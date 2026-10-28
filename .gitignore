@@ -163,3 +163,8 @@ tags
 # Local development artifacts
 .devcontainer/bash_history
 *.bak
+
+
+# Docs stuff
+tmp
+docs

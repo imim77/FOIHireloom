@@ -1,4 +1,4 @@
-from FOIHireloom.api.server import McpServer
+from FOIHireloom.api.mcp_server import McpServer
 
 
 def main() -> None:
