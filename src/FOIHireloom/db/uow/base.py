@@ -2,11 +2,11 @@ from abc import ABC, abstractmethod
 from types import TracebackType
 from typing import Self
 
-from FOIHireloom.persistence.county_repository import CountyRepository
-from FOIHireloom.persistence.job_repository import JobRepository
-from FOIHireloom.persistence.job_feed_membership_repository import JobFeedMembershipRepository
-from FOIHireloom.persistence.source_feed_repository import SourceFeedRepository
-from FOIHireloom.persistence.sync_run_repository import SyncRunRepository
+from FOIHireloom.dao.interfaces.county import CountyRepository
+from FOIHireloom.dao.interfaces.job import JobRepository
+from FOIHireloom.dao.interfaces.job_feed_membership import JobFeedMembershipRepository
+from FOIHireloom.dao.interfaces.source_feed import SourceFeedRepository
+from FOIHireloom.dao.interfaces.sync_run import SyncRunRepository
 
 
 class UnitOfWork(ABC):

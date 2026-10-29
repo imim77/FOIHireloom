@@ -10,9 +10,9 @@ from model_test_case import ModelTestCase
 from FOIHireloom.db.models import County, Employer, Job, JobFeedMembership, SourceFeed, SyncRun
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWork, SqlAlchemyUnitOfWorkFactory, UnitOfWork
-from FOIHireloom.persistence.impl.sqlalchemy_job_repository import SqlAlchemyJobRepository
-from FOIHireloom.persistence.impl.sqlalchemy_source_feed_repository import SqlAlchemySourceFeedRepository
-from FOIHireloom.persistence.impl.sqlalchemy_sync_run_repository import SqlAlchemySyncRunRepository
+from FOIHireloom.dao.concrete.sqla_job import SqlAlchemyJobRepository
+from FOIHireloom.dao.concrete.sqla_source_feed import SqlAlchemySourceFeedRepository
+from FOIHireloom.dao.concrete.sqla_sync_run import SqlAlchemySyncRunRepository
 
 
 class UnitOfWorkTests(ModelTestCase):

@@ -8,10 +8,10 @@ from model_test_case import ModelTestCase
 
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.db.session import SessionManager
-from FOIHireloom.persistence.impl.sqlalchemy_job_feed_membership_repository import (
+from FOIHireloom.dao.concrete.sqla_job_feed_membership import (
     SqlAlchemyJobFeedMembershipRepository,
 )
-from FOIHireloom.persistence.job_feed_membership_repository import JobFeedMembershipRepository
+from FOIHireloom.dao.interfaces.job_feed_membership import JobFeedMembershipRepository
 
 
 class JobFeedMembershipRepositoryTests(ModelTestCase):

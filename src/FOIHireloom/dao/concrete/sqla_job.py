@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import Job
-from FOIHireloom.persistence.job_repository import JobRepository
+from FOIHireloom.dao.interfaces.job import JobRepository
 
 
 class SqlAlchemyJobRepository(JobRepository):

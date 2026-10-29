@@ -4,18 +4,18 @@ from typing import Self
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.session import AsyncDBContextManager, SessionManager
-from FOIHireloom.persistence.county_repository import CountyRepository
-from FOIHireloom.persistence.impl.sqlalchemy_county_repository import SqlAlchemyCountyRepository
-from FOIHireloom.persistence.impl.sqlalchemy_job_repository import SqlAlchemyJobRepository
-from FOIHireloom.persistence.impl.sqlalchemy_job_feed_membership_repository import (
+from FOIHireloom.dao.interfaces.county import CountyRepository
+from FOIHireloom.dao.concrete.sqla_county import SqlAlchemyCountyRepository
+from FOIHireloom.dao.concrete.sqla_job import SqlAlchemyJobRepository
+from FOIHireloom.dao.concrete.sqla_job_feed_membership import (
     SqlAlchemyJobFeedMembershipRepository,
 )
-from FOIHireloom.persistence.impl.sqlalchemy_source_feed_repository import SqlAlchemySourceFeedRepository
-from FOIHireloom.persistence.impl.sqlalchemy_sync_run_repository import SqlAlchemySyncRunRepository
-from FOIHireloom.persistence.job_repository import JobRepository
-from FOIHireloom.persistence.job_feed_membership_repository import JobFeedMembershipRepository
-from FOIHireloom.persistence.source_feed_repository import SourceFeedRepository
-from FOIHireloom.persistence.sync_run_repository import SyncRunRepository
+from FOIHireloom.dao.concrete.sqla_source_feed import SqlAlchemySourceFeedRepository
+from FOIHireloom.dao.concrete.sqla_sync_run import SqlAlchemySyncRunRepository
+from FOIHireloom.dao.interfaces.job import JobRepository
+from FOIHireloom.dao.interfaces.job_feed_membership import JobFeedMembershipRepository
+from FOIHireloom.dao.interfaces.source_feed import SourceFeedRepository
+from FOIHireloom.dao.interfaces.sync_run import SyncRunRepository
 
 from .base import UnitOfWork
 

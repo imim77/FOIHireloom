@@ -7,8 +7,8 @@ from model_test_case import ModelTestCase
 
 from FOIHireloom.db.models import Employer, Job
 from FOIHireloom.db.session import SessionManager
-from FOIHireloom.persistence.impl.sqlalchemy_job_repository import SqlAlchemyJobRepository
-from FOIHireloom.persistence.job_repository import JobRepository
+from FOIHireloom.dao.concrete.sqla_job import SqlAlchemyJobRepository
+from FOIHireloom.dao.interfaces.job import JobRepository
 
 
 class JobRepositoryTests(ModelTestCase):

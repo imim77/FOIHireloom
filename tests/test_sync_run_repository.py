@@ -8,8 +8,8 @@ from model_test_case import ModelTestCase
 
 from FOIHireloom.db.models import County, SourceFeed, SyncRun
 from FOIHireloom.db.session import SessionManager
-from FOIHireloom.persistence.impl.sqlalchemy_sync_run_repository import SqlAlchemySyncRunRepository
-from FOIHireloom.persistence.sync_run_repository import SyncRunRepository
+from FOIHireloom.dao.concrete.sqla_sync_run import SqlAlchemySyncRunRepository
+from FOIHireloom.dao.interfaces.sync_run import SyncRunRepository
 
 
 class SyncRunRepositoryTests(ModelTestCase):

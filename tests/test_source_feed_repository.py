@@ -8,8 +8,8 @@ from model_test_case import ModelTestCase
 
 from FOIHireloom.db.models import County, SourceFeed
 from FOIHireloom.db.session import SessionManager
-from FOIHireloom.persistence.impl.sqlalchemy_source_feed_repository import SqlAlchemySourceFeedRepository
-from FOIHireloom.persistence.source_feed_repository import SourceFeedRepository
+from FOIHireloom.dao.concrete.sqla_source_feed import SqlAlchemySourceFeedRepository
+from FOIHireloom.dao.interfaces.source_feed import SourceFeedRepository
 
 
 class SourceFeedRepositoryTests(ModelTestCase):

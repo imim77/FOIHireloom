@@ -5,7 +5,7 @@ from model_test_case import ModelTestCase
 from FOIHireloom.db.models import County
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
-from FOIHireloom.persistence.impl.sqlalchemy_county_repository import SqlAlchemyCountyRepository
+from FOIHireloom.dao.concrete.sqla_county import SqlAlchemyCountyRepository
 
 
 class CountyRepositoryTests(ModelTestCase):

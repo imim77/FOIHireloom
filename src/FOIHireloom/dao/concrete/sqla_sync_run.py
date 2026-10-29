@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import SourceFeed, SyncRun
-from FOIHireloom.persistence.sync_run_repository import SyncRunRepository
+from FOIHireloom.dao.interfaces.sync_run import SyncRunRepository
 
 
 class SqlAlchemySyncRunRepository(SyncRunRepository):

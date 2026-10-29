@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import County
-from FOIHireloom.persistence.county_repository import CountyRepository
+from FOIHireloom.dao.interfaces.county import CountyRepository
 
 
 class SqlAlchemyCountyRepository(CountyRepository):

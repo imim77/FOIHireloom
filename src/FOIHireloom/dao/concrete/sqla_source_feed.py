@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import SourceFeed
-from FOIHireloom.persistence.source_feed_repository import SourceFeedRepository
+from FOIHireloom.dao.interfaces.source_feed import SourceFeedRepository
 
 
 class SqlAlchemySourceFeedRepository(SourceFeedRepository):

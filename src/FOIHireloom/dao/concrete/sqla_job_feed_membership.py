@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import JobFeedMembership, SourceFeed
-from FOIHireloom.persistence.job_feed_membership_repository import JobFeedMembershipRepository
+from FOIHireloom.dao.interfaces.job_feed_membership import JobFeedMembershipRepository
 
 
 class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
