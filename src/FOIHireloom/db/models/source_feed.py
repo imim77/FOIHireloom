@@ -20,6 +20,7 @@ from .base import Base
 
 if TYPE_CHECKING:
     from .county import County
+    from .sync_run import SyncRun
 
 
 class SourceFeed(Base):
@@ -56,4 +57,7 @@ class SourceFeed(Base):
 
     county: Mapped["County | None"] = relationship(
         back_populates="source_feeds", lazy="raise"
+    )
+    sync_runs: Mapped[list["SyncRun"]] = relationship(
+        back_populates="feed", passive_deletes="all", lazy="raise"
     )
