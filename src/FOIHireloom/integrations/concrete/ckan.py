@@ -1,48 +1,19 @@
 import math
-from uuid import UUID
 
 import httpx
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, ValidationError
+from pydantic import ValidationError
+
+from FOIHireloom.dto.ckan import CkanPackage, CkanResource
+from FOIHireloom.exceptions import (
+    CkanApiError,
+    CkanHttpError,
+    CkanResponseError,
+    CkanTransportError,
+)
+from FOIHireloom.integrations.interfaces.ckan import CkanClientInterface
 
 
-class CkanError(RuntimeError):
-    """A CKAN request could not supply valid dataset resources."""
-
-
-class CkanTransportError(CkanError):
-    """The HTTP request failed, including timeouts."""
-
-
-class CkanHttpError(CkanError):
-    def __init__(self, status_code: int) -> None:
-        self.status_code = status_code
-        super().__init__(f"CKAN returned HTTP {status_code}.")
-
-
-class CkanApiError(CkanError):
-    """CKAN returned success=false, even if HTTP succeeded."""
-
-
-class CkanResponseError(CkanError):
-    """The response is not a valid package_show response."""
-
-
-class CkanResource(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True)
-
-    id: UUID
-    url: AnyHttpUrl
-    name: str | None = None
-    description: str | None = None
-    format: str | None = None
-    state: str | None = "active"
-
-
-class _CkanPackage(BaseModel):
-    resources: list[CkanResource]
-
-
-class CkanClient:
+class CkanClient(CkanClientInterface):
     """Read CKAN metadata using a caller-owned async HTTP client.
 
     This client neither filters counties nor downloads RSS contents. The caller
@@ -85,6 +56,6 @@ class CkanClient:
         if payload["success"] is False:
             raise CkanApiError("CKAN reported an unsuccessful package_show response.")
         try:
-            return _CkanPackage.model_validate(payload.get("result")).resources
+            return CkanPackage.model_validate(payload.get("result")).resources
         except ValidationError as error:
             raise CkanResponseError("CKAN returned invalid dataset resources.") from error

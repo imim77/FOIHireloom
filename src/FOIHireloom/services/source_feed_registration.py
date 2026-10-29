@@ -5,7 +5,8 @@ from sqlalchemy.exc import IntegrityError
 
 from FOIHireloom.db.models import County, SourceFeed
 from FOIHireloom.db.uow.base import UnitOfWork
-from FOIHireloom.integrations.ckan_client import CkanClient, CkanResource
+from FOIHireloom.dto.ckan import CkanResource
+from FOIHireloom.integrations.concrete.ckan import CkanClient
 
 from .croatian_counties import CountyDefinition, CroatianCountyCatalog
 

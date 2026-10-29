@@ -6,9 +6,8 @@ from uuid import UUID
 
 import httpx
 
-from FOIHireloom.integrations.ckan_client import (
-    CkanApiError, CkanClient, CkanHttpError, CkanResponseError, CkanTransportError,
-)
+from FOIHireloom.exceptions import CkanApiError, CkanHttpError, CkanResponseError, CkanTransportError
+from FOIHireloom.integrations.concrete.ckan import CkanClient
 
 
 class CkanClientTests(unittest.IsolatedAsyncioTestCase):

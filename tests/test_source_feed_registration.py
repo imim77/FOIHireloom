@@ -13,7 +13,9 @@ from model_test_case import ModelTestCase
 from FOIHireloom.db.models import County, Job, SourceFeed, SyncRun
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
-from FOIHireloom.integrations.ckan_client import CkanClient, CkanError, CkanResource
+from FOIHireloom.dto.ckan import CkanResource
+from FOIHireloom.exceptions import CkanError
+from FOIHireloom.integrations.concrete.ckan import CkanClient
 from FOIHireloom.services.source_feed_registration import (
     SourceFeedRegistrationError, SourceFeedRegistrationPlanner, SourceFeedRegistrationService,
 )
