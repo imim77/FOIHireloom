@@ -11,6 +11,8 @@ from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 
+from FOIHireloom.db.models import Base
+
 
 class AlembicEnvironmentTests(unittest.TestCase):
     config_path = (
@@ -49,3 +51,23 @@ class AlembicEnvironmentTests(unittest.TestCase):
             command.upgrade(config, "head", sql=True)
         sql = output.getvalue()
         self.assertNotIn("p%25ss", sql)
+
+    def test_offline_upgrade_contains_all_model_tables(self) -> None:
+        output = io.StringIO()
+        config = Config(str(self.config_path), output_buffer=output)
+        with patch.dict(os.environ, {"DATABASE_URL": "postgresql+asyncpg://invalid.example/offline"}):
+            command.upgrade(config, "head", sql=True)
+        sql = output.getvalue()
+        for table_name in Base.metadata.tables:
+            self.assertIn(f"CREATE TABLE {table_name}", sql)
+        self.assertIn("JSONB", sql)
+        self.assertIn("TEXT[]", sql)
+
+    def test_offline_downgrade_has_explicit_revision_range(self) -> None:
+        output = io.StringIO()
+        config = Config(str(self.config_path), output_buffer=output)
+        with patch.dict(os.environ, {"DATABASE_URL": "postgresql+asyncpg://invalid.example/offline"}):
+            command.downgrade(config, "head:base", sql=True)
+        sql = output.getvalue()
+        self.assertLess(sql.index("DROP TABLE job_feed_memberships"), sql.index("DROP TABLE jobs"))
+        self.assertLess(sql.index("DROP TABLE jobs"), sql.index("DROP TABLE employers"))

@@ -1,7 +1,11 @@
 import os
 import unittest
+from pathlib import Path
 from uuid import uuid4
 
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import Connection
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.schema import CreateSchema, DropSchema
@@ -27,10 +31,19 @@ class ModelTestCase(unittest.IsolatedAsyncioTestCase):
             await connection.execute(CreateSchema(self.schema))
         self.addAsyncCleanup(self.drop_schema)
         async with self.engine.begin() as connection:
-            await connection.run_sync(Base.metadata.create_all)
+            await connection.run_sync(self.migrate_schema)
 
         self.session = async_sessionmaker(self.engine, expire_on_commit=False)()
         self.addAsyncCleanup(self.session.close)
+
+    def migrate_schema(self, connection: Connection) -> None:
+        config_path = (
+            Path(__file__).resolve().parents[1]
+            / "src/FOIHireloom/db/alembic/alembic.ini"
+        )
+        config = Config(str(config_path))
+        config.attributes["connection"] = connection
+        command.upgrade(config, "head")
 
     async def drop_schema(self) -> None:
         async with self.engine.begin() as connection:

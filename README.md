@@ -93,7 +93,7 @@ databases using the development-only `aiosqlite` driver. They also check the
 PostgreSQL engine configuration, but do not require or connect to a running
 PostgreSQL server.
 
-ORM integration tests use real PostgreSQL types and constraints. Set
+ORM and migration integration tests use real PostgreSQL types and constraints. Set
 `TEST_DATABASE_URL` in the process environment to a dedicated test database:
 
 ```sh
@@ -101,6 +101,9 @@ TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5433/foihirel
   uv run --locked python -m unittest discover -s tests -v
 ```
 
-Each model test creates a uniquely named schema and drops only that schema
-afterwards. The test account needs permission to create schemas. Without
-`TEST_DATABASE_URL`, PostgreSQL model tests are skipped; session tests still run.
+Each integration test creates a uniquely named schema and drops only that
+schema afterwards. Model tests apply the migration history before testing
+ORM operations. Migration tests also exercise downgrade/re-upgrade cycles and
+detect differences from the ORM metadata. The test account needs permission
+to create schemas. Without `TEST_DATABASE_URL`, PostgreSQL integration tests
+are skipped; session and offline migration tests still run.
