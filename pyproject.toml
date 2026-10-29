@@ -16,6 +16,7 @@ dependencies = [
 [project.scripts]
 foihireloom-mcp = "FOIHireloom.main:main"
 foihireloom-register-sources = "FOIHireloom.commands.register_sources:main"
+foihireloom-sync-jobs = "FOIHireloom.commands.sync_jobs:main"
 
 [build-system]
 requires = ["hatchling"]
