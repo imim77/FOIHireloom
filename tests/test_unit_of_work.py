@@ -184,6 +184,8 @@ class UnitOfWorkTests(ModelTestCase):
             with self.assertRaisesRegex(RuntimeError, "active"):
                 _ = work.jobs
             with self.assertRaisesRegex(RuntimeError, "active"):
+                _ = work.job_feed_memberships
+            with self.assertRaisesRegex(RuntimeError, "active"):
                 _ = work.source_feeds
             with self.assertRaisesRegex(RuntimeError, "active"):
                 _ = work.sync_runs
@@ -213,6 +215,7 @@ class UnitOfWorkTests(ModelTestCase):
         work = SqlAlchemyUnitOfWork(self.sessions)
         async with work:
             previous_repository = work.jobs
+            previous_memberships = work.job_feed_memberships
             previous_source_feeds = work.source_feeds
             previous_sync_runs = work.sync_runs
             discarded = self.job()
@@ -221,6 +224,7 @@ class UnitOfWorkTests(ModelTestCase):
 
         async with work:
             self.assertIsNot(work.jobs, previous_repository)
+            self.assertIsNot(work.job_feed_memberships, previous_memberships)
             self.assertIsNot(work.source_feeds, previous_source_feeds)
             self.assertIsNot(work.sync_runs, previous_sync_runs)
             self.assertIsNone(await work.jobs.get_by_id(discarded_id))
@@ -237,10 +241,16 @@ class UnitOfWorkTests(ModelTestCase):
         async with work:
             feed = self.feed()
             await work.source_feeds.add(feed)
-            job = self.job(feed_memberships=[JobFeedMembership(
-                feed_id=feed.id, source_item={"title": "Programer"}
-            )])
+            job = self.job()
             await work.jobs.add(job)
+            membership = JobFeedMembership(
+                job_id=job.id, feed_id=feed.id, source_item={"title": "Programer"}
+            )
+            await work.job_feed_memberships.add(membership)
+            self.assertIs(
+                await work.job_feed_memberships.get_by_job_and_feed(job.id, feed.id), membership
+            )
+            self.assertEqual(await work.job_feed_memberships.list_for_feed(feed.id), [membership])
             self.assertIs(await work.source_feeds.get_by_id(feed.id), feed)
             async with self.sessions.session() as reader:
                 self.assertIsNone(await reader.get(SourceFeed, feed.id))
@@ -260,10 +270,11 @@ class UnitOfWorkTests(ModelTestCase):
         async with SqlAlchemyUnitOfWork(self.sessions) as work:
             feed = self.feed()
             await work.source_feeds.add(feed)
-            job = self.job(feed_memberships=[JobFeedMembership(
-                feed_id=feed.id, source_item={"title": "Programer"}
-            )])
+            job = self.job()
             await work.jobs.add(job)
+            await work.job_feed_memberships.add(JobFeedMembership(
+                job_id=job.id, feed_id=feed.id, source_item={"title": "Programer"}
+            ))
             feed_id, job_id, county_id = feed.id, job.id, feed.county_id
 
         async with self.sessions.session() as reader:
@@ -375,6 +386,32 @@ class UnitOfWorkTests(ModelTestCase):
             self.assertEqual(failed.error_summary, "invalid source item")
             self.assertIsNone(await reader.get(Job, job_id))
             self.assertIsNone((await reader.get(SourceFeed, feed_id)).last_success_at)
+        self.assertEqual(self.engine.pool.checkedout(), 0)
+
+    async def test_membership_error_rolls_back_all_repositories(self) -> None:
+        with self.assertRaises(IntegrityError) as error:
+            async with SqlAlchemyUnitOfWork(self.sessions) as work:
+                feed = self.feed()
+                await work.source_feeds.add(feed)
+                job = self.job()
+                await work.jobs.add(job)
+                record = SyncRun(feed_id=feed.id)
+                await work.sync_runs.add(record)
+                await work.job_feed_memberships.add(JobFeedMembership(
+                    job_id=job.id, feed_id=feed.id, source_item={}
+                ))
+                feed_id, job_id, run_id, county_id = feed.id, job.id, record.id, feed.county_id
+                await work.job_feed_memberships.add(JobFeedMembership(
+                    job_id=job.id + 1, feed_id=feed.id, source_item={}
+                ))
+
+        self.assertIn("fk_job_feed_memberships_job_id_jobs", str(error.exception))
+        async with self.sessions.session() as reader:
+            self.assertIsNone(await reader.get(SourceFeed, feed_id))
+            self.assertIsNone(await reader.get(Job, job_id))
+            self.assertIsNone(await reader.get(SyncRun, run_id))
+            self.assertIsNone(await reader.get(JobFeedMembership, (job_id, feed_id)))
+            self.assertIsNone(await reader.get(County, county_id))
         self.assertEqual(self.engine.pool.checkedout(), 0)
 
     async def test_concurrent_instances_have_independent_transactions(self) -> None:

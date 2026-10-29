@@ -3,6 +3,7 @@ from types import TracebackType
 from typing import Self
 
 from FOIHireloom.persistence.job_repository import JobRepository
+from FOIHireloom.persistence.job_feed_membership_repository import JobFeedMembershipRepository
 from FOIHireloom.persistence.source_feed_repository import SourceFeedRepository
 from FOIHireloom.persistence.sync_run_repository import SyncRunRepository
 
@@ -19,6 +20,11 @@ class UnitOfWork(ABC):
     @abstractmethod
     def jobs(self) -> JobRepository:
         """Return the job repository bound to this context's session."""
+
+    @property
+    @abstractmethod
+    def job_feed_memberships(self) -> JobFeedMembershipRepository:
+        """Return the job/feed membership repository bound to the same session."""
 
     @property
     @abstractmethod

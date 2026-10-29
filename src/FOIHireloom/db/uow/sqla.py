@@ -5,9 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.session import AsyncDBContextManager, SessionManager
 from FOIHireloom.persistence.impl.sqlalchemy_job_repository import SqlAlchemyJobRepository
+from FOIHireloom.persistence.impl.sqlalchemy_job_feed_membership_repository import (
+    SqlAlchemyJobFeedMembershipRepository,
+)
 from FOIHireloom.persistence.impl.sqlalchemy_source_feed_repository import SqlAlchemySourceFeedRepository
 from FOIHireloom.persistence.impl.sqlalchemy_sync_run_repository import SqlAlchemySyncRunRepository
 from FOIHireloom.persistence.job_repository import JobRepository
+from FOIHireloom.persistence.job_feed_membership_repository import JobFeedMembershipRepository
 from FOIHireloom.persistence.source_feed_repository import SourceFeedRepository
 from FOIHireloom.persistence.sync_run_repository import SyncRunRepository
 
@@ -31,6 +35,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self._context: AsyncDBContextManager | None = None
         self._session: AsyncSession | None = None
         self._jobs: JobRepository | None = None
+        self._job_feed_memberships: JobFeedMembershipRepository | None = None
         self._source_feeds: SourceFeedRepository | None = None
         self._sync_runs: SyncRunRepository | None = None
 
@@ -39,6 +44,12 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         if self._jobs is None:
             raise RuntimeError("Job repository requires an active Unit of Work.")
         return self._jobs
+
+    @property
+    def job_feed_memberships(self) -> JobFeedMembershipRepository:
+        if self._job_feed_memberships is None:
+            raise RuntimeError("Job feed membership repository requires an active Unit of Work.")
+        return self._job_feed_memberships
 
     @property
     def source_feeds(self) -> SourceFeedRepository:
@@ -61,6 +72,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         try:
             self._session = await context.__aenter__()
             self._jobs = SqlAlchemyJobRepository(self._session)
+            self._job_feed_memberships = SqlAlchemyJobFeedMembershipRepository(self._session)
             self._source_feeds = SqlAlchemySourceFeedRepository(self._session)
             self._sync_runs = SqlAlchemySyncRunRepository(self._session)
         except BaseException as error:
@@ -101,6 +113,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
 
     def _clear_context(self) -> None:
         self._jobs = None
+        self._job_feed_memberships = None
         self._source_feeds = None
         self._sync_runs = None
         self._session = None
