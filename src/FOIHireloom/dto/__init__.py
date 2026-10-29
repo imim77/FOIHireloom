@@ -2,6 +2,7 @@ from .base import ModelConfigBaseModel
 from .ckan import CkanPackage, CkanResource
 from .county import CountyDefinitionDTO, CountyDTO
 from .hzz_feed import FeedResponseDTO
+from .job import ParsedFeedDTO, ParsedJobDTO
 from .source_feed import (
     PlannedSourceDTO,
     RegistrationPlanDTO,
@@ -19,6 +20,8 @@ __all__ = [
     "CountyDefinitionDTO",
     "FeedResponseDTO",
     "ModelConfigBaseModel",
+    "ParsedFeedDTO",
+    "ParsedJobDTO",
     "PlannedSourceDTO",
     "RegistrationPlanDTO",
     "RegistrationPreviewDTO",

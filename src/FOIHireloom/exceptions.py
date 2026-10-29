@@ -78,3 +78,6 @@ class HzzFeedHttpError(HzzFeedError):
 class HzzFeedTooLargeError(HzzFeedError):
     """The decoded response exceeded the configured size limit."""
 
+
+class HzzFeedParseError(HzzFeedError):
+    """The response is not a well-formed, safe RSS 2.0 document."""
