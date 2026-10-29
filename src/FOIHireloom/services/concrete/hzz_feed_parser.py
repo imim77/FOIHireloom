@@ -91,6 +91,7 @@ class HzzFeedParser:
             location_text=fields.get("Mjesto rada"),
             quality_flags=tuple(flags),
             content_hash=hashlib.sha256("\x1f".join((title or "", pub, raw)).encode()).hexdigest(),
+            source_item={child.tag: child.text or "" for child in item},
         )
 
     @classmethod

@@ -21,3 +21,7 @@ class Settings(BaseSettings):
         default="slobodna-radna-mjesta-po-zupanijama-u-rh-i-eu", min_length=1
     )
     CKAN_TIMEOUT: float = Field(default=15.0, gt=0, allow_inf_nan=False)
+
+    HZZ_FEED_TIMEOUT: float = Field(default=15.0, gt=0, allow_inf_nan=False)
+    HZZ_FEED_MAX_BYTES: int = Field(default=5 * 1024 * 1024, gt=0)
+    HZZ_MIN_RETAINED_RATIO: float = Field(default=0.5, ge=0, le=1)

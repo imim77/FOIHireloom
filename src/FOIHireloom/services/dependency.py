@@ -9,8 +9,12 @@ from FOIHireloom.db.database import PostgresDatabase
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
 from FOIHireloom.exceptions import PersistenceError
+from FOIHireloom.factories.job_sync import JobSyncServiceFactory
 from FOIHireloom.factories.source_feed_registration import SourceFeedRegistrationServiceFactory
+from FOIHireloom.services.interfaces.job_sync import JobSyncServiceInterface
 from FOIHireloom.services.interfaces.source_feed_registration import SourceFeedRegistrationServiceInterface
+
+USER_AGENT = "FOIHireloom/0.1 (+https://github.com/imim77/FOIHireloom)"
 
 
 class DependencyService:
@@ -33,11 +37,24 @@ class DependencyService:
             if not with_database:
                 yield factory.create(http, None)
                 return
-            try:
-                database = PostgresDatabase(self._settings)
-            except SQLAlchemyError as error:
-                raise PersistenceError("Invalid database configuration.") from error
-            try:
-                yield factory.create(http, SqlAlchemyUnitOfWorkFactory(SessionManager(database.engine)))
-            finally:
-                await database.close()
+            async with self._unit_of_work_factory() as uow_factory:
+                yield factory.create(http, uow_factory)
+
+    @asynccontextmanager
+    async def job_sync_service(self) -> AsyncIterator[JobSyncServiceInterface]:
+        """Yield a sync service sharing one HTTP client, and its HZZ cookie, for the whole run."""
+        factory = JobSyncServiceFactory(self._settings)
+        async with httpx.AsyncClient(headers={"User-Agent": USER_AGENT}) as http:
+            async with self._unit_of_work_factory() as uow_factory:
+                yield factory.create(http, uow_factory)
+
+    @asynccontextmanager
+    async def _unit_of_work_factory(self) -> AsyncIterator[SqlAlchemyUnitOfWorkFactory]:
+        try:
+            database = PostgresDatabase(self._settings)
+        except SQLAlchemyError as error:
+            raise PersistenceError("Invalid database configuration.") from error
+        try:
+            yield SqlAlchemyUnitOfWorkFactory(SessionManager(database.engine))
+        finally:
+            await database.close()
