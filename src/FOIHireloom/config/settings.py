@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     )
 
     DATABASE_URL: str = (
-        "postgresql+asyncpg://postgres:postgres@localhost:5432/foihireloom"
+        "postgresql+asyncpg://myuser:mypassword@localhost:5432/myapp"
     )
     DATABASE_POOL_SIZE: int = Field(default=5, ge=1)
     DATABASE_MAX_OVERFLOW: int = Field(default=10, ge=0)
