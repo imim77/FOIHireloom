@@ -2,39 +2,38 @@ import asyncio
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from FOIHireloom.db.database import close_database
-from FOIHireloom.db.session import AsyncDBContextManager
+from FOIHireloom.config.settings import Settings
+from FOIHireloom.db.database import PostgresDatabase
+from FOIHireloom.db.session import SessionManager
 
 
 class SessionTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory()
         database_path = Path(self.directory.name) / "sessions.db"
-        self.engine = create_async_engine(f"sqlite+aiosqlite:///{database_path}")
-        self.factory = async_sessionmaker(self.engine, expire_on_commit=False)
-        self.factory_patch = patch(
-            "FOIHireloom.db.session.async_session", self.factory
+        settings = Settings(
+            _env_file=None,
+            DATABASE_URL=f"sqlite+aiosqlite:///{database_path}",
         )
-        self.factory_patch.start()
+        self.database = PostgresDatabase(settings)
+        self.engine = self.database.engine
+        self.sessions = SessionManager(self.engine)
         async with self.engine.begin() as connection:
             await connection.execute(text("CREATE TABLE records (id INTEGER PRIMARY KEY)"))
 
     async def asyncTearDown(self) -> None:
-        self.factory_patch.stop()
-        await self.engine.dispose()
+        await self.database.close()
         self.directory.cleanup()
 
     async def count_records(self) -> int:
-        async with AsyncDBContextManager() as session:
+        async with self.sessions.session() as session:
             return await session.scalar(text("SELECT COUNT(*) FROM records"))
 
     async def test_explicit_commit_persists_changes(self) -> None:
-        async with AsyncDBContextManager() as session:
+        async with self.sessions.session() as session:
             await session.execute(text("INSERT INTO records (id) VALUES (1)"))
             await session.commit()
 
@@ -42,7 +41,7 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.engine.pool.checkedout(), 0)
 
     async def test_normal_exit_rolls_back_uncommitted_changes(self) -> None:
-        async with AsyncDBContextManager() as session:
+        async with self.sessions.session() as session:
             await session.execute(text("INSERT INTO records (id) VALUES (1)"))
 
         self.assertEqual(await self.count_records(), 0)
@@ -50,7 +49,7 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_exception_propagates_and_releases_transaction(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "import failed"):
-            async with AsyncDBContextManager() as session:
+            async with self.sessions.session() as session:
                 await session.execute(text("INSERT INTO records (id) VALUES (1)"))
                 raise RuntimeError("import failed")
 
@@ -59,7 +58,7 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_concurrent_contexts_use_independent_sessions(self) -> None:
         async def read_record_count() -> tuple[int, object]:
-            async with AsyncDBContextManager() as session:
+            async with self.sessions.session() as session:
                 count = await session.scalar(text("SELECT COUNT(*) FROM records"))
                 return count, session
 
@@ -73,8 +72,31 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
     async def test_dispose_closes_idle_connections_and_allows_reconnection(self) -> None:
         self.assertEqual(await self.count_records(), 0)
 
-        with patch("FOIHireloom.db.database.engine", self.engine):
-            await close_database()
+        await self.database.close()
 
         self.assertEqual(self.engine.pool.checkedin(), 0)
         self.assertEqual(await self.count_records(), 0)
+
+    async def test_database_objects_keep_their_data_and_sessions_isolated(self) -> None:
+        other_path = Path(self.directory.name) / "other.db"
+        other_database = PostgresDatabase(
+            Settings(_env_file=None, DATABASE_URL=f"sqlite+aiosqlite:///{other_path}")
+        )
+        other_sessions = SessionManager(other_database.engine)
+        try:
+            async with other_database.engine.begin() as connection:
+                await connection.execute(
+                    text("CREATE TABLE records (id INTEGER PRIMARY KEY)")
+                )
+
+            async with other_sessions.session() as session:
+                await session.execute(text("INSERT INTO records (id) VALUES (1)"))
+                await session.commit()
+
+            self.assertEqual(await self.count_records(), 0)
+            async with other_sessions.session() as session:
+                self.assertEqual(
+                    await session.scalar(text("SELECT COUNT(*) FROM records")), 1
+                )
+        finally:
+            await other_database.close()

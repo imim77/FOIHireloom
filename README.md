@@ -20,25 +20,37 @@ postgresql+asyncpg://user:password@localhost:5432/foihireloom
 ```
 
 `DATABASE_POOL_SIZE` defaults to 5 and `DATABASE_MAX_OVERFLOW` defaults to 10.
-The shared engine is defined in `FOIHireloom.db.database`. Importing the
-module configures the engine without opening a connection or creating tables.
+`PostgresDatabase` in `FOIHireloom.db.database` owns the engine and connection
+pool. Constructing the object configures the engine without opening a
+connection or creating tables. Importing modules does not create a database
+object, engine, session factory, or settings instance.
 The `.env` file is read relative to the working directory, so run commands
 from the project root when using it.
 
-`FOIHireloom.db.session` exposes the shared `async_session` factory and an
-`AsyncDBContextManager`, following the
-[reference project's session structure](https://github.com/anmarkoulis/layered-architecture/blob/main/src/layered_architecture/db/session.py):
+`SessionManager` in `FOIHireloom.db.session` owns a session factory and creates
+an `AsyncDBContextManager` for each operation. The module layout follows the
+[reference project](https://github.com/anmarkoulis/layered-architecture/blob/main/src/layered_architecture/db/session.py),
+with database resources encapsulated in objects and passed explicitly:
 
 ```python
 from sqlalchemy import text
 
-from FOIHireloom.db.session import AsyncDBContextManager
+from FOIHireloom.config.settings import Settings
+from FOIHireloom.db.database import PostgresDatabase
+from FOIHireloom.db.session import SessionManager
 
 
-async def check_database() -> int:
-    async with AsyncDBContextManager() as session:
-        result = await session.scalar(text("SELECT 1"))
-        return result
+class DatabaseExample:
+    def __init__(self, settings: Settings) -> None:
+        self.database = PostgresDatabase(settings)
+        self.sessions = SessionManager(self.database.engine)
+
+    async def check_connection(self) -> int:
+        async with self.sessions.session() as session:
+            return await session.scalar(text("SELECT 1"))
+
+    async def close(self) -> None:
+        await self.database.close()
 ```
 
 Each context manager creates its own session, using the same engine and
@@ -48,8 +60,10 @@ uncommitted transaction; it does not commit automatically. Writes must be
 committed explicitly or through a future Unit of Work. Use a separate session
 for each concurrent task.
 
-Call `await close_database()` from `FOIHireloom.db.database` during application
-shutdown once the database layer is connected to the server lifecycle.
+Create one `PostgresDatabase(Settings())` and its `SessionManager` per
+application process, and pass the session manager to services that need it.
+Call `await database.close()` during application shutdown once the database
+layer is connected to the server lifecycle.
 Schema creation and Alembic migrations will be added with the ORM models.
 
 ## Tests

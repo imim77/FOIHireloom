@@ -7,17 +7,28 @@ from unittest.mock import patch
 from pydantic import ValidationError
 
 from FOIHireloom.config.settings import Settings
-from FOIHireloom.db.database import engine
-from FOIHireloom.db.session import async_session
+from FOIHireloom.db.database import PostgresDatabase
+from FOIHireloom.db.session import SessionManager
 
 
-class DatabaseConfigurationTests(unittest.TestCase):
-    def test_engine_uses_asyncpg_and_shared_session_factory(self) -> None:
-        self.assertEqual(engine.dialect.name, "postgresql")
-        self.assertEqual(engine.dialect.driver, "asyncpg")
-        self.assertTrue(engine.dialect.is_async)
-        self.assertIs(async_session.kw["bind"], engine)
-        self.assertFalse(async_session.kw["expire_on_commit"])
+class DatabaseConfigurationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_engine_uses_asyncpg_and_shared_session_factory(self) -> None:
+        settings = Settings(
+            _env_file=None,
+            DATABASE_URL="postgresql+asyncpg://localhost/foihireloom",
+        )
+        database = PostgresDatabase(settings)
+        try:
+            self.assertEqual(database.engine.dialect.name, "postgresql")
+            self.assertEqual(database.engine.dialect.driver, "asyncpg")
+            self.assertTrue(database.engine.dialect.is_async)
+
+            sessions = SessionManager(database.engine)
+            async with sessions.session() as session:
+                self.assertIs(session.bind, database.engine)
+                self.assertFalse(session.sync_session.expire_on_commit)
+        finally:
+            await database.close()
 
     def test_environment_overrides_dotenv_configuration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
