@@ -45,7 +45,7 @@ class AlembicEnvironmentTests(unittest.TestCase):
         with patch.dict(os.environ, {
             "DATABASE_URL": "postgresql+asyncpg://example:p%25ss@invalid.example/offline"
         }), patch(
-            "FOIHireloom.db.alembic.environment.create_async_engine",
+            "sqlalchemy.ext.asyncio.create_async_engine",
             side_effect=AssertionError("Offline migrations must not create an engine"),
         ):
             command.upgrade(config, "head", sql=True)

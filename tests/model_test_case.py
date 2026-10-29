@@ -22,14 +22,17 @@ class ModelTestCase(unittest.IsolatedAsyncioTestCase):
             raise ValueError("TEST_DATABASE_URL must use postgresql+asyncpg")
 
         self.schema = f"test_models_{uuid4().hex}"
-        self.engine = create_async_engine(
-            database_url,
-            execution_options={"schema_translate_map": {None: self.schema}},
-        )
-        self.addAsyncCleanup(self.engine.dispose)
-        async with self.engine.begin() as connection:
+        self.admin_engine = create_async_engine(database_url)
+        self.addAsyncCleanup(self.admin_engine.dispose)
+        async with self.admin_engine.begin() as connection:
             await connection.execute(CreateSchema(self.schema))
         self.addAsyncCleanup(self.drop_schema)
+
+        self.engine = create_async_engine(
+            database_url,
+            connect_args={"server_settings": {"search_path": self.schema}},
+        )
+        self.addAsyncCleanup(self.engine.dispose)
         async with self.engine.begin() as connection:
             await connection.run_sync(self.migrate_schema)
 
@@ -46,7 +49,7 @@ class ModelTestCase(unittest.IsolatedAsyncioTestCase):
         command.upgrade(config, "head")
 
     async def drop_schema(self) -> None:
-        async with self.engine.begin() as connection:
+        async with self.admin_engine.begin() as connection:
             await connection.execute(DropSchema(self.schema, cascade=True))
 
     async def assert_rejected(self, instance: Base) -> None:

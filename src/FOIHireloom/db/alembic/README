@@ -25,6 +25,35 @@ Revert the latest revision:
 Downgrades can remove tables and their data. Use a disposable database when
 testing upgrade/downgrade cycles. Schema migrations do not run on MCP startup.
 
-The async connection lifecycle is encapsulated in MigrationEnvironment. For
+The async connection lifecycle is encapsulated in MigrationEnvironment in env.py. For
 programmatic use inside an async application, pass a synchronous connection
 through Config.attributes["connection"] from AsyncConnection.run_sync().
+
+Reference structure
+
+This directory follows:
+https://github.com/anmarkoulis/layered-architecture/tree/main/src/layered_architecture/db/alembic
+
+  alembic/
+    README
+    alembic.ini
+    env.py
+    script.py.mako
+    versions/
+      <revision>_<description>.py
+
+As in the reference, env.py owns the offline and online migration paths,
+uses Base.metadata for autogeneration, bridges async connections with run_sync,
+uses NullPool, and enables transaction_per_migration. MigrationEnvironment
+encapsulates these operations as methods to follow this project's OOP convention.
+
+Project-specific differences:
+- alembic.ini resolves script_location relative to its own location with %(here)s,
+  so commands work from the repository root; logging is configured in this file
+  because Settings does not provide the reference project's LOGGING_CONFIG.
+- DATABASE_URL goes directly to create_async_engine/context.configure to preserve
+  percent-encoded passwords without ConfigParser interpolation.
+- Type/default comparisons, disposal in finally, and an optionally supplied
+  connection are retained for schema checks, cleanup, and async integration tests.
+- Celery's include_object filter is omitted because this project has no Celery
+  tables. The revision template retains type annotations on standard Alembic hooks.
