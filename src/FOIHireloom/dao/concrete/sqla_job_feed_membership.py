@@ -1,8 +1,12 @@
-from sqlalchemy import select
+from collections.abc import Collection, Mapping
+from datetime import datetime
+
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import JobFeedMembership, SourceFeed
 from FOIHireloom.dao.interfaces.job_feed_membership import JobFeedMembershipRepository
+from FOIHireloom.dto.job_sync import MembershipSnapshotDTO
 
 
 class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
@@ -31,11 +35,61 @@ class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
         return list(result.all())
 
     async def add(self, membership: JobFeedMembership) -> None:
-        feed_id = await self._session.scalar(select(SourceFeed.id).where(
-            SourceFeed.id == membership.feed_id,
-            SourceFeed.scope == "county",
-        ))
-        if feed_id is None:
-            raise ValueError("Memberships require an existing Croatian county source feed.")
+        await self._require_county_feed(membership.feed_id)
         self._session.add(membership)
         await self._session.flush()
+
+    async def list_snapshots_for_feed(self, feed_id: int) -> list[MembershipSnapshotDTO]:
+        statement = (
+            select(JobFeedMembership.job_id, JobFeedMembership.presence_status)
+            .join(SourceFeed)
+            .where(JobFeedMembership.feed_id == feed_id, SourceFeed.scope == "county")
+            .order_by(JobFeedMembership.job_id)
+        )
+        result = await self._session.execute(statement)
+        return [MembershipSnapshotDTO.model_validate(row) for row in result.all()]
+
+    async def create_many(self, feed_id: int, items: Mapping[int, dict[str, str]], seen_at: datetime) -> None:
+        if not items:
+            return
+        await self._require_county_feed(feed_id)
+        self._session.add_all([
+            JobFeedMembership(job_id=job_id, feed_id=feed_id, source_item=dict(item),
+                              first_seen_at=seen_at, last_seen_at=seen_at)
+            for job_id, item in items.items()
+        ])
+        await self._session.flush()
+
+    async def mark_present(self, feed_id: int, items: Mapping[int, dict[str, str]], seen_at: datetime) -> None:
+        if items:
+            await self._session.execute(update(JobFeedMembership), [
+                {"job_id": job_id, "feed_id": feed_id, "source_item": dict(item), "presence_status": "present",
+                 "last_seen_at": seen_at, "missing_since_at": None}
+                for job_id, item in items.items()
+            ])
+
+    async def mark_missing(self, feed_id: int, job_ids: Collection[int], missing_since: datetime) -> None:
+        if job_ids:
+            await self._session.execute(
+                update(JobFeedMembership)
+                .where(JobFeedMembership.feed_id == feed_id, JobFeedMembership.job_id.in_(job_ids),
+                       JobFeedMembership.presence_status == "present")
+                .values(presence_status="missing", missing_since_at=missing_since)
+            )
+
+    async def touch_present(self, feed_id: int, seen_at: datetime) -> list[int]:
+        result = await self._session.execute(
+            update(JobFeedMembership)
+            .where(JobFeedMembership.feed_id == feed_id, JobFeedMembership.presence_status == "present")
+            .values(last_seen_at=seen_at)
+            .returning(JobFeedMembership.job_id)
+        )
+        return sorted(result.scalars().all())
+
+    async def _require_county_feed(self, feed_id: int) -> None:
+        found = await self._session.scalar(select(SourceFeed.id).where(
+            SourceFeed.id == feed_id,
+            SourceFeed.scope == "county",
+        ))
+        if found is None:
+            raise ValueError("Memberships require an existing Croatian county source feed.")

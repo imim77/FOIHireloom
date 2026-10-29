@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
+from collections.abc import Collection, Mapping
+from datetime import datetime
 
 from FOIHireloom.db.models import JobFeedMembership
+from FOIHireloom.dto.job_sync import MembershipSnapshotDTO
 
 
 class JobFeedMembershipRepository(ABC):
@@ -30,3 +33,23 @@ class JobFeedMembershipRepository(ABC):
         Database errors propagate; the caller owns rollback. Generated
         observation timestamps are available after the call.
         """
+
+    @abstractmethod
+    async def list_snapshots_for_feed(self, feed_id: int) -> list[MembershipSnapshotDTO]:
+        """Return each membership's job ID and presence status for a county feed."""
+
+    @abstractmethod
+    async def create_many(self, feed_id: int, items: Mapping[int, dict[str, str]], seen_at: datetime) -> None:
+        """Add present memberships keyed by job ID; raise ValueError for a non-county feed."""
+
+    @abstractmethod
+    async def mark_present(self, feed_id: int, items: Mapping[int, dict[str, str]], seen_at: datetime) -> None:
+        """Mark existing memberships present at seen_at and store their current items."""
+
+    @abstractmethod
+    async def mark_missing(self, feed_id: int, job_ids: Collection[int], missing_since: datetime) -> None:
+        """Mark present memberships missing; already missing ones keep their time."""
+
+    @abstractmethod
+    async def touch_present(self, feed_id: int, seen_at: datetime) -> list[int]:
+        """Confirm every present membership at seen_at; return their job IDs."""

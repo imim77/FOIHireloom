@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
+from datetime import datetime
 from uuid import UUID
 
 from FOIHireloom.db.models import SourceFeed
+from FOIHireloom.dto.job_sync import FeedCheckDTO
 from FOIHireloom.dto.source_feed import SourceFeedCreateDTO, SourceFeedDTO, SourceFeedUpdateDTO
 
 
@@ -47,4 +49,11 @@ class SourceFeedRepository(ABC):
         Enabled flags and sync timestamps are kept. Raise NotFoundError when no
         county feed has this ID. Database errors propagate; the caller owns
         rollback.
+        """
+
+    @abstractmethod
+    async def record_check(self, feed_id: int, check: FeedCheckDTO, checked_at: datetime) -> None:
+        """Store a check's time and, when it succeeded, its validators.
+
+        Raise NotFoundError when no county feed has this ID.
         """

@@ -1,9 +1,11 @@
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import SourceFeed
+from FOIHireloom.dto.job_sync import FeedCheckDTO
 from FOIHireloom.dto.source_feed import SourceFeedCreateDTO, SourceFeedDTO, SourceFeedUpdateDTO
 from FOIHireloom.exceptions import NotFoundError
 from FOIHireloom.dao.interfaces.source_feed import SourceFeedRepository
@@ -66,3 +68,15 @@ class SqlAlchemySourceFeedRepository(SourceFeedRepository):
             feed.etag = feed.source_last_modified_at = None
         await self._session.flush()
         return SourceFeedDTO.model_validate(feed)
+
+    async def record_check(self, feed_id: int, check: FeedCheckDTO, checked_at: datetime) -> None:
+        feed = await self.get_by_id(feed_id)
+        if feed is None:
+            raise NotFoundError("source feed", str(feed_id))
+        feed.last_checked_at = checked_at
+        if check.succeeded:
+            feed.last_success_at = checked_at
+            feed.etag, feed.source_last_modified_at = check.etag, check.source_last_modified_at
+            if check.content_changed:
+                feed.last_content_change_at = checked_at
+        await self._session.flush()

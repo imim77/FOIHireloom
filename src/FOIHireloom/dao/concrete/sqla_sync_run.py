@@ -1,8 +1,12 @@
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import SourceFeed, SyncRun
 from FOIHireloom.dao.interfaces.sync_run import SyncRunRepository
+from FOIHireloom.dto.job_sync import SyncRunOutcomeDTO
+from FOIHireloom.exceptions import NotFoundError
 
 
 class SqlAlchemySyncRunRepository(SyncRunRepository):
@@ -37,3 +41,27 @@ class SqlAlchemySyncRunRepository(SyncRunRepository):
             raise ValueError("Sync attempts require an existing Croatian county source feed.")
         self._session.add(sync_run)
         await self._session.flush()
+
+    async def start(self, feed_id: int) -> int:
+        run = SyncRun(feed_id=feed_id)
+        await self.add(run)
+        return run.id
+
+    async def finish(self, run_id: int, outcome: SyncRunOutcomeDTO, finished_at: datetime) -> None:
+        run = await self.get_by_id(run_id)
+        if run is None:
+            raise NotFoundError("sync run", str(run_id))
+        for field, value in outcome.model_dump().items():
+            setattr(run, field, value)
+        run.finished_at = finished_at
+        await self._session.flush()
+
+    async def get_latest_items_seen(self, feed_id: int) -> int | None:
+        statement = (
+            select(SyncRun.items_seen)
+            .join(SourceFeed)
+            .where(SyncRun.feed_id == feed_id, SyncRun.status == "succeeded", SourceFeed.scope == "county")
+            .order_by(SyncRun.started_at.desc(), SyncRun.id.desc())
+            .limit(1)
+        )
+        return await self._session.scalar(statement)

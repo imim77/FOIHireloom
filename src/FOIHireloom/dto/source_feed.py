@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from .base import ModelConfigBaseModel
@@ -13,6 +14,8 @@ class SourceFeedDTO(ModelConfigBaseModel):
     feed_url: str
     scope: str
     enabled: bool
+    etag: str | None = None
+    source_last_modified_at: datetime | None = None
 
 
 class SourceFeedCreateDTO(ModelConfigBaseModel):
