@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from types import TracebackType
 from typing import Self
 
+from FOIHireloom.persistence.county_repository import CountyRepository
 from FOIHireloom.persistence.job_repository import JobRepository
 from FOIHireloom.persistence.job_feed_membership_repository import JobFeedMembershipRepository
 from FOIHireloom.persistence.source_feed_repository import SourceFeedRepository
@@ -15,6 +16,11 @@ class UnitOfWork(ABC):
     rolls back any remaining changes and releases the session, including
     when an exception escapes. Repositories are available only in the context.
     """
+
+    @property
+    @abstractmethod
+    def counties(self) -> CountyRepository:
+        """Return the county reference repository bound to the same session."""
 
     @property
     @abstractmethod

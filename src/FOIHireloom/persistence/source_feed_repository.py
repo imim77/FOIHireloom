@@ -20,6 +20,10 @@ class SourceFeedRepository(ABC):
         """Return the county feed for this CKAN resource, or None if absent."""
 
     @abstractmethod
+    async def get_by_feed_url(self, feed_url: str) -> SourceFeed | None:
+        """Return the county feed for this URL, including disabled feeds."""
+
+    @abstractmethod
     async def list_enabled(self) -> list[SourceFeed]:
         """Return enabled county feeds ordered by ascending database ID."""
 

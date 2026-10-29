@@ -4,6 +4,8 @@ from typing import Self
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.session import AsyncDBContextManager, SessionManager
+from FOIHireloom.persistence.county_repository import CountyRepository
+from FOIHireloom.persistence.impl.sqlalchemy_county_repository import SqlAlchemyCountyRepository
 from FOIHireloom.persistence.impl.sqlalchemy_job_repository import SqlAlchemyJobRepository
 from FOIHireloom.persistence.impl.sqlalchemy_job_feed_membership_repository import (
     SqlAlchemyJobFeedMembershipRepository,
@@ -34,10 +36,17 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self._sessions = sessions
         self._context: AsyncDBContextManager | None = None
         self._session: AsyncSession | None = None
+        self._counties: CountyRepository | None = None
         self._jobs: JobRepository | None = None
         self._job_feed_memberships: JobFeedMembershipRepository | None = None
         self._source_feeds: SourceFeedRepository | None = None
         self._sync_runs: SyncRunRepository | None = None
+
+    @property
+    def counties(self) -> CountyRepository:
+        if self._counties is None:
+            raise RuntimeError("County repository requires an active Unit of Work.")
+        return self._counties
 
     @property
     def jobs(self) -> JobRepository:
@@ -71,6 +80,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self._context = context
         try:
             self._session = await context.__aenter__()
+            self._counties = SqlAlchemyCountyRepository(self._session)
             self._jobs = SqlAlchemyJobRepository(self._session)
             self._job_feed_memberships = SqlAlchemyJobFeedMembershipRepository(self._session)
             self._source_feeds = SqlAlchemySourceFeedRepository(self._session)
@@ -112,9 +122,20 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         return self._session
 
     def _clear_context(self) -> None:
+        self._counties = None
         self._jobs = None
         self._job_feed_memberships = None
         self._source_feeds = None
         self._sync_runs = None
         self._session = None
         self._context = None
+
+
+class SqlAlchemyUnitOfWorkFactory:
+    """Create an independent Unit of Work for each service operation."""
+
+    def __init__(self, sessions: SessionManager) -> None:
+        self._sessions = sessions
+
+    def __call__(self) -> SqlAlchemyUnitOfWork:
+        return SqlAlchemyUnitOfWork(self._sessions)

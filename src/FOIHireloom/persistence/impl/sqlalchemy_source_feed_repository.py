@@ -27,6 +27,13 @@ class SqlAlchemySourceFeedRepository(SourceFeedRepository):
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
 
+    async def get_by_feed_url(self, feed_url: str) -> SourceFeed | None:
+        statement = select(SourceFeed).where(
+            SourceFeed.scope == "county", SourceFeed.feed_url == feed_url
+        )
+        result = await self._session.execute(statement)
+        return result.scalar_one_or_none()
+
     async def list_enabled(self) -> list[SourceFeed]:
         statement = (
             select(SourceFeed)

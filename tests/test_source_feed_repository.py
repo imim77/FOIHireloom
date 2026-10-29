@@ -59,6 +59,7 @@ class SourceFeedRepositoryTests(ModelTestCase):
             self.assertEqual(saved.feed_url, feed.feed_url)
             self.assertEqual(saved.scope, "county")
             self.assertIs(await repository.get_by_ckan_resource_id(feed.ckan_resource_id), saved)
+            self.assertIs(await repository.get_by_feed_url(feed.feed_url), saved)
 
     async def test_missing_feeds_return_none_and_empty_list(self) -> None:
         self.assertEqual(await self.repository.list_enabled(), [])
@@ -66,6 +67,7 @@ class SourceFeedRepositoryTests(ModelTestCase):
         await self.repository.add(feed)
         self.assertIsNone(await self.repository.get_by_id(feed.id + 1))
         self.assertIsNone(await self.repository.get_by_ckan_resource_id(uuid4()))
+        self.assertIsNone(await self.repository.get_by_feed_url("https://example.com/missing"))
 
     async def test_disabled_county_feed_remains_available_for_individual_lookups(self) -> None:
         feed = self.feed(enabled=False)
@@ -74,6 +76,7 @@ class SourceFeedRepositoryTests(ModelTestCase):
         async with self.sessions.session() as reader:
             repository = SqlAlchemySourceFeedRepository(reader)
             self.assertIsNotNone(await repository.get_by_id(feed.id))
+            self.assertIsNotNone(await repository.get_by_feed_url(feed.feed_url))
             self.assertIsNotNone(await repository.get_by_ckan_resource_id(feed.ckan_resource_id))
             self.assertEqual(await repository.list_enabled(), [])
 
@@ -87,11 +90,13 @@ class SourceFeedRepositoryTests(ModelTestCase):
 
         # The EU row is already present in the session's identity map.
         self.assertIsNone(await self.repository.get_by_id(legacy.id))
+        self.assertIsNone(await self.repository.get_by_feed_url(legacy.feed_url))
         self.assertIsNone(await self.repository.get_by_ckan_resource_id(legacy.ckan_resource_id))
         self.assertEqual([feed.id for feed in await self.repository.list_enabled()], [first.id, last.id])
         async with self.sessions.session() as reader:
             repository = SqlAlchemySourceFeedRepository(reader)
             self.assertIsNone(await repository.get_by_id(legacy.id))
+            self.assertIsNone(await repository.get_by_feed_url(legacy.feed_url))
             self.assertIsNone(await repository.get_by_ckan_resource_id(legacy.ckan_resource_id))
             self.assertEqual([feed.id for feed in await repository.list_enabled()], [first.id, last.id])
 

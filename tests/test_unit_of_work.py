@@ -9,7 +9,7 @@ from model_test_case import ModelTestCase
 
 from FOIHireloom.db.models import County, Employer, Job, JobFeedMembership, SourceFeed, SyncRun
 from FOIHireloom.db.session import SessionManager
-from FOIHireloom.db.uow import SqlAlchemyUnitOfWork, UnitOfWork
+from FOIHireloom.db.uow import SqlAlchemyUnitOfWork, SqlAlchemyUnitOfWorkFactory, UnitOfWork
 from FOIHireloom.persistence.impl.sqlalchemy_job_repository import SqlAlchemyJobRepository
 from FOIHireloom.persistence.impl.sqlalchemy_source_feed_repository import SqlAlchemySourceFeedRepository
 from FOIHireloom.persistence.impl.sqlalchemy_sync_run_repository import SqlAlchemySyncRunRepository
@@ -184,6 +184,8 @@ class UnitOfWorkTests(ModelTestCase):
             with self.assertRaisesRegex(RuntimeError, "active"):
                 _ = work.jobs
             with self.assertRaisesRegex(RuntimeError, "active"):
+                _ = work.counties
+            with self.assertRaisesRegex(RuntimeError, "active"):
                 _ = work.job_feed_memberships
             with self.assertRaisesRegex(RuntimeError, "active"):
                 _ = work.source_feeds
@@ -215,6 +217,7 @@ class UnitOfWorkTests(ModelTestCase):
         work = SqlAlchemyUnitOfWork(self.sessions)
         async with work:
             previous_repository = work.jobs
+            previous_counties = work.counties
             previous_memberships = work.job_feed_memberships
             previous_source_feeds = work.source_feeds
             previous_sync_runs = work.sync_runs
@@ -224,6 +227,7 @@ class UnitOfWorkTests(ModelTestCase):
 
         async with work:
             self.assertIsNot(work.jobs, previous_repository)
+            self.assertIsNot(work.counties, previous_counties)
             self.assertIsNot(work.job_feed_memberships, previous_memberships)
             self.assertIsNot(work.source_feeds, previous_source_feeds)
             self.assertIsNot(work.sync_runs, previous_sync_runs)
@@ -416,9 +420,10 @@ class UnitOfWorkTests(ModelTestCase):
 
     async def test_concurrent_instances_have_independent_transactions(self) -> None:
         barrier = asyncio.Barrier(2)
+        factory = SqlAlchemyUnitOfWorkFactory(self.sessions)
 
         async def write(commit: bool) -> int:
-            async with SqlAlchemyUnitOfWork(self.sessions) as work:
+            async with factory() as work:
                 job = self.job()
                 await work.jobs.add(job)
                 job_id = job.id
