@@ -1,7 +1,12 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import CheckConstraint, Identity, SmallInteger, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+
+if TYPE_CHECKING:
+    from .source_feed import SourceFeed
 
 
 class County(Base):
@@ -14,3 +19,7 @@ class County(Base):
     id: Mapped[int] = mapped_column(SmallInteger, Identity(), primary_key=True)
     code: Mapped[str] = mapped_column(Text, unique=True)
     name: Mapped[str] = mapped_column(Text, unique=True)
+
+    source_feeds: Mapped[list["SourceFeed"]] = relationship(
+        back_populates="county", passive_deletes="all", lazy="raise"
+    )
