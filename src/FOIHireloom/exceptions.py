@@ -57,3 +57,24 @@ class CkanApiError(CkanError):
 
 class CkanResponseError(CkanError):
     """The response is not a valid package_show response."""
+
+
+class HzzFeedError(FOIHireloomException, RuntimeError):
+    """An HZZ RSS feed could not be downloaded or read."""
+
+    code = "hzz_feed_error"
+
+
+class HzzFeedTransportError(HzzFeedError):
+    """The HTTP request failed, including timeouts."""
+
+
+class HzzFeedHttpError(HzzFeedError):
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
+        super().__init__(f"HZZ feed returned HTTP {status_code}.")
+
+
+class HzzFeedTooLargeError(HzzFeedError):
+    """The decoded response exceeded the configured size limit."""
+
