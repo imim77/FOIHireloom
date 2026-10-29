@@ -15,3 +15,9 @@ class Settings(BaseSettings):
     )
     DATABASE_POOL_SIZE: int = Field(default=5, ge=1)
     DATABASE_MAX_OVERFLOW: int = Field(default=10, ge=0)
+
+    CKAN_BASE_URL: str = "https://data.gov.hr/ckan"
+    CKAN_DATASET_ID: str = Field(
+        default="slobodna-radna-mjesta-po-zupanijama-u-rh-i-eu", min_length=1
+    )
+    CKAN_TIMEOUT: float = Field(default=15.0, gt=0, allow_inf_nan=False)

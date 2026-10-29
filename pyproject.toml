@@ -6,6 +6,8 @@ dependencies = [
     "alembic>=1.16,<2",
     "asyncpg>=0.31,<1",
     "fastmcp>=3.0,<4",
+    "httpx>=0.28,<1",
+    "pydantic>=2,<3",
     "pydantic-settings>=2,<3",
     "sqlalchemy[asyncio]>=2.0,<3",
 ]
