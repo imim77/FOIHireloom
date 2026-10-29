@@ -1,6 +1,8 @@
+from datetime import datetime
 from types import TracebackType
 from typing import Self
 
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -114,6 +116,9 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
                 self._clear_context()
         if isinstance(exc, SQLAlchemyError):
             raise self._translate(exc) from exc
+
+    async def transaction_time(self) -> datetime:
+        return await self._active_session().scalar(select(func.now()))
 
     async def commit(self) -> None:
         try:

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from datetime import datetime
 from types import TracebackType
 from typing import Self
 
@@ -57,6 +58,14 @@ class UnitOfWork(ABC):
 
         Database errors escaping the context are re-raised as PersistenceError
         (ConflictError for constraint violations); others propagate unchanged.
+        """
+
+    @abstractmethod
+    async def transaction_time(self) -> datetime:
+        """Return the database's timestamp for the current transaction.
+
+        Database defaults use the same clock, so ordering constraints hold
+        even when the application's clock differs.
         """
 
     @abstractmethod

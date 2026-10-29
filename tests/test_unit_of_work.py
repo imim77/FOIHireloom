@@ -82,6 +82,16 @@ class UnitOfWorkTests(ModelTestCase):
             self.assertIsNone(await reader.get(Employer, employer_id))
         self.assertEqual(self.engine.pool.checkedout(), 0)
 
+    async def test_transaction_time_is_stable_within_and_advances_across_transactions(self) -> None:
+        work = SqlAlchemyUnitOfWork(self.sessions)
+        async with work:
+            first = await work.transaction_time()
+            await asyncio.sleep(0.01)
+            self.assertEqual(await work.transaction_time(), first)
+            self.assertIsNotNone(first.tzinfo)
+        async with work:
+            self.assertGreater(await work.transaction_time(), first)
+
     async def test_failed_flush_rolls_back_earlier_writes_and_allows_reuse(self) -> None:
         work = SqlAlchemyUnitOfWork(self.sessions)
         with self.assertRaises(ConflictError):
