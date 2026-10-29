@@ -14,17 +14,15 @@ from FOIHireloom.db.models import County, Job, SourceFeed, SyncRun
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
 from FOIHireloom.dto.ckan import CkanResource
-from FOIHireloom.exceptions import CkanError
+from FOIHireloom.exceptions import CkanError, SourceFeedRegistrationError
 from FOIHireloom.integrations.concrete.ckan import CkanClient
-from FOIHireloom.services.source_feed_registration import (
-    SourceFeedRegistrationError, SourceFeedRegistrationPlanner, SourceFeedRegistrationService,
-)
+from FOIHireloom.services import CroatianCountyCatalog, SourceFeedRegistrationPlanner, SourceFeedRegistrationService
 
 
 class RegistrationPlannerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.payload = json.loads((Path(__file__).parent / "fixtures/ckan_package_show.json").read_text())
-        self.planner = SourceFeedRegistrationPlanner()
+        self.planner = SourceFeedRegistrationPlanner(CroatianCountyCatalog())
 
     def build(self):
         return self.planner.build([CkanResource.model_validate(row) for row in self.payload["result"]["resources"]])
@@ -82,6 +80,7 @@ class SourceFeedRegistrationTests(ModelTestCase):
         self.service = SourceFeedRegistrationService(
             CkanClient(self.http, "https://ckan.example/ckan"),
             SqlAlchemyUnitOfWorkFactory(self.sessions),
+            SourceFeedRegistrationPlanner(CroatianCountyCatalog()),
         )
 
     def respond(self, request: httpx.Request) -> httpx.Response:

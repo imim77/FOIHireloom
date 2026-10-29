@@ -5,22 +5,12 @@
 
 import argparse
 import asyncio
-from dataclasses import asdict
 import json
 import sys
 
-import httpx
-from sqlalchemy.exc import SQLAlchemyError
-
 from FOIHireloom.config.settings import Settings
-from FOIHireloom.db.database import PostgresDatabase
-from FOIHireloom.db.session import SessionManager
-from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
-from FOIHireloom.exceptions import CkanError, PersistenceError
-from FOIHireloom.integrations.concrete.ckan import CkanClient
-from FOIHireloom.services.source_feed_registration import (
-    SourceFeedRegistrationError, SourceFeedRegistrationPlanner, SourceFeedRegistrationService,
-)
+from FOIHireloom.exceptions import CkanError, PersistenceError, SourceFeedRegistrationError
+from FOIHireloom.services.dependency import DependencyService
 
 
 class SourceFeedRegistrationCommand:
@@ -28,24 +18,12 @@ class SourceFeedRegistrationCommand:
         self._settings = settings
 
     async def run(self, dry_run: bool = False) -> dict[str, int | bool]:
-        async with httpx.AsyncClient() as http:
-            client = CkanClient(http, self._settings.CKAN_BASE_URL, self._settings.CKAN_TIMEOUT)
+        dependencies = DependencyService(self._settings)
+        dataset_id = self._settings.CKAN_DATASET_ID
+        async with dependencies.source_feed_registration_service(with_database=not dry_run) as service:
             if dry_run:
-                planner = SourceFeedRegistrationPlanner()
-                plan = planner.build(await client.get_resources(self._settings.CKAN_DATASET_ID))
-                return {
-                    "dry_run": True, "counties": len(planner.catalog.definitions),
-                    "feeds": len(plan.sources), "resources_skipped": plan.resources_skipped,
-                }
-            database = PostgresDatabase(self._settings)
-            try:
-                service = SourceFeedRegistrationService(
-                    client, SqlAlchemyUnitOfWorkFactory(SessionManager(database.engine))
-                )
-                result = await service.register_sources(self._settings.CKAN_DATASET_ID)
-                return asdict(result)
-            finally:
-                await database.close()
+                return {"dry_run": True, **(await service.preview_sources(dataset_id)).model_dump()}
+            return (await service.register_sources(dataset_id)).model_dump()
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -54,7 +32,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     try:
         result = asyncio.run(SourceFeedRegistrationCommand(Settings()).run(args.dry_run))
-    except (SQLAlchemyError, PersistenceError, OSError):
+    except (PersistenceError, OSError):
         print("Registration failed: check DATABASE_URL and apply Alembic migrations.", file=sys.stderr)
         raise SystemExit(1) from None
     except (CkanError, SourceFeedRegistrationError, ValueError) as error:
