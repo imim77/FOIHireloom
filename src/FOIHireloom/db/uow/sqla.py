@@ -1,6 +1,7 @@
 from types import TracebackType
 from typing import Self
 
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.session import AsyncDBContextManager, SessionManager
@@ -16,6 +17,8 @@ from FOIHireloom.dao.interfaces.job import JobRepository
 from FOIHireloom.dao.interfaces.job_feed_membership import JobFeedMembershipRepository
 from FOIHireloom.dao.interfaces.source_feed import SourceFeedRepository
 from FOIHireloom.dao.interfaces.sync_run import SyncRunRepository
+
+from FOIHireloom.exceptions import ConflictError, PersistenceError
 
 from .base import UnitOfWork
 
@@ -109,9 +112,14 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
                 await context.__aexit__(exc_type, exc, tb)
             finally:
                 self._clear_context()
+        if isinstance(exc, SQLAlchemyError):
+            raise self._translate(exc) from exc
 
     async def commit(self) -> None:
-        await self._active_session().commit()
+        try:
+            await self._active_session().commit()
+        except SQLAlchemyError as error:
+            raise self._translate(error) from error
 
     async def rollback(self) -> None:
         await self._active_session().rollback()
@@ -120,6 +128,12 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         if self._session is None:
             raise RuntimeError("Unit of Work is not active. Use 'async with'.")
         return self._session
+
+    @staticmethod
+    def _translate(error: SQLAlchemyError) -> PersistenceError:
+        if isinstance(error, IntegrityError):
+            return ConflictError(str(error))
+        return PersistenceError(str(error))
 
     def _clear_context(self) -> None:
         self._counties = None

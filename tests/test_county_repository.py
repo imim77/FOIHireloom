@@ -1,11 +1,10 @@
-from sqlalchemy.exc import IntegrityError
-
 from model_test_case import ModelTestCase
 
 from FOIHireloom.db.models import County
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
 from FOIHireloom.dao.concrete.sqla_county import SqlAlchemyCountyRepository
+from FOIHireloom.exceptions import ConflictError
 
 
 class CountyRepositoryTests(ModelTestCase):
@@ -35,7 +34,7 @@ class CountyRepositoryTests(ModelTestCase):
             County(code="grad-zagreb", name="Other"),
             County(code="other", name="Grad Zagreb"),
         ]:
-            with self.subTest(code=duplicate.code), self.assertRaises(IntegrityError):
+            with self.subTest(code=duplicate.code), self.assertRaises(ConflictError):
                 async with factory() as work:
                     await work.counties.add(County(code="pending", name="Pending"))
                     await work.counties.add(duplicate)

@@ -3,13 +3,12 @@ from contextlib import suppress
 from datetime import timedelta
 from uuid import uuid4
 
-from sqlalchemy.exc import IntegrityError
-
 from model_test_case import ModelTestCase
 
 from FOIHireloom.db.models import County, Employer, Job, JobFeedMembership, SourceFeed, SyncRun
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWork, SqlAlchemyUnitOfWorkFactory, UnitOfWork
+from FOIHireloom.exceptions import ConflictError
 from FOIHireloom.dao.concrete.sqla_job import SqlAlchemyJobRepository
 from FOIHireloom.dao.concrete.sqla_source_feed import SqlAlchemySourceFeedRepository
 from FOIHireloom.dao.concrete.sqla_sync_run import SqlAlchemySyncRunRepository
@@ -85,7 +84,7 @@ class UnitOfWorkTests(ModelTestCase):
 
     async def test_failed_flush_rolls_back_earlier_writes_and_allows_reuse(self) -> None:
         work = SqlAlchemyUnitOfWork(self.sessions)
-        with self.assertRaises(IntegrityError):
+        with self.assertRaises(ConflictError):
             async with work:
                 first = self.job(source_job_id="123")
                 await work.jobs.add(first)
@@ -106,7 +105,7 @@ class UnitOfWorkTests(ModelTestCase):
         self.session.add_all([first, second])
         await self.session.commit()
 
-        with self.assertRaises(IntegrityError):
+        with self.assertRaises(ConflictError):
             async with SqlAlchemyUnitOfWork(self.sessions) as work:
                 pending = self.job()
                 await work.jobs.add(pending)
@@ -289,7 +288,7 @@ class UnitOfWorkTests(ModelTestCase):
         self.assertEqual(self.engine.pool.checkedout(), 0)
 
     async def test_source_feed_error_rolls_back_both_repositories(self) -> None:
-        with self.assertRaises(IntegrityError) as error:
+        with self.assertRaises(ConflictError) as error:
             async with SqlAlchemyUnitOfWork(self.sessions) as work:
                 feed = self.feed()
                 await work.source_feeds.add(feed)
@@ -393,7 +392,7 @@ class UnitOfWorkTests(ModelTestCase):
         self.assertEqual(self.engine.pool.checkedout(), 0)
 
     async def test_membership_error_rolls_back_all_repositories(self) -> None:
-        with self.assertRaises(IntegrityError) as error:
+        with self.assertRaises(ConflictError) as error:
             async with SqlAlchemyUnitOfWork(self.sessions) as work:
                 feed = self.feed()
                 await work.source_feeds.add(feed)

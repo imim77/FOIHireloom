@@ -53,11 +53,15 @@ class UnitOfWork(ABC):
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
-        """Roll back uncommitted work and close without suppressing exceptions."""
+        """Roll back uncommitted work and close.
+
+        Database errors escaping the context are re-raised as PersistenceError
+        (ConflictError for constraint violations); others propagate unchanged.
+        """
 
     @abstractmethod
     async def commit(self) -> None:
-        """Persist the current transaction; database errors propagate to the caller."""
+        """Persist the current transaction; database errors raise PersistenceError."""
 
     @abstractmethod
     async def rollback(self) -> None:

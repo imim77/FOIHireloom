@@ -1,11 +1,10 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from sqlalchemy.exc import IntegrityError
-
 from FOIHireloom.db.models import County, SourceFeed
 from FOIHireloom.db.uow.base import UnitOfWork
 from FOIHireloom.dto.ckan import CkanResource
+from FOIHireloom.exceptions import ConflictError
 from FOIHireloom.integrations.concrete.ckan import CkanClient
 
 from .croatian_counties import CountyDefinition, CroatianCountyCatalog
@@ -124,7 +123,7 @@ class SourceFeedRegistrationService:
                         unchanged += 1
                 await work.commit()
                 return RegistrationResult(counties_added, added, updated, unchanged, plan.resources_skipped)
-        except IntegrityError as error:
+        except ConflictError as error:
             raise SourceFeedRegistrationError("County or feed data conflicts; registration was rolled back.") from error
 
     async def _ensure_counties(self, work: UnitOfWork) -> tuple[dict[str, int], int]:

@@ -16,7 +16,7 @@ from FOIHireloom.config.settings import Settings
 from FOIHireloom.db.database import PostgresDatabase
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
-from FOIHireloom.exceptions import CkanError
+from FOIHireloom.exceptions import CkanError, PersistenceError
 from FOIHireloom.integrations.concrete.ckan import CkanClient
 from FOIHireloom.services.source_feed_registration import (
     SourceFeedRegistrationError, SourceFeedRegistrationPlanner, SourceFeedRegistrationService,
@@ -54,7 +54,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     try:
         result = asyncio.run(SourceFeedRegistrationCommand(Settings()).run(args.dry_run))
-    except (SQLAlchemyError, OSError):
+    except (SQLAlchemyError, PersistenceError, OSError):
         print("Registration failed: check DATABASE_URL and apply Alembic migrations.", file=sys.stderr)
         raise SystemExit(1) from None
     except (CkanError, SourceFeedRegistrationError, ValueError) as error:
