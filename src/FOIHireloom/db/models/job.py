@@ -21,6 +21,7 @@ from .base import Base
 
 if TYPE_CHECKING:
     from .employer import Employer
+    from .job_feed_membership import JobFeedMembership
 
 
 class Job(Base):
@@ -77,3 +78,9 @@ class Job(Base):
     content_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     employer: Mapped["Employer | None"] = relationship(back_populates="jobs", lazy="raise")
+    feed_memberships: Mapped[list["JobFeedMembership"]] = relationship(
+        back_populates="job",
+        cascade="save-update, merge, delete, delete-orphan",
+        passive_deletes=True,
+        lazy="raise",
+    )
