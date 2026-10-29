@@ -1,0 +1,21 @@
+simulation: ckan-registration
+routing: path
+mocks:
+  - name: CKAN metadata
+    routeKey: ckan
+    origin: [data.gov.hr]
+    path: postman/mocks/ckan
+  - name: CKAN unavailable
+    routeKey: ckan-error
+    path: postman/mocks/ckan
+    scenarios:
+      - overrides:
+          conditions:
+            error: {status_code: 503}
+  - name: CKAN slow
+    routeKey: ckan-slow
+    path: postman/mocks/ckan
+    scenarios:
+      - overrides:
+          conditions:
+            latency: {delay_ms: 500}

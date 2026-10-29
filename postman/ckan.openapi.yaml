@@ -1,0 +1,51 @@
+openapi: 3.0.3
+info:
+  title: data.gov.hr CKAN metadata dependency
+  version: 0.1.0
+  description: Subset used by FOIHireloom, based on CKAN documentation and the 2026-10-29 public response.
+servers:
+  - url: https://data.gov.hr/ckan
+externalDocs:
+  url: https://docs.ckan.org/en/latest/api/
+paths:
+  /api/3/action/package_show:
+    get:
+      operationId: packageShow
+      parameters:
+        - in: query
+          name: id
+          required: true
+          schema: {type: string, minLength: 1}
+      responses:
+        '200':
+          description: Check success even on HTTP 200. Resources are metadata, not RSS contents.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: {type: boolean}
+                  error: {type: object}
+                  result:
+                    type: object
+                    required: [resources]
+                    properties:
+                      resources:
+                        type: array
+                        items:
+                          type: object
+                          required: [id, url]
+                          properties:
+                            id: {type: string, format: uuid}
+                            url: {type: string, format: uri}
+                            name: {type: string, nullable: true}
+                            description: {type: string, nullable: true}
+                            format: {type: string, nullable: true}
+                            state: {type: string, nullable: true}
+              example: {success: true, result: {resources: []}}
+        '503':
+          description: Controlled availability failure for testing caller behavior.
+          content:
+            application/json:
+              example: {error: Service unavailable}
