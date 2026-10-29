@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
 from FOIHireloom.db.models import County
+from FOIHireloom.dto.county import CountyDefinitionDTO, CountyDTO
 
 
 class CountyRepository(ABC):
@@ -17,3 +18,7 @@ class CountyRepository(ABC):
     @abstractmethod
     async def add(self, county: County) -> None:
         """Add and flush without committing; database errors propagate."""
+
+    @abstractmethod
+    async def create(self, county: CountyDefinitionDTO) -> CountyDTO:
+        """Add and flush a county from its definition; return it with its ID."""

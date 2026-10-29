@@ -4,6 +4,7 @@ from FOIHireloom.db.models import County
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
 from FOIHireloom.dao.concrete.sqla_county import SqlAlchemyCountyRepository
+from FOIHireloom.dto.county import CountyDefinitionDTO, CountyDTO
 from FOIHireloom.exceptions import ConflictError
 
 
@@ -42,3 +43,11 @@ class CountyRepositoryTests(ModelTestCase):
                 self.assertIsNone(await work.counties.get_by_code("pending"))
                 self.assertIsNotNone(await work.counties.get_by_name("Grad Zagreb"))
         self.assertEqual(self.engine.pool.checkedout(), 0)
+
+    async def test_create_returns_county_dto_with_generated_id(self) -> None:
+        factory = SqlAlchemyUnitOfWorkFactory(SessionManager(self.engine))
+        async with factory() as work:
+            created = await work.counties.create(CountyDefinitionDTO(code="istarska", name="Istarska županija"))
+            self.assertIsInstance(created, CountyDTO)
+            self.assertEqual((await work.counties.get_by_code("istarska")).id, created.id)
+            await work.commit()

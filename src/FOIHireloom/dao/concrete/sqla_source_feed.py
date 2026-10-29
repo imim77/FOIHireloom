@@ -4,6 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import SourceFeed
+from FOIHireloom.dto.source_feed import SourceFeedCreateDTO, SourceFeedDTO, SourceFeedUpdateDTO
+from FOIHireloom.exceptions import NotFoundError
 from FOIHireloom.dao.interfaces.source_feed import SourceFeedRepository
 
 
@@ -48,3 +50,19 @@ class SqlAlchemySourceFeedRepository(SourceFeedRepository):
             raise ValueError("Only Croatian county source feeds can be added.")
         self._session.add(feed)
         await self._session.flush()
+
+    async def create(self, feed: SourceFeedCreateDTO) -> SourceFeedDTO:
+        entity = SourceFeed(**feed.model_dump(), scope="county")
+        await self.add(entity)
+        return SourceFeedDTO.model_validate(entity)
+
+    async def update(self, feed_id: int, changes: SourceFeedUpdateDTO) -> SourceFeedDTO:
+        feed = await self.get_by_id(feed_id)
+        if feed is None:
+            raise NotFoundError("source feed", str(feed_id))
+        feed.county_id, feed.ckan_resource_id = changes.county_id, changes.ckan_resource_id
+        feed.label, feed.feed_url = changes.label, changes.feed_url
+        if changes.reset_http_validators:
+            feed.etag = feed.source_last_modified_at = None
+        await self._session.flush()
+        return SourceFeedDTO.model_validate(feed)

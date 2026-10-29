@@ -8,6 +8,8 @@ from model_test_case import ModelTestCase
 
 from FOIHireloom.db.models import County, SourceFeed
 from FOIHireloom.db.session import SessionManager
+from FOIHireloom.dto.source_feed import SourceFeedCreateDTO, SourceFeedDTO, SourceFeedUpdateDTO
+from FOIHireloom.exceptions import NotFoundError
 from FOIHireloom.dao.concrete.sqla_source_feed import SqlAlchemySourceFeedRepository
 from FOIHireloom.dao.interfaces.source_feed import SourceFeedRepository
 
@@ -179,3 +181,41 @@ class SourceFeedRepositoryTests(ModelTestCase):
             feed_id = feed.id
         async with self.sessions.session() as reader:
             self.assertIsNone(await SqlAlchemySourceFeedRepository(reader).get_by_id(feed_id))
+
+    def changes(self, **overrides: object) -> dict[str, object]:
+        values = {
+            "county_id": self.county_id,
+            "ckan_resource_id": uuid4(),
+            "label": "Poslovi u Gradu Zagrebu",
+            "feed_url": f"https://example.com/{uuid4()}.xml",
+        }
+        return values | overrides
+
+    async def test_create_adds_enabled_county_feed_and_returns_dto(self) -> None:
+        created = await self.repository.create(SourceFeedCreateDTO(**self.changes()))
+        self.assertIsInstance(created, SourceFeedDTO)
+        self.assertEqual((created.scope, created.enabled), ("county", True))
+        self.assertEqual((await self.repository.get_by_id(created.id)).feed_url, created.feed_url)
+
+    async def test_update_keeps_sync_state_and_resets_validators_only_on_request(self) -> None:
+        now = datetime.now(timezone.utc)
+        feed = self.feed(enabled=False, etag='"v1"', source_last_modified_at=now, last_checked_at=now)
+        await self.repository.add(feed)
+        for reset in (False, True):
+            with self.subTest(reset=reset):
+                updated = await self.repository.update(
+                    feed.id, SourceFeedUpdateDTO(**self.changes(label=f"Label {reset}"), reset_http_validators=reset)
+                )
+                self.assertEqual(updated.label, f"Label {reset}")
+                self.assertFalse(updated.enabled)
+                self.assertEqual(feed.last_checked_at, now)
+                self.assertEqual(feed.etag, None if reset else '"v1"')
+                self.assertEqual(feed.source_last_modified_at, None if reset else now)
+
+    async def test_update_of_missing_or_eu_feed_raises_not_found(self) -> None:
+        legacy = self.feed(scope="eu", county_id=None)
+        self.session.add(legacy)
+        await self.session.flush()
+        for feed_id in (legacy.id, legacy.id + 1):
+            with self.subTest(feed_id=feed_id), self.assertRaises(NotFoundError):
+                await self.repository.update(feed_id, SourceFeedUpdateDTO(**self.changes()))
