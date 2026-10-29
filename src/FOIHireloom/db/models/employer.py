@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
 
 if TYPE_CHECKING:
+    from .employer_web_document import EmployerWebDocument
     from .job import Job
 
 
@@ -28,5 +29,8 @@ class Employer(Base):
     )
 
     jobs: Mapped[list["Job"]] = relationship(
+        back_populates="employer", passive_deletes="all", lazy="raise"
+    )
+    web_document_links: Mapped[list["EmployerWebDocument"]] = relationship(
         back_populates="employer", passive_deletes="all", lazy="raise"
     )
