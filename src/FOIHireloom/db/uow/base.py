@@ -3,6 +3,7 @@ from types import TracebackType
 from typing import Self
 
 from FOIHireloom.persistence.job_repository import JobRepository
+from FOIHireloom.persistence.source_feed_repository import SourceFeedRepository
 
 
 class UnitOfWork(ABC):
@@ -17,6 +18,11 @@ class UnitOfWork(ABC):
     @abstractmethod
     def jobs(self) -> JobRepository:
         """Return the job repository bound to this context's session."""
+
+    @property
+    @abstractmethod
+    def source_feeds(self) -> SourceFeedRepository:
+        """Return the Croatian source feed repository bound to the same session."""
 
     @abstractmethod
     async def __aenter__(self) -> Self:

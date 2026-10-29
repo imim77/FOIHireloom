@@ -6,10 +6,11 @@ from sqlalchemy.exc import IntegrityError
 
 from model_test_case import ModelTestCase
 
-from FOIHireloom.db.models import Employer, Job
+from FOIHireloom.db.models import County, Employer, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWork, UnitOfWork
 from FOIHireloom.persistence.impl.sqlalchemy_job_repository import SqlAlchemyJobRepository
+from FOIHireloom.persistence.impl.sqlalchemy_source_feed_repository import SqlAlchemySourceFeedRepository
 
 
 class UnitOfWorkTests(ModelTestCase):
@@ -24,6 +25,15 @@ class UnitOfWorkTests(ModelTestCase):
             "content_hash": "source-content-hash",
         }
         return Job(**(values | overrides))
+
+    def feed(self) -> SourceFeed:
+        return SourceFeed(
+            county=County(code="zagreb", name="Grad Zagreb"),
+            ckan_resource_id=uuid4(),
+            label="Poslovi u Gradu Zagrebu",
+            feed_url=f"https://example.com/{uuid4()}.xml",
+            scope="county",
+        )
 
     async def persisted(self, job_id: int) -> Job | None:
         async with self.sessions.session() as reader:
@@ -172,6 +182,8 @@ class UnitOfWorkTests(ModelTestCase):
             with self.assertRaisesRegex(RuntimeError, "active"):
                 _ = work.jobs
             with self.assertRaisesRegex(RuntimeError, "active"):
+                _ = work.source_feeds
+            with self.assertRaisesRegex(RuntimeError, "active"):
                 await work.commit()
             with self.assertRaisesRegex(RuntimeError, "active"):
                 await work.rollback()
@@ -197,12 +209,14 @@ class UnitOfWorkTests(ModelTestCase):
         work = SqlAlchemyUnitOfWork(self.sessions)
         async with work:
             previous_repository = work.jobs
+            previous_source_feeds = work.source_feeds
             discarded = self.job()
             await work.jobs.add(discarded)
             discarded_id = discarded.id
 
         async with work:
             self.assertIsNot(work.jobs, previous_repository)
+            self.assertIsNot(work.source_feeds, previous_source_feeds)
             self.assertIsNone(await work.jobs.get_by_id(discarded_id))
             committed = self.job()
             await work.jobs.add(committed)
@@ -210,6 +224,69 @@ class UnitOfWorkTests(ModelTestCase):
 
         self.assertIsNone(await self.persisted(discarded_id))
         self.assertIsNotNone(await self.persisted(committed.id))
+        self.assertEqual(self.engine.pool.checkedout(), 0)
+
+    async def test_source_feed_and_job_membership_commit_in_the_same_transaction(self) -> None:
+        work: UnitOfWork = SqlAlchemyUnitOfWork(self.sessions)
+        async with work:
+            feed = self.feed()
+            await work.source_feeds.add(feed)
+            job = self.job(feed_memberships=[JobFeedMembership(
+                feed_id=feed.id, source_item={"title": "Programer"}
+            )])
+            await work.jobs.add(job)
+            self.assertIs(await work.source_feeds.get_by_id(feed.id), feed)
+            async with self.sessions.session() as reader:
+                self.assertIsNone(await reader.get(SourceFeed, feed.id))
+                self.assertIsNone(await reader.get(JobFeedMembership, (job.id, feed.id)))
+            await work.commit()
+
+        async with self.sessions.session() as reader:
+            feeds = SqlAlchemySourceFeedRepository(reader)
+            self.assertIsNotNone(await feeds.get_by_ckan_resource_id(feed.ckan_resource_id))
+            self.assertEqual([saved.id for saved in await feeds.list_enabled()], [feed.id])
+            self.assertIsNotNone(await SqlAlchemyJobRepository(reader).get_by_id(job.id))
+            membership = await reader.get(JobFeedMembership, (job.id, feed.id))
+            self.assertEqual(membership.source_item, {"title": "Programer"})
+        self.assertEqual(self.engine.pool.checkedout(), 0)
+
+    async def test_uncommitted_source_feed_job_and_membership_are_rolled_back_together(self) -> None:
+        async with SqlAlchemyUnitOfWork(self.sessions) as work:
+            feed = self.feed()
+            await work.source_feeds.add(feed)
+            job = self.job(feed_memberships=[JobFeedMembership(
+                feed_id=feed.id, source_item={"title": "Programer"}
+            )])
+            await work.jobs.add(job)
+            feed_id, job_id, county_id = feed.id, job.id, feed.county_id
+
+        async with self.sessions.session() as reader:
+            self.assertIsNone(await reader.get(SourceFeed, feed_id))
+            self.assertIsNone(await reader.get(Job, job_id))
+            self.assertIsNone(await reader.get(JobFeedMembership, (job_id, feed_id)))
+            self.assertIsNone(await reader.get(County, county_id))
+        self.assertEqual(self.engine.pool.checkedout(), 0)
+
+    async def test_source_feed_error_rolls_back_both_repositories(self) -> None:
+        with self.assertRaises(IntegrityError) as error:
+            async with SqlAlchemyUnitOfWork(self.sessions) as work:
+                feed = self.feed()
+                await work.source_feeds.add(feed)
+                job = self.job()
+                await work.jobs.add(job)
+                feed_id, job_id = feed.id, job.id
+                await work.source_feeds.add(SourceFeed(
+                    county_id=feed.county_id,
+                    ckan_resource_id=feed.ckan_resource_id,
+                    label="Duplicate source",
+                    feed_url=f"https://example.com/{uuid4()}.xml",
+                    scope="county",
+                ))
+
+        self.assertIn("uq_source_feeds_ckan_resource_id", str(error.exception))
+        async with self.sessions.session() as reader:
+            self.assertIsNone(await reader.get(SourceFeed, feed_id))
+            self.assertIsNone(await reader.get(Job, job_id))
         self.assertEqual(self.engine.pool.checkedout(), 0)
 
     async def test_concurrent_instances_have_independent_transactions(self) -> None:
