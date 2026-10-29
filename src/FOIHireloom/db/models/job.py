@@ -22,6 +22,7 @@ from .base import Base
 if TYPE_CHECKING:
     from .employer import Employer
     from .job_feed_membership import JobFeedMembership
+    from .job_web_document import JobWebDocument
 
 
 class Job(Base):
@@ -79,6 +80,12 @@ class Job(Base):
 
     employer: Mapped["Employer | None"] = relationship(back_populates="jobs", lazy="raise")
     feed_memberships: Mapped[list["JobFeedMembership"]] = relationship(
+        back_populates="job",
+        cascade="save-update, merge, delete, delete-orphan",
+        passive_deletes=True,
+        lazy="raise",
+    )
+    web_document_links: Mapped[list["JobWebDocument"]] = relationship(
         back_populates="job",
         cascade="save-update, merge, delete, delete-orphan",
         passive_deletes=True,

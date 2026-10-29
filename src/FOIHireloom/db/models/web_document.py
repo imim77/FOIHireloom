@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
@@ -9,9 +10,12 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+
+if TYPE_CHECKING:
+    from .job_web_document import JobWebDocument
 
 
 class WebDocument(Base):
@@ -40,4 +44,8 @@ class WebDocument(Base):
     )
     last_verified_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+
+    job_links: Mapped[list["JobWebDocument"]] = relationship(
+        back_populates="document", passive_deletes="all", lazy="raise"
     )
