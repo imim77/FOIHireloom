@@ -168,3 +168,6 @@ tags
 # Docs stuff
 tmp
 docs
+
+# Postman collections, mocks, and simulations
+postman/
