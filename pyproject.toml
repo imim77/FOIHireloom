@@ -3,6 +3,7 @@ name = "foihireloom"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
+    "alembic>=1.16,<2",
     "asyncpg>=0.31,<1",
     "fastmcp>=3.0,<4",
     "pydantic-settings>=2,<3",

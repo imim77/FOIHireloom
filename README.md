@@ -66,8 +66,21 @@ Call `await database.close()` during application shutdown once the database
 layer is connected to the server lifecycle.
 ORM models live in `FOIHireloom.db.models` and share `Base.metadata`.
 Import that package to register all tables before running schema operations.
-Alembic migrations will be added separately; the application does not create
-or modify tables on startup.
+The application does not create or modify tables on startup.
+
+## Schema migrations
+
+Alembic configuration and revisions live in `src/FOIHireloom/db/alembic/`.
+Use the same `DATABASE_URL` configuration as the application. From the project
+root, apply migrations and check for differences from the ORM models:
+
+```sh
+uv run --locked alembic -c src/FOIHireloom/db/alembic/alembic.ini upgrade head
+uv run --locked alembic -c src/FOIHireloom/db/alembic/alembic.ini check
+```
+
+The database must already exist. See the migration directory's `README` for
+revision generation, offline SQL previews, and downgrade commands.
 
 ## Tests
 

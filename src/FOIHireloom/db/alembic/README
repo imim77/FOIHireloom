@@ -1,0 +1,30 @@
+FOIHireloom PostgreSQL migrations
+
+Run from the project root, using DATABASE_URL from the environment or .env:
+
+  uv run --locked alembic -c src/FOIHireloom/db/alembic/alembic.ini upgrade head
+  uv run --locked alembic -c src/FOIHireloom/db/alembic/alembic.ini current
+  uv run --locked alembic -c src/FOIHireloom/db/alembic/alembic.ini check
+
+Create a new revision after changing ORM models:
+
+  uv run --locked alembic -c src/FOIHireloom/db/alembic/alembic.ini revision --autogenerate -m "describe schema change"
+
+Review generated operations, including upgrade and downgrade, before committing.
+Each migration belongs in a separate commit. Revisions contain fixed schema
+operations and must not import current application models.
+
+Preview SQL without connecting:
+
+  uv run --locked alembic -c src/FOIHireloom/db/alembic/alembic.ini upgrade head --sql
+
+Revert the latest revision:
+
+  uv run --locked alembic -c src/FOIHireloom/db/alembic/alembic.ini downgrade -1
+
+Downgrades can remove tables and their data. Use a disposable database when
+testing upgrade/downgrade cycles. Schema migrations do not run on MCP startup.
+
+The async connection lifecycle is encapsulated in MigrationEnvironment. For
+programmatic use inside an async application, pass a synchronous connection
+through Config.attributes["connection"] from AsyncConnection.run_sync().
