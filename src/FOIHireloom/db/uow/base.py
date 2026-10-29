@@ -4,6 +4,7 @@ from typing import Self
 
 from FOIHireloom.persistence.job_repository import JobRepository
 from FOIHireloom.persistence.source_feed_repository import SourceFeedRepository
+from FOIHireloom.persistence.sync_run_repository import SyncRunRepository
 
 
 class UnitOfWork(ABC):
@@ -23,6 +24,11 @@ class UnitOfWork(ABC):
     @abstractmethod
     def source_feeds(self) -> SourceFeedRepository:
         """Return the Croatian source feed repository bound to the same session."""
+
+    @property
+    @abstractmethod
+    def sync_runs(self) -> SyncRunRepository:
+        """Return the sync attempt repository bound to the same session."""
 
     @abstractmethod
     async def __aenter__(self) -> Self:

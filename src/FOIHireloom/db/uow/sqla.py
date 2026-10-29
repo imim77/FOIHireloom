@@ -6,8 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from FOIHireloom.db.session import AsyncDBContextManager, SessionManager
 from FOIHireloom.persistence.impl.sqlalchemy_job_repository import SqlAlchemyJobRepository
 from FOIHireloom.persistence.impl.sqlalchemy_source_feed_repository import SqlAlchemySourceFeedRepository
+from FOIHireloom.persistence.impl.sqlalchemy_sync_run_repository import SqlAlchemySyncRunRepository
 from FOIHireloom.persistence.job_repository import JobRepository
 from FOIHireloom.persistence.source_feed_repository import SourceFeedRepository
+from FOIHireloom.persistence.sync_run_repository import SyncRunRepository
 
 from .base import UnitOfWork
 
@@ -30,6 +32,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self._session: AsyncSession | None = None
         self._jobs: JobRepository | None = None
         self._source_feeds: SourceFeedRepository | None = None
+        self._sync_runs: SyncRunRepository | None = None
 
     @property
     def jobs(self) -> JobRepository:
@@ -43,6 +46,12 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
             raise RuntimeError("Source feed repository requires an active Unit of Work.")
         return self._source_feeds
 
+    @property
+    def sync_runs(self) -> SyncRunRepository:
+        if self._sync_runs is None:
+            raise RuntimeError("Sync run repository requires an active Unit of Work.")
+        return self._sync_runs
+
     async def __aenter__(self) -> Self:
         if self._context is not None:
             raise RuntimeError("Unit of Work is already active.")
@@ -53,6 +62,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
             self._session = await context.__aenter__()
             self._jobs = SqlAlchemyJobRepository(self._session)
             self._source_feeds = SqlAlchemySourceFeedRepository(self._session)
+            self._sync_runs = SqlAlchemySyncRunRepository(self._session)
         except BaseException as error:
             try:
                 await context.__aexit__(type(error), error, error.__traceback__)
@@ -92,5 +102,6 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
     def _clear_context(self) -> None:
         self._jobs = None
         self._source_feeds = None
+        self._sync_runs = None
         self._session = None
         self._context = None

@@ -1,16 +1,18 @@
 import asyncio
 from contextlib import suppress
+from datetime import timedelta
 from uuid import uuid4
 
 from sqlalchemy.exc import IntegrityError
 
 from model_test_case import ModelTestCase
 
-from FOIHireloom.db.models import County, Employer, Job, JobFeedMembership, SourceFeed
+from FOIHireloom.db.models import County, Employer, Job, JobFeedMembership, SourceFeed, SyncRun
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWork, UnitOfWork
 from FOIHireloom.persistence.impl.sqlalchemy_job_repository import SqlAlchemyJobRepository
 from FOIHireloom.persistence.impl.sqlalchemy_source_feed_repository import SqlAlchemySourceFeedRepository
+from FOIHireloom.persistence.impl.sqlalchemy_sync_run_repository import SqlAlchemySyncRunRepository
 
 
 class UnitOfWorkTests(ModelTestCase):
@@ -184,6 +186,8 @@ class UnitOfWorkTests(ModelTestCase):
             with self.assertRaisesRegex(RuntimeError, "active"):
                 _ = work.source_feeds
             with self.assertRaisesRegex(RuntimeError, "active"):
+                _ = work.sync_runs
+            with self.assertRaisesRegex(RuntimeError, "active"):
                 await work.commit()
             with self.assertRaisesRegex(RuntimeError, "active"):
                 await work.rollback()
@@ -210,6 +214,7 @@ class UnitOfWorkTests(ModelTestCase):
         async with work:
             previous_repository = work.jobs
             previous_source_feeds = work.source_feeds
+            previous_sync_runs = work.sync_runs
             discarded = self.job()
             await work.jobs.add(discarded)
             discarded_id = discarded.id
@@ -217,6 +222,7 @@ class UnitOfWorkTests(ModelTestCase):
         async with work:
             self.assertIsNot(work.jobs, previous_repository)
             self.assertIsNot(work.source_feeds, previous_source_feeds)
+            self.assertIsNot(work.sync_runs, previous_sync_runs)
             self.assertIsNone(await work.jobs.get_by_id(discarded_id))
             committed = self.job()
             await work.jobs.add(committed)
@@ -287,6 +293,88 @@ class UnitOfWorkTests(ModelTestCase):
         async with self.sessions.session() as reader:
             self.assertIsNone(await reader.get(SourceFeed, feed_id))
             self.assertIsNone(await reader.get(Job, job_id))
+        self.assertEqual(self.engine.pool.checkedout(), 0)
+
+    async def test_source_feed_job_and_sync_outcome_commit_together(self) -> None:
+        work: UnitOfWork = SqlAlchemyUnitOfWork(self.sessions)
+        async with work:
+            feed = self.feed()
+            await work.source_feeds.add(feed)
+            record = SyncRun(feed_id=feed.id)
+            await work.sync_runs.add(record)
+            job = self.job()
+            await work.jobs.add(job)
+            self.assertIs(await work.sync_runs.get_latest_for_feed(feed.id), record)
+            record.status, record.http_status = "succeeded", 200
+            record.finished_at = record.started_at + timedelta(seconds=1)
+            record.items_seen, record.items_added = 1, 1
+            record.items_updated, record.items_invalid = 0, 0
+            feed.last_checked_at = feed.last_success_at = record.finished_at
+            async with self.sessions.session() as reader:
+                self.assertIsNone(await reader.get(SyncRun, record.id))
+                self.assertIsNone(await reader.get(Job, job.id))
+            await work.commit()
+
+        async with self.sessions.session() as reader:
+            saved = await SqlAlchemySyncRunRepository(reader).get_by_id(record.id)
+            self.assertEqual(saved.status, "succeeded")
+            self.assertEqual(saved.items_added, 1)
+            saved_feed = await reader.get(SourceFeed, feed.id)
+            self.assertEqual(saved_feed.last_success_at, saved.finished_at)
+            self.assertIsNotNone(await reader.get(Job, job.id))
+        self.assertEqual(self.engine.pool.checkedout(), 0)
+
+    async def test_uncommitted_source_feed_job_and_sync_run_are_rolled_back_together(self) -> None:
+        async with SqlAlchemyUnitOfWork(self.sessions) as work:
+            feed = self.feed()
+            await work.source_feeds.add(feed)
+            record = SyncRun(feed_id=feed.id)
+            await work.sync_runs.add(record)
+            job = self.job()
+            await work.jobs.add(job)
+            feed_id, run_id, job_id, county_id = feed.id, record.id, job.id, feed.county_id
+
+        async with self.sessions.session() as reader:
+            self.assertIsNone(await reader.get(SourceFeed, feed_id))
+            self.assertIsNone(await reader.get(SyncRun, run_id))
+            self.assertIsNone(await reader.get(Job, job_id))
+            self.assertIsNone(await reader.get(County, county_id))
+        self.assertEqual(self.engine.pool.checkedout(), 0)
+
+    async def test_failed_run_can_be_saved_after_import_writes_are_rolled_back(self) -> None:
+        work = SqlAlchemyUnitOfWork(self.sessions)
+        async with work:
+            feed = self.feed()
+            await work.source_feeds.add(feed)
+            record = SyncRun(feed_id=feed.id)
+            await work.sync_runs.add(record)
+            feed_id, run_id = feed.id, record.id
+            await work.commit()
+
+        with self.assertRaisesRegex(ValueError, "invalid source item") as error:
+            async with work:
+                job = self.job()
+                await work.jobs.add(job)
+                job_id = job.id
+                raise ValueError("invalid source item")
+
+        async with work:
+            failed = await work.sync_runs.get_by_id(run_id)
+            self.assertEqual(failed.status, "running")
+            failed.status, failed.http_status = "failed", 200
+            failed.finished_at = failed.started_at + timedelta(seconds=1)
+            failed.error_summary = str(error.exception)
+            loaded_feed = await work.source_feeds.get_by_id(feed_id)
+            loaded_feed.last_checked_at = failed.finished_at
+            await work.commit()
+
+        async with self.sessions.session() as reader:
+            failed = await SqlAlchemySyncRunRepository(reader).get_latest_for_feed(feed_id)
+            self.assertEqual(failed.id, run_id)
+            self.assertEqual(failed.status, "failed")
+            self.assertEqual(failed.error_summary, "invalid source item")
+            self.assertIsNone(await reader.get(Job, job_id))
+            self.assertIsNone((await reader.get(SourceFeed, feed_id)).last_success_at)
         self.assertEqual(self.engine.pool.checkedout(), 0)
 
     async def test_concurrent_instances_have_independent_transactions(self) -> None:
