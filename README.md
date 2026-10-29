@@ -64,7 +64,10 @@ Create one `PostgresDatabase(Settings())` and its `SessionManager` per
 application process, and pass the session manager to services that need it.
 Call `await database.close()` during application shutdown once the database
 layer is connected to the server lifecycle.
-Schema creation and Alembic migrations will be added with the ORM models.
+ORM models live in `FOIHireloom.db.models` and share `Base.metadata`.
+Import that package to register all tables before running schema operations.
+Alembic migrations will be added separately; the application does not create
+or modify tables on startup.
 
 ## Tests
 
@@ -76,3 +79,15 @@ The session tests exercise real transactions against temporary SQLite
 databases using the development-only `aiosqlite` driver. They also check the
 PostgreSQL engine configuration, but do not require or connect to a running
 PostgreSQL server.
+
+ORM integration tests use real PostgreSQL types and constraints. Set
+`TEST_DATABASE_URL` in the process environment to a dedicated test database:
+
+```sh
+TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5433/foihireloom_test \
+  uv run --locked python -m unittest discover -s tests -v
+```
+
+Each model test creates a uniquely named schema and drops only that schema
+afterwards. The test account needs permission to create schemas. Without
+`TEST_DATABASE_URL`, PostgreSQL model tests are skipped; session tests still run.
