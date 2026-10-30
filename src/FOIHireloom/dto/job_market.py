@@ -100,11 +100,9 @@ class CountyShareDTO(ModelConfigBaseModel):
 
 
 class JobsByCountyDTO(ModelConfigBaseModel):
-    """The counties with the most matching jobs, for the jobs-by-county chart.
+    """Every county with matching jobs, most jobs first, for the jobs-by-county chart.
 
-    counties holds at most top counties, most jobs first; counties_total is
-    how many counties have any. total_jobs and total_workers_needed cover
-    every county.
+    The chart shows the first top counties and lets the user expand it to all.
     """
 
     title: str
@@ -112,6 +110,6 @@ class JobsByCountyDTO(ModelConfigBaseModel):
     today: date
     total_jobs: int
     total_workers_needed: int
-    counties_total: int
+    top: int
     counties: tuple[CountyShareDTO, ...]
     coverage: CoverageDTO

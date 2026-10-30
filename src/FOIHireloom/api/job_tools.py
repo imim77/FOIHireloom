@@ -164,18 +164,21 @@ class JobTools(ToolGroup):
                 description="Also count jobs whose application deadline has passed.",
             )] = False,
             top: Annotated[int, Field(
-                ge=1, le=jobs_by_county.MAX_TOP, description="Counties to show, those with the most jobs first.",
+                ge=1, le=jobs_by_county.MAX_TOP,
+                description="Columns the chart shows before the user expands it to every county; keep the default "
+                            "unless the user asks for a number.",
             )] = jobs_by_county.DEFAULT_TOP,
         ) -> JobsByCountyDTO:
             """Show the user a chart of the counties with the most matching jobs.
 
             Use it when the user wants to see where jobs of a kind are, not
-            just read it. Hosts that support MCP Apps draw the counties as
-            columns the user can hover and select; every host also gets the
-            data: jobs, workers_needed and share (percent of total_jobs)
-            per county, and counties_total, the number of counties with any
-            matching job. When coverage.warning is set, tell the user the
-            numbers may be outdated or incomplete.
+            just read it. Hosts that support MCP Apps draw the top counties
+            as columns the user can hover and select, with a button that
+            opens every county full screen. Every host also gets the data:
+            each county with matching jobs, most first, with jobs,
+            workers_needed and share (percent of total_jobs). When
+            coverage.warning is set, tell the user the numbers may be
+            outdated or incomplete.
             """
             filters = JobMarketFiltersDTO(query=query, category=category, include_expired=include_expired)
             stats = await self._call(service(ctx).market_stats(filters))

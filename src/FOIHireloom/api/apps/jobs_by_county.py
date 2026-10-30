@@ -12,7 +12,7 @@ from FOIHireloom.dto.job_market import CountyShareDTO, JobMarketStatsDTO, JobsBy
 RESOURCE_URI = "ui://foihireloom/jobs-by-county.html"
 # The page loads the MCP Apps SDK from this origin, so its CSP must allow it.
 SDK_ORIGIN = "https://unpkg.com"
-DEFAULT_TOP = 8
+DEFAULT_TOP = 7
 # There are 21 counties.
 MAX_TOP = 21
 
@@ -31,14 +31,14 @@ def jobs_by_county(stats: JobMarketStatsDTO, top: int, query: str | None, catego
         today=stats.today,
         total_jobs=stats.jobs,
         total_workers_needed=stats.workers_needed,
-        counties_total=len(stats.counties),
+        top=top,
         counties=tuple(
             CountyShareDTO(
                 code=county.code, name=county.name, short_name=county.name.removesuffix(" županija"),
                 jobs=county.jobs, workers_needed=county.workers_needed,
                 share=round(100 * county.jobs / stats.jobs, 1) if stats.jobs else 0.0,
             )
-            for county in stats.counties[:top]
+            for county in stats.counties
         ),
         coverage=stats.coverage,
     )

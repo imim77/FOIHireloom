@@ -43,6 +43,15 @@
       background: var(--card); color: var(--fg-loud); border: 1px solid var(--border); border-radius: 20px;
     }
     .header { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .header .titles { flex: 1; }
+    .expand {
+      display: grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--card); color: var(--fg-loud); cursor: pointer;
+    }
+    .expand:hover { background: var(--surface-subdued); }
+    .expand:focus-visible { outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--orange-500) 40%, transparent); }
+    .expand svg { width: 18px; height: 18px; }
+    .expand[hidden] { display: none; }
     .tile {
       display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 12px;
       background: var(--orange-500); color: #fff;
@@ -59,7 +68,11 @@
     .chart { display: flex; flex-direction: column; gap: 8px; }
     .plot { position: relative; isolation: isolate; display: flex; gap: 8px; height: 208.921px; }
     .column { position: relative; flex: 1; min-width: 0; padding: 0; border: 0; background: none; cursor: pointer; outline: none; }
-    .bar { position: absolute; bottom: 0; pointer-events: none; overflow: visible; }
+    .bar { position: absolute; bottom: 0; pointer-events: none; overflow: visible;
+      -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
+      mask-image: linear-gradient(to bottom, #000 72%, transparent 100%); }
+    /* The padding leaves room for the focus rings, which reach 4px past a column. */
+    .scroller { overflow-x: auto; overflow-y: hidden; padding: 4px; margin: -4px; }
     .bar .look { transition: opacity 300ms; }
     .value {
       position: absolute; left: 50%; z-index: 1; transform: translateX(-50%); pointer-events: none;
@@ -71,13 +84,11 @@
     .focus-ring { position: absolute; inset: -4px; z-index: 1; border-radius: 12px; pointer-events: none; opacity: 0;
       box-shadow: 0 0 0 2px color-mix(in srgb, var(--orange-500) 40%, transparent); transition: opacity 150ms; }
     .column:focus-visible .focus-ring { opacity: 1; }
-    .fade { position: absolute; inset-inline: 0; top: 151px; height: 58px; pointer-events: none;
-      background: linear-gradient(to bottom, color-mix(in srgb, var(--card) 0%, transparent), var(--card) 83.58%); }
     .axis { position: relative; display: flex; gap: 8px; }
     .pill { position: absolute; inset-block: 0; border-radius: 8px; background: var(--surface-muted); }
     .axis-label { position: relative; display: flex; flex: 1; min-width: 0; justify-content: center; padding: 6px 2px; }
     .axis-label span {
-      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; text-overflow: ellipsis;
       text-align: center; font-size: 12px; line-height: 1.25; color: var(--fg-soft); transition: color 200ms;
     }
     .axis-label.active span { font-weight: 600; color: var(--fg-on-muted); }
@@ -100,6 +111,7 @@
         <p class="title truncate" id="title">Oglasi po županijama</p>
         <p class="soft truncate" id="description">Učitavanje…</p>
       </div>
+      <button class="expand" id="expand" type="button" hidden></button>
     </div>
     <div id="body"></div>
   </div>
@@ -135,7 +147,10 @@
     const BARS_AT = 250;
     const BAR_STAGGER = 70;
     const GROW = 1100;
-    const MORPH = 700;
+    // The narrowest column when every county is shown; the plot scrolls sideways below it.
+    const MIN_COLUMN = 84;
+    const EXPAND_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>';
+    const COLLAPSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="M14 10l7-7"/><path d="M3 21l7-7"/></svg>';
 
     // One column drawn once (48 × 188.921) and stretched to each bar's height: two faces, a lid and white edges.
     const BAR_VIEW = "0 0 48 188.921";
@@ -156,12 +171,19 @@
     const SAMPLE = {
       title: "Oglasi po županijama",
       description: "Pregled s probnim podacima",
-      total_jobs: 7676, total_workers_needed: 15922, counties_total: 21,
+      total_jobs: 7676, total_workers_needed: 15922, top: 7,
       counties: [
         ["Grad Zagreb", "Grad Zagreb", 1325, 3093], ["Splitsko-dalmatinska županija", "Splitsko-dalmatinska", 656, 1315],
         ["Zagrebačka županija", "Zagrebačka", 607, 1266], ["Osječko-baranjska županija", "Osječko-baranjska", 531, 992],
         ["Istarska županija", "Istarska", 507, 1185], ["Primorsko-goranska županija", "Primorsko-goranska", 498, 1040],
         ["Varaždinska županija", "Varaždinska", 402, 801], ["Zadarska županija", "Zadarska", 344, 690],
+        ["Međimurska županija", "Međimurska", 329, 610], ["Krapinsko-zagorska županija", "Krapinsko-zagorska", 297, 540],
+        ["Vukovarsko-srijemska županija", "Vukovarsko-srijemska", 263, 480], ["Karlovačka županija", "Karlovačka", 251, 470],
+        ["Šibensko-kninska županija", "Šibensko-kninska", 226, 420], ["Sisačko-moslavačka županija", "Sisačko-moslavačka", 222, 400],
+        ["Dubrovačko-neretvanska županija", "Dubrovačko-neretvanska", 212, 390], ["Brodsko-posavska županija", "Brodsko-posavska", 205, 380],
+        ["Koprivničko-križevačka županija", "Koprivničko-križevačka", 202, 370], ["Bjelovarsko-bilogorska županija", "Bjelovarsko-bilogorska", 180, 330],
+        ["Virovitičko-podravska županija", "Virovitičko-podravska", 100, 190], ["Požeško-slavonska županija", "Požeško-slavonska", 97, 180],
+        ["Ličko-senjska županija", "Ličko-senjska", 91, 170],
       ].map(([name, short_name, jobs, workers_needed]) => ({ name, short_name, jobs, workers_needed,
         share: Math.round((1000 * jobs) / 7676) / 10 })),
       coverage: { warning: null },
@@ -241,13 +263,23 @@
     }
 
     let chart = null;
+    let current = null;
+    let expanded = false;
+    let app = null;
 
     function render(data) {
       for (const job of [...running]) job.cancel();
+      current = data;
       document.getElementById("title").textContent = data.title;
       document.getElementById("description").textContent = data.description;
       const body = document.getElementById("body");
-      const counties = data.counties ?? [];
+      const all = data.counties ?? [];
+      const counties = expanded ? all : all.slice(0, data.top);
+      const button = document.getElementById("expand");
+      button.hidden = !expanded && all.length <= data.top;
+      button.innerHTML = expanded ? COLLAPSE_ICON : EXPAND_ICON;
+      button.title = expanded ? "Prikaži manje županija" : `Prikaži svih ${all.length} županija`;
+      button.setAttribute("aria-label", button.title);
       const parts = [];
       if (data.coverage?.warning) parts.push(element("p", { class: "warning", text: data.coverage.warning }));
       if (!counties.length) {
@@ -279,16 +311,19 @@
         column.addEventListener("click", () => select(i));
         column.addEventListener("keydown", onKeyDown);
         plot.append(column);
-        axis.append(element("span", { class: "axis-label", title: county.name }, [element("span", { text: county.short_name })]));
+        // A break after each hyphen: "Splitsko-" over "dalmatinska" instead of a cut word.
+        axis.append(element("span", { class: "axis-label", title: county.name },
+          [element("span", { text: county.short_name.replaceAll("-", "-\u200b") })]));
       });
-      plot.append(element("span", { class: "fade", "aria-hidden": "true" }));
       plot.addEventListener("pointerleave", () => setHovered(null));
-      const shown = counties.length < data.counties_total
-        ? `Prikazano ${counties.length} od ${data.counties_total} županija s oglasima`
-        : `Sve županije s oglasima (${data.counties_total})`;
+      const shown = counties.length < all.length
+        ? `Prikazano ${counties.length} od ${all.length} županija s oglasima`
+        : `Sve županije s oglasima (${all.length})`;
       const footer = element("p", { class: "soft footer",
         text: `${shown} · ukupno ${formatJobs(data.total_jobs)} oglasa, ${formatJobs(data.total_workers_needed)} traženih radnika` });
-      parts.push(selection, element("div", { class: "chart" }, [plot, axis]), footer);
+      const scroller = element("div", { class: "scroller" }, [element("div", { class: "chart",
+        style: { minWidth: `${counties.length * MIN_COLUMN + (counties.length - 1) * COLUMN_GAP}px` } }, [plot, axis])]);
+      parts.push(selection, scroller, footer);
       body.replaceChildren(...parts);
 
       const max = Math.max(0, ...counties.map((county) => county.jobs));
@@ -407,19 +442,42 @@
       pop(pill, { at: BARS_AT + chart.selected * BAR_STAGGER + GROW * 0.45 });
     }
 
-    function applyTheme(context) {
+    function setExpanded(value) {
+      if (value === expanded) return;
+      expanded = value;
+      if (current) render(current);
+    }
+
+    async function toggleExpanded() {
+      const mode = expanded ? "inline" : "fullscreen";
+      if (app?.getHostContext()?.availableDisplayModes?.includes(mode)) {
+        try {
+          const result = await app.requestDisplayMode({ mode });
+          setExpanded(result.mode === "fullscreen");
+          return;
+        } catch {
+          // The host refused; fall back to showing every county inline.
+        }
+      }
+      setExpanded(!expanded);
+    }
+    document.getElementById("expand").addEventListener("click", toggleExpanded);
+
+    function applyContext(context) {
       if (context?.theme) document.documentElement.dataset.theme = context.theme;
+      if (context?.displayMode) setExpanded(context.displayMode === "fullscreen");
     }
 
     if (window.parent === window) {
       render(SAMPLE);
     } else {
       const { App } = await import(SDK);
-      const app = new App({ name: "FOIHireloom jobs by county", version: "1.0.0" }, {}, { autoResize: true });
+      app = new App({ name: "FOIHireloom jobs by county", version: "1.0.0" },
+        { availableDisplayModes: ["inline", "fullscreen"] }, { autoResize: true });
       app.ontoolresult = ({ structuredContent }) => { if (structuredContent) render(structuredContent); };
-      app.onhostcontextchanged = applyTheme;
+      app.onhostcontextchanged = applyContext;
       await app.connect();
-      applyTheme(app.getHostContext());
+      applyContext(app.getHostContext());
     }
   </script>
 </body>
