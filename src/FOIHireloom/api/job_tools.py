@@ -1,0 +1,109 @@
+from collections.abc import Awaitable
+from typing import Annotated
+
+from fastmcp import Context, FastMCP
+from fastmcp.exceptions import ToolError
+from mcp.types import ToolAnnotations
+from pydantic import Field
+
+from FOIHireloom.dto.job_search import (
+    MAX_PAGE_SIZE,
+    MAX_QUERY_LENGTH,
+    CategoryDTO,
+    JobDetailsDTO,
+    JobSearchFiltersDTO,
+    JobSearchPageDTO,
+    RegionDTO,
+)
+from FOIHireloom.exceptions import InvalidJobSearchError, NotFoundError, PersistenceError
+from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
+
+from .tool_provider import ToolGroup
+
+# Key of the search service in the server's lifespan context.
+JOB_SEARCH_SERVICE = "job_search_service"
+
+READ_ONLY = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False)
+
+
+class JobTools(ToolGroup):
+    """MCP tools over stored HZZ job advertisements.
+
+    Tools only translate arguments and errors; JobSearchService holds the
+    rules. The server's lifespan must provide the service under
+    JOB_SEARCH_SERVICE.
+    """
+
+    def register(self, server: FastMCP) -> None:
+        @server.tool(annotations=READ_ONLY)
+        async def search_jobs(
+            ctx: Context,
+            query: Annotated[str | None, Field(
+                max_length=MAX_QUERY_LENGTH,
+                description="Words to find in the title or description, e.g. 'kuhar' or 'medicinska sestra'. "
+                            "Each word matches the start of a word, with or without Croatian diacritics; "
+                            "all words must match.",
+            )] = None,
+            county: Annotated[str | None, Field(
+                description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
+            )] = None,
+            category: Annotated[str | None, Field(
+                description="Exact category name from list_categories; letter case is ignored.",
+            )] = None,
+            include_expired: Annotated[bool, Field(
+                description="Also return jobs whose application deadline has passed.",
+            )] = False,
+            limit: Annotated[int, Field(ge=1, le=MAX_PAGE_SIZE, description="Jobs per page.")] = MAX_PAGE_SIZE,
+            cursor: Annotated[str | None, Field(
+                description="next_cursor from the previous page, with the same other arguments.",
+            )] = None,
+        ) -> JobSearchPageDTO:
+            """Search Croatian Employment Service (HZZ) job advertisements, newest first.
+
+            Returns jobs still listed in an HZZ county feed. Jobs whose known
+            deadline has passed are left out unless include_expired is true;
+            jobs without a stated deadline are included, with deadline_passed
+            null. Null fields were not stated by the source. Use get_job for the
+            description, and canonical_url to view or apply on the HZZ site.
+            """
+            filters = JobSearchFiltersDTO(query=query, county=county, category=category,
+                                          include_expired=include_expired, limit=limit, cursor=cursor)
+            return await self._call(service(ctx).search(filters))
+
+        @server.tool(annotations=READ_ONLY)
+        async def get_job(
+            ctx: Context,
+            job_id: Annotated[int, Field(ge=1, le=2**63 - 1, description="id of a job from search_jobs.")],
+        ) -> JobDetailsDTO:
+            """Return one stored job advertisement with its description and county listings.
+
+            HZZ cuts descriptions at 512 characters; quality_flags marks fields
+            that may be incomplete. A listing with presence_status 'missing'
+            means the job left that feed, not that it was filled or closed;
+            availability_status stays 'unknown' without evidence either way.
+            """
+            return await self._call(service(ctx).get_job(job_id))
+
+        @server.tool(annotations=READ_ONLY)
+        async def list_regions(ctx: Context) -> list[RegionDTO]:
+            """List the Croatian counties with the number of jobs search_jobs finds in each by default."""
+            return list(await self._call(service(ctx).list_regions()))
+
+        @server.tool(annotations=READ_ONLY)
+        async def list_categories(ctx: Context) -> list[CategoryDTO]:
+            """List job categories with the number of jobs search_jobs finds in each by default, most common first."""
+            return list(await self._call(service(ctx).list_categories()))
+
+    @staticmethod
+    async def _call[T](operation: Awaitable[T]) -> T:
+        """Turn errors the caller can act on into tool errors; database details stay in the server log."""
+        try:
+            return await operation
+        except (NotFoundError, InvalidJobSearchError) as error:
+            raise ToolError(error.details) from error
+        except PersistenceError as error:
+            raise ToolError("Job data is temporarily unavailable; try again later.") from error
+
+
+def service(ctx: Context) -> JobSearchServiceInterface:
+    return ctx.lifespan_context[JOB_SEARCH_SERVICE]
