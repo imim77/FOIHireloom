@@ -40,9 +40,11 @@ class JobTools(ToolGroup):
             ctx: Context,
             query: Annotated[str | None, Field(
                 max_length=MAX_QUERY_LENGTH,
-                description="Words to find in the title or description, e.g. 'kuhar' or 'medicinska sestra'. "
-                            "Each word matches the start of a word, with or without Croatian diacritics; "
-                            "all words must match.",
+                description="Words to find, e.g. 'kuhar', 'medicinska sestra', 'njemački' or 'Pula'. Searches "
+                            "the title, the full description, the employer, the place of work and the required "
+                            "education. Each word matches the start of a word, with or without Croatian "
+                            "diacritics, and all words must match. Croatian word endings vary, so search a "
+                            "shorter stem (e.g. 'njemack' also finds 'njemačkog').",
             )] = None,
             county: Annotated[str | None, Field(
                 description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
@@ -60,7 +62,11 @@ class JobTools(ToolGroup):
         ) -> JobSearchPageDTO:
             """Search Croatian Employment Service (HZZ) job advertisements, newest first.
 
-            Returns jobs still listed in an HZZ county feed. deadline_on is
+            Returns jobs still listed in an HZZ county feed. With a query,
+            jobs whose title contains every query word come first
+            (title_match true), then jobs that match only elsewhere, such as
+            a driving licence or a language mentioned in the description;
+            each group is ordered newest first. deadline_on is
             the application deadline; with deadline_source 'job_page' it is
             the "Natječaj vrijedi do" date from the job's HZZ page. Jobs whose
             known deadline has passed are left out unless include_expired is
