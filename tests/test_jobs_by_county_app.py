@@ -48,7 +48,7 @@ class JobsByCountyAppTests(unittest.TestCase):
                          'new Intl.NumberFormat("hr-HR"', "short_name", "workers_needed", "coverage?.warning",
                          'requestDisplayMode({ mode })', 'availableDisplayModes: ["inline", "fullscreen"]',
                          "all.slice(0, data.top)", "mask-image", 'id: "selected-workers"',
-                         '"traženi radnik", "tražena radnika", "traženih radnika"'):
+                         "`${formatJobs(value)} traženih radnika`"):
             with self.subTest(expected=expected):
                 self.assertIn(expected, html)
 

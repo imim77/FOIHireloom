@@ -184,14 +184,14 @@
     const percent = new Intl.NumberFormat("hr-HR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     const formatJobs = (value) => integer.format(Math.round(value));
     const formatShare = (value) => `${percent.format(value)} %`;
-    // Croatian plurals: 1, 21 … "traženi radnik"; 2–4, 22–24 … "tražena radnika"; otherwise "traženih radnika".
+    // Croatian plurals: 1, 21 … "oglas"; otherwise "oglasa".
     const plural = (count, one, few, many) => {
       const n = Math.round(count);
       if (n % 10 === 1 && n % 100 !== 11) return one;
       return n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? few : many;
     };
-    const formatWorkers = (value) =>
-      `${formatJobs(value)} ${plural(value, "traženi radnik", "tražena radnika", "traženih radnika")}`;
+    // Always "traženih radnika", whatever the number.
+    const formatWorkers = (value) => `${formatJobs(value)} traženih radnika`;
     const formatAds = (value) => `${formatJobs(value)} ${plural(value, "oglas", "oglasa", "oglasa")}`;
     const round = (n) => Math.round(n * 1000) / 1000;
     const $ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
