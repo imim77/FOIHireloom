@@ -47,7 +47,7 @@ class JobSearchServiceTests(ModelTestCase):
                           published_on=date(2026, 10, 27)), {"bj1": "present", "bj2": "present"}),
             ("cleaner", dict(title="ČISTAČICA", category="POMOĆNI RADNICI", published_on=date(2026, 10, 28),
                              deadline_on=self.today - timedelta(days=1)), {"zg": "present"}),
-            ("driver", dict(title="VOZAČ C KATEGORIJE", published_on=date(2026, 10, 28),
+            ("driver", dict(title="VOZAČ C KATEGORIJE", location_text="ZAGREB", published_on=date(2026, 10, 28),
                             deadline_on=self.today + timedelta(days=30)), {"zg": "present"}),
             ("gone", dict(title="KUHAR", category=HOSPITALITY, published_on=date(2026, 10, 29)), {"zg": "missing"}),
             ("waiter", dict(title="KONOBAR", category=HOSPITALITY, published_on=None), {"bj1": "present"}),
@@ -235,3 +235,17 @@ class JobSearchServiceTests(ModelTestCase):
                          f"Oglas HZZ bez naslova ({untitled.id})")
         with self.assertRaises(ValueError):
             JobSearchService(lambda: None, CroatianCountyCatalog(), timedelta(0))
+
+    async def test_every_listed_job_has_a_display_location(self) -> None:
+        page = await self.service.search(JobSearchFiltersDTO(include_expired=True))
+        locations = {job.source_job_id: (job.county_code, job.display_location) for job in page.jobs}
+        self.assertEqual(locations["driver"], ("grad-zagreb", "ZAGREB, Grad Zagreb"))
+        # HZZ gave no town for the cook, so the county from its feed is the most precise location.
+        self.assertEqual(locations["cook"], ("bjelovarsko-bilogorska",
+                                             "Bjelovarsko-bilogorska županija (mjesto rada nije navedeno)"))
+        self.assertTrue(all(job.county_name for job in page.jobs))
+        gone = await self.service.get_job(self.ids["gone"])
+        self.assertEqual((gone.county_name, gone.display_location),
+                         ("Grad Zagreb", "Grad Zagreb (mjesto rada nije navedeno)"))
+        self.assertEqual(page.jobs[0].model_copy(update={"location_text": None, "county_name": None}).display_location,
+                         "Mjesto rada nije navedeno")

@@ -64,7 +64,10 @@ class JobTools(ToolGroup):
             deadline has passed are left out unless include_expired is true;
             jobs without a stated deadline are included, with deadline_passed
             null. Null fields were not stated by the source; display_title
-            labels jobs without a title. Use get_job for the description, and
+            labels jobs without a title. Show display_location as the job's
+            location: HZZ states the town for only about half of the jobs, and
+            for the rest the county is the most precise known location. Use
+            get_job for the description, which sometimes names the place, and
             canonical_url to view or apply on the HZZ site.
 
             coverage says how current the searched counties are. When

@@ -104,6 +104,7 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(page["jobs"][0]["published_on"], "2026-10-27")
         self.assertIsNone(page["jobs"][0]["deadline_passed"])
         self.assertEqual(page["jobs"][0]["display_title"], "KUHAR/KUHARICA")
+        self.assertEqual(page["jobs"][0]["display_location"], "BJELOVAR")
         self.assertEqual((page["coverage"]["data_status"], page["coverage"]["warning"]),
                          ("stale", COVERAGE.warning))
 

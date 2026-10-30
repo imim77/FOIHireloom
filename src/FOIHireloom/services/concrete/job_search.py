@@ -14,6 +14,7 @@ from FOIHireloom.dto.job_search import (
     CountyFeedCheckDTO,
     CoverageDTO,
     DataStatus,
+    JobCountyDTO,
     JobCursorDTO,
     JobDetailsDTO,
     JobSearchCriteriaDTO,
@@ -78,7 +79,9 @@ class JobSearchService(JobSearchServiceInterface):
                 # One extra row tells whether another page exists.
                 limit=filters.limit + 1,
             )
-            jobs = [self._summary(job, today) for job in await work.jobs.search(criteria)]
+            found = await work.jobs.search(criteria)
+            counties = self._first_county(await work.job_feed_memberships.list_counties([job.id for job in found]))
+            jobs = [self._summary(job, today, counties.get(job.id)) for job in found]
             regions = self._freshness(await work.counties.list_feed_checks(), now)
         if county_code is not None:
             regions = [region for region in regions if region.code == county_code]
@@ -93,7 +96,9 @@ class JobSearchService(JobSearchServiceInterface):
                 raise NotFoundError("job", str(job_id))
             now = await work.transaction_time()
             listings = await work.job_feed_memberships.list_listings(job_id)
+            county = self._first_county(await work.job_feed_memberships.list_counties([job_id])).get(job_id)
             return JobDetailsDTO.model_validate(job).model_copy(update={
+                **self._county_fields(county),
                 "deadline_passed": self._deadline_passed(job, self._local_date(now)),
                 "listings": tuple(
                     listing.model_copy(update={"data_status": self._status([listing.feed_last_success_at], now)})
@@ -194,10 +199,24 @@ class JobSearchService(JobSearchServiceInterface):
     def _deadline_passed(job: Job, today: date) -> bool | None:
         return None if job.deadline_on is None else job.deadline_on < today
 
-    def _summary(self, job: Job, today: date) -> JobSummaryDTO:
+    def _summary(self, job: Job, today: date, county: JobCountyDTO | None) -> JobSummaryDTO:
         return JobSummaryDTO.model_validate(job).model_copy(
-            update={"deadline_passed": self._deadline_passed(job, today)}
+            update={"deadline_passed": self._deadline_passed(job, today), **self._county_fields(county)}
         )
+
+    @staticmethod
+    def _first_county(counties: Sequence[JobCountyDTO]) -> dict[int, JobCountyDTO]:
+        """Keep one county per job, preferring a feed that still lists it; HZZ lists a job in one county."""
+        first: dict[int, JobCountyDTO] = {}
+        for county in counties:
+            first.setdefault(county.job_id, county)
+        return first
+
+    @staticmethod
+    def _county_fields(county: JobCountyDTO | None) -> dict[str, str | None]:
+        if county is None:
+            return {"county_code": None, "county_name": None}
+        return {"county_code": county.county_code, "county_name": county.county_name}
 
     @staticmethod
     def _encode_cursor(job: JobSummaryDTO) -> str:

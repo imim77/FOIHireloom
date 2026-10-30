@@ -63,7 +63,10 @@ class JobSearchCriteriaDTO(ModelConfigBaseModel):
 class JobSummaryDTO(ModelConfigBaseModel):
     """A search result; None means the source did not state the value.
 
-    deadline_passed is None when the deadline is unknown.
+    deadline_passed is None when the deadline is unknown. location_text and
+    municipality come from the description suffix, which HZZ cuts off in
+    about half of the jobs; county_name comes from the county feed that
+    publishes the job and is known for every job in a feed.
     """
 
     id: int
@@ -72,6 +75,8 @@ class JobSummaryDTO(ModelConfigBaseModel):
     category: str | None
     location_text: str | None
     municipality: str | None
+    county_code: str | None = None
+    county_name: str | None = None
     published_on: date | None
     deadline_on: date | None
     deadline_passed: bool | None = None
@@ -86,6 +91,19 @@ class JobSummaryDTO(ModelConfigBaseModel):
         if self.title is not None:
             return self.title
         return f"Oglas HZZ {self.source_job_id}" if self.source_job_id else f"Oglas HZZ bez naslova ({self.id})"
+
+    @computed_field
+    @property
+    def display_location(self) -> str:
+        """The place of work with its county; says so when HZZ gave only the county."""
+        place = self.location_text or self.municipality
+        if place and self.county_name:
+            return f"{place}, {self.county_name}"
+        if place:
+            return place
+        if self.county_name:
+            return f"{self.county_name} (mjesto rada nije navedeno)"
+        return "Mjesto rada nije navedeno"
 
 
 class RegionFreshnessDTO(ModelConfigBaseModel):
@@ -160,6 +178,15 @@ class RegionDTO(ModelConfigBaseModel):
     open_jobs: int
     data_status: DataStatus = "unavailable"
     last_success_at: datetime | None = None
+
+
+class JobCountyDTO(ModelConfigBaseModel):
+    """A county whose feed lists or listed a job."""
+
+    job_id: int
+    county_code: str
+    county_name: str
+    presence_status: str
 
 
 class CountyFeedCheckDTO(ModelConfigBaseModel):
