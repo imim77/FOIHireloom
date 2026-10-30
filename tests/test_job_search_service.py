@@ -117,6 +117,37 @@ class JobSearchServiceTests(ModelTestCase):
         with self.assertRaises(InvalidJobSearchError):
             await self.service.search(JobSearchFiltersDTO(query="!!! --"))
 
+    async def test_query_searches_job_page_text_and_puts_title_matches_first(self) -> None:
+        # The driver is newer than the cook, but only its page mentions cooks.
+        await self.set_page("driver", page_description_text="Dostava hrane kuharima u Đakovu.",
+                            page_employer_name="PLODINE d.d.", page_work_place="PULA-POLA, ISTARSKA ŽUPANIJA",
+                            page_education="Srednja škola 3 godine")
+        for query in ("dakovu", "plodine", "pula", "srednja skola"):
+            with self.subTest(query=query):
+                self.assertEqual(await self.keys(query=query), ["driver"])
+        page = await self.service.search(JobSearchFiltersDTO(query="kuhar"))
+        self.assertEqual([(job.source_job_id, job.title_match) for job in page.jobs], [("cook", True), ("driver", False)])
+        # Every term must be in the title for a title match.
+        page = await self.service.search(JobSearchFiltersDTO(query="kuhar restoranu"))
+        self.assertEqual([(job.source_job_id, job.title_match) for job in page.jobs], [("cook", False)])
+        self.assertIsNone((await self.service.search(JobSearchFiltersDTO())).jobs[0].title_match)
+
+        seen, cursor = [], None
+        while True:
+            page = await self.service.search(JobSearchFiltersDTO(query="kuhar", limit=1, cursor=cursor))
+            seen.extend(job.source_job_id for job in page.jobs)
+            if (cursor := page.next_cursor) is None:
+                break
+        self.assertEqual(seen, ["cook", "driver"])
+
+    async def test_cursor_must_come_from_a_search_with_or_without_a_query_alike(self) -> None:
+        plain = (await self.service.search(JobSearchFiltersDTO(limit=1))).next_cursor
+        queried = (await self.service.search(JobSearchFiltersDTO(query="k", limit=1, include_expired=True))).next_cursor
+        self.assertIsNotNone(queried)
+        for filters in ({"query": "kuhar", "cursor": plain}, {"cursor": queried}):
+            with self.subTest(filters=filters), self.assertRaises(InvalidJobSearchError):
+                await self.service.search(JobSearchFiltersDTO(**filters))
+
     async def test_county_accepts_code_or_name(self) -> None:
         for county in ("grad-zagreb", "Grad Zagreb", "GRAD-ZAGREB"):
             with self.subTest(county=county):

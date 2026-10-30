@@ -33,8 +33,12 @@ class JobSearchFiltersDTO(ModelConfigBaseModel):
 
 
 class JobCursorDTO(ModelConfigBaseModel):
-    """Position after the last returned job in the search order."""
+    """Position after the last returned job in the search order.
 
+    title_match is set only for a search with a query, whose title matches come first.
+    """
+
+    title_match: bool | None = None
     published_on: date | None
     id: int = Field(ge=1, le=2**63 - 1)
 
@@ -71,7 +75,8 @@ class JobSummaryDTO(ModelConfigBaseModel):
     description suffix HZZ cuts off in about half of the jobs.
     deadline_passed is None when the deadline is unknown. county_name comes
     from the county feed that publishes the job and is known for every job in
-    a feed.
+    a feed. title_match tells whether every query word matched the title;
+    such jobs come first, and it is None for a search without a query.
     """
 
     id: int
@@ -91,6 +96,7 @@ class JobSummaryDTO(ModelConfigBaseModel):
     canonical_url: str
     quality_flags: tuple[str, ...]
     details_status: DetailsStatus = "pending"
+    title_match: bool | None = None
     last_seen_at: datetime
 
     @computed_field

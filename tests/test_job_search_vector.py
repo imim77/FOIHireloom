@@ -1,4 +1,4 @@
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 
 from model_test_case import ModelTestCase
 
@@ -38,6 +38,28 @@ class JobSearchVectorTests(ModelTestCase):
         self.assertEqual(await self.search("apartmana cistac"), ["1"])
         vectors = await self.session.execute(select(Job.source_job_id, Job.search_vector).order_by(Job.source_job_id))
         self.assertEqual({key: str(vector) for key, vector in vectors.all()}["3"], "")
+
+    async def test_job_page_text_replaces_the_feed_text_and_titles_are_weighted(self) -> None:
+        await self.session.execute(update(Job).where(Job.source_job_id == "1").values(
+            page_title="ČISTAČICA/ČISTAČ APARTMANA", page_description_text="Potreban njemački jezik.",
+            page_employer_name="PLODINE d.d.", page_work_place="PULA-POLA, ISTARSKA ŽUPANIJA",
+            page_education="Srednja škola 3 godine"))
+        await self.session.commit()
+        for query in ("njemacki", "plodine", "pula", "pola", "srednja", "cistacica apartmana"):
+            with self.subTest(query=query):
+                self.assertEqual(await self.search(query), ["1"])
+        # The page's description replaces the feed's truncated one.
+        self.assertEqual(await self.search("dakovu"), [])
+
+        async def title_matches(query: str) -> list[str]:
+            statement = (select(Job.source_job_id)
+                         .where(Job.search_vector.bool_op("@@")(func.to_tsquery("simple", query)))
+                         .order_by(Job.source_job_id))
+            return list(await self.session.scalars(statement))
+
+        self.assertEqual(await title_matches("apartman:*A"), ["1"])
+        self.assertEqual(await title_matches("kuhar:*A"), ["2"])
+        self.assertEqual(await title_matches("plodine:*A | njemack:*A"), [])
 
     async def test_search_vector_is_deferred_and_backed_by_a_gin_index(self) -> None:
         job = await self.session.scalar(select(Job).where(Job.source_job_id == "2"))

@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Collection, Mapping, Sequence
 from datetime import date, datetime
+from typing import NamedTuple
 
 from FOIHireloom.db.models import Job
 from FOIHireloom.dto.hzz_job_page import ParsedJobPageDTO
@@ -8,6 +9,13 @@ from FOIHireloom.dto.job import ParsedJobDTO
 from FOIHireloom.dto.job_page import JobPageTargetDTO
 from FOIHireloom.dto.job_search import CategoryDTO, JobSearchCriteriaDTO
 from FOIHireloom.dto.job_sync import JobSnapshotDTO
+
+
+class JobSearchHit(NamedTuple):
+    """A found job; title_match tells whether every search term matched its title, None without terms."""
+
+    job: Job
+    title_match: bool | None
 
 
 class JobRepository(ABC):
@@ -26,12 +34,14 @@ class JobRepository(ABC):
         """Look up a canonical URL within its provider's namespace."""
 
     @abstractmethod
-    async def search(self, criteria: JobSearchCriteriaDTO) -> list[Job]:
+    async def search(self, criteria: JobSearchCriteriaDTO) -> list[JobSearchHit]:
         """Return up to criteria.limit listed jobs matching every criterion.
 
-        A job is listed while it is present in at least one county feed. Jobs
-        are ordered by publication date, newest first and unknown dates last,
-        then by descending ID; criteria.after continues after that position.
+        A job is listed while it is present in at least one county feed. With
+        search terms, jobs whose title matches every term come first. Jobs
+        are then ordered by publication date, newest first and unknown dates
+        last, then by descending ID; criteria.after continues after that
+        position.
         """
 
     @abstractmethod

@@ -28,9 +28,17 @@ from .base import Base
 # must apply the same translate(); unaccent() is not immutable and cannot be
 # used in a generated column.
 SEARCH_FOLD_FROM, SEARCH_FOLD_TO = "ČĆŽŠĐčćžšđ/.", "CCZSDcczsd  "
+# Title words get weight A, so a query restricted to it (kuhar:*A) tells
+# whether the title matched; everything else keeps the default weight D. The
+# job page's values replace the feed's truncated title and description once
+# read, and add the employer, place of work and education.
+SEARCH_TITLE_WEIGHT = "A"
 SEARCH_DOCUMENT = (
+    "setweight(to_tsvector('simple'::regconfig, translate("
+    f"coalesce(page_title, title, ''), '{SEARCH_FOLD_FROM}', '{SEARCH_FOLD_TO}')), '{SEARCH_TITLE_WEIGHT}') || "
     "to_tsvector('simple'::regconfig, translate("
-    "coalesce(title, '') || ' ' || coalesce(description_text, ''), "
+    "coalesce(page_description_text, description_text, '') || ' ' || coalesce(page_employer_name, '') || ' ' || "
+    "coalesce(page_work_place, '') || ' ' || coalesce(page_education, ''), "
     f"'{SEARCH_FOLD_FROM}', '{SEARCH_FOLD_TO}'))"
 )
 

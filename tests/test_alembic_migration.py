@@ -166,3 +166,29 @@ class AlembicMigrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tuple(restored), ("KUHAR", "http://burzarada.hzz.hr/RadnoMjesto_Ispis.aspx?WebSifra=1", {}))
         await self.migrate(command.upgrade, "head")
         await self.migrate(command.check)
+
+    async def test_page_search_migration_rebuilds_the_search_vector_both_ways(self) -> None:
+        await self.migrate(command.upgrade, "adc0c83dfede")
+        async with self.engine.begin() as connection:
+            await connection.execute(text(
+                "INSERT INTO jobs (provider, source_job_id, canonical_url, title, description_text, content_hash, "
+                "page_status, page_checked_at, page_fetched_at, page_source_hash, page_title, page_description_text) "
+                "VALUES ('hzz', '1', 'https://example.com/1', 'KUHAR', 'Kuhanje jela', 'hash', 'fetched', now(), "
+                "now(), 'hash', 'KUHAR/KUHARICA', 'Potreban njemački jezik.')"
+            ))
+
+        async def matches(*queries: str) -> tuple[bool, ...]:
+            async with self.engine.connect() as connection:
+                return tuple([
+                    await connection.scalar(text("SELECT search_vector @@ to_tsquery('simple', :query) FROM jobs"),
+                                            {"query": query})
+                    for query in queries
+                ])
+
+        self.assertEqual(await matches("njemacki", "kuhanje", "kuharica:*A"), (False, True, False))
+        await self.migrate(command.upgrade, "head")
+        self.assertEqual(await matches("njemacki", "kuhanje", "kuharica:*A", "njemacki:*A"), (True, False, True, False))
+        await self.migrate(command.downgrade, "adc0c83dfede")
+        self.assertEqual(await matches("njemacki", "kuhanje"), (False, True))
+        await self.migrate(command.upgrade, "head")
+        await self.migrate(command.check)

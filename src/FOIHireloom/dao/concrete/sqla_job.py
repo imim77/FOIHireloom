@@ -1,16 +1,17 @@
 from collections.abc import Collection, Mapping, Sequence
 from datetime import date, datetime
 
-from sqlalchemy import ColumnElement, and_, func, or_, select, update
+from sqlalchemy import ColumnElement, and_, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import Job, JobFeedMembership, SourceFeed
+from FOIHireloom.db.models.job import SEARCH_TITLE_WEIGHT
 from FOIHireloom.dto.hzz_job_page import ParsedJobPageDTO
 from FOIHireloom.dto.job import ParsedJobDTO
 from FOIHireloom.dto.job_page import JobPageTargetDTO
 from FOIHireloom.dto.job_search import CategoryDTO, JobSearchCriteriaDTO
 from FOIHireloom.dto.job_sync import JobSnapshotDTO
-from FOIHireloom.dao.interfaces.job import JobRepository
+from FOIHireloom.dao.interfaces.job import JobRepository, JobSearchHit
 
 
 class SqlAlchemyJobRepository(JobRepository):
@@ -36,26 +37,39 @@ class SqlAlchemyJobRepository(JobRepository):
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
 
-    async def search(self, criteria: JobSearchCriteriaDTO) -> list[Job]:
-        statement = select(Job).where(listed_condition(criteria.county_id))
+    async def search(self, criteria: JobSearchCriteriaDTO) -> list[JobSearchHit]:
+        title_match = None
+        if criteria.terms:
+            matches = Job.search_vector.bool_op("@@")
+            title_match = matches(func.to_tsquery(
+                "simple", " & ".join(f"{term}:*{SEARCH_TITLE_WEIGHT}" for term in criteria.terms)
+            ))
+        statement = select(Job, title_match).where(listed_condition(criteria.county_id))
         if criteria.terms:
             query = " & ".join(f"{term}:*" for term in criteria.terms)
-            statement = statement.where(Job.search_vector.bool_op("@@")(func.to_tsquery("simple", query)))
+            statement = statement.where(matches(func.to_tsquery("simple", query)))
         if criteria.category is not None:
             statement = statement.where(func.upper(Job.category) == func.upper(criteria.category))
         if criteria.open_on is not None:
             statement = statement.where(open_condition(criteria.open_on))
         if (after := criteria.after) is not None:
             if after.published_on is None:
-                statement = statement.where(Job.published_on.is_(None), Job.id < after.id)
+                later = and_(Job.published_on.is_(None), Job.id < after.id)
             else:
-                statement = statement.where(or_(
+                later = or_(
                     Job.published_on < after.published_on,
                     and_(Job.published_on == after.published_on, Job.id < after.id),
                     Job.published_on.is_(None),
-                ))
-        statement = statement.order_by(Job.published_on.desc().nulls_last(), Job.id.desc()).limit(criteria.limit)
-        return list(await self._session.scalars(statement))
+                )
+            if title_match is not None:
+                later = or_(and_(title_match, later), not_(title_match)) if after.title_match else \
+                    and_(not_(title_match), later)
+            statement = statement.where(later)
+        order = [Job.published_on.desc().nulls_last(), Job.id.desc()]
+        if title_match is not None:
+            order.insert(0, title_match.desc())
+        statement = statement.order_by(*order).limit(criteria.limit)
+        return [JobSearchHit(job, title_match) for job, title_match in await self._session.execute(statement)]
 
     async def list_categories(self, open_on: date) -> list[CategoryDTO]:
         open_jobs = func.count().label("open_jobs")

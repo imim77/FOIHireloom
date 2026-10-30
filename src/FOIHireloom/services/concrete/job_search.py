@@ -35,6 +35,7 @@ LOCAL_TIME_ZONE = ZoneInfo("Europe/Zagreb")
 SEARCH_FOLD = str.maketrans(SEARCH_FOLD_FROM, SEARCH_FOLD_TO)
 # Counties named in a coverage warning before the rest are only counted.
 WARNING_REGION_LIMIT = 5
+INVALID_CURSOR = "The cursor is not valid; start the search again without it."
 
 
 class JobSearchService(JobSearchServiceInterface):
@@ -61,6 +62,9 @@ class JobSearchService(JobSearchServiceInterface):
     async def search(self, filters: JobSearchFiltersDTO) -> JobSearchPageDTO:
         terms = self._terms(filters.query)
         after = self._decode_cursor(filters.cursor) if filters.cursor else None
+        # A cursor orders by title match exactly when the search has a query.
+        if after is not None and (after.title_match is None) != (not terms):
+            raise InvalidJobSearchError(INVALID_CURSOR)
         async with self._uow_factory() as work:
             now = await work.transaction_time()
             today = self._local_date(now)
@@ -80,8 +84,8 @@ class JobSearchService(JobSearchServiceInterface):
                 limit=filters.limit + 1,
             )
             found = await work.jobs.search(criteria)
-            counties = self._first_county(await work.job_feed_memberships.list_counties([job.id for job in found]))
-            jobs = [self._summary(job, today, counties.get(job.id)) for job in found]
+            counties = self._first_county(await work.job_feed_memberships.list_counties([hit.job.id for hit in found]))
+            jobs = [self._summary(hit.job, today, counties.get(hit.job.id), hit.title_match) for hit in found]
             regions = self._freshness(await work.counties.list_feed_checks(), now)
         if county_code is not None:
             regions = [region for region in regions if region.code == county_code]
@@ -207,9 +211,9 @@ class JobSearchService(JobSearchServiceInterface):
         definition = self._counties.match(county)
         return definition.code if definition is not None else county.casefold()
 
-    def _summary(self, job: Job, today: date, county: JobCountyDTO | None) -> JobSummaryDTO:
+    def _summary(self, job: Job, today: date, county: JobCountyDTO | None, title_match: bool | None) -> JobSummaryDTO:
         return JobSummaryDTO.model_validate(job).model_copy(
-            update={**self._page_fields(job, today), **self._county_fields(county)}
+            update={**self._page_fields(job, today), **self._county_fields(county), "title_match": title_match}
         )
 
     @staticmethod
@@ -250,7 +254,7 @@ class JobSearchService(JobSearchServiceInterface):
 
     @staticmethod
     def _encode_cursor(job: JobSummaryDTO) -> str:
-        cursor = JobCursorDTO(published_on=job.published_on, id=job.id)
+        cursor = JobCursorDTO(title_match=job.title_match, published_on=job.published_on, id=job.id)
         return base64.urlsafe_b64encode(cursor.model_dump_json().encode()).decode()
 
     @staticmethod
@@ -258,4 +262,4 @@ class JobSearchService(JobSearchServiceInterface):
         try:
             return JobCursorDTO.model_validate_json(base64.urlsafe_b64decode(cursor.encode("ascii")))
         except (ValueError, ValidationError) as error:
-            raise InvalidJobSearchError("The cursor is not valid; start the search again without it.") from error
+            raise InvalidJobSearchError(INVALID_CURSOR) from error
