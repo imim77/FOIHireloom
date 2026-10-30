@@ -3,7 +3,9 @@ from collections.abc import Collection, Mapping, Sequence
 from datetime import date, datetime
 
 from FOIHireloom.db.models import Job
+from FOIHireloom.dto.hzz_job_page import ParsedJobPageDTO
 from FOIHireloom.dto.job import ParsedJobDTO
+from FOIHireloom.dto.job_page import JobPageTargetDTO
 from FOIHireloom.dto.job_search import CategoryDTO, JobSearchCriteriaDTO
 from FOIHireloom.dto.job_sync import JobSnapshotDTO
 
@@ -66,3 +68,23 @@ class JobRepository(ABC):
     @abstractmethod
     async def mark_seen(self, job_ids: Collection[int], seen_at: datetime) -> None:
         """Record that these jobs were still published at seen_at."""
+
+    @abstractmethod
+    async def list_page_candidates(self, retry_before: datetime, limit: int) -> list[JobPageTargetDTO]:
+        """Return up to limit listed jobs whose detail page is due, newest publication first.
+
+        A page is due when it was never fetched, was fetched for older feed
+        content, or was unavailable or failed before retry_before.
+        """
+
+    @abstractmethod
+    async def count_page_candidates(self, retry_before: datetime) -> int:
+        """Count the listed jobs whose detail page is due, as list_page_candidates defines it."""
+
+    @abstractmethod
+    async def record_page(self, job_id: int, page: ParsedJobPageDTO, source_hash: str, checked_at: datetime) -> None:
+        """Store a fetched detail page for the feed content with source_hash."""
+
+    @abstractmethod
+    async def record_page_problem(self, job_id: int, status: str, error: str, checked_at: datetime) -> None:
+        """Mark a detail page check 'unavailable' or 'failed'; earlier fetched values stay."""

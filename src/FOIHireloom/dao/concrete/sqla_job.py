@@ -5,7 +5,9 @@ from sqlalchemy import ColumnElement, and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import Job, JobFeedMembership, SourceFeed
+from FOIHireloom.dto.hzz_job_page import ParsedJobPageDTO
 from FOIHireloom.dto.job import ParsedJobDTO
+from FOIHireloom.dto.job_page import JobPageTargetDTO
 from FOIHireloom.dto.job_search import CategoryDTO, JobSearchCriteriaDTO
 from FOIHireloom.dto.job_sync import JobSnapshotDTO
 from FOIHireloom.dao.interfaces.job import JobRepository
@@ -103,6 +105,34 @@ class SqlAlchemyJobRepository(JobRepository):
                 update(Job).where(Job.id.in_(job_ids)).values(last_seen_at=seen_at)
             )
 
+    async def list_page_candidates(self, retry_before: datetime, limit: int) -> list[JobPageTargetDTO]:
+        statement = (
+            select(Job.id, Job.canonical_url, Job.content_hash)
+            .where(listed_condition(), page_due_condition(retry_before))
+            .order_by(Job.published_on.desc().nulls_last(), Job.id.desc())
+            .limit(limit)
+        )
+        result = await self._session.execute(statement)
+        return [JobPageTargetDTO.model_validate(row) for row in result.all()]
+
+    async def count_page_candidates(self, retry_before: datetime) -> int:
+        statement = select(func.count()).select_from(Job).where(listed_condition(), page_due_condition(retry_before))
+        return await self._session.scalar(statement)
+
+    async def record_page(self, job_id: int, page: ParsedJobPageDTO, source_hash: str, checked_at: datetime) -> None:
+        await self._session.execute(update(Job).where(Job.id == job_id).values(
+            page_status="fetched", page_checked_at=checked_at, page_fetched_at=checked_at,
+            page_source_hash=source_hash, page_error=None,
+            **{f"page_{name}": value for name, value in page.model_dump().items()},
+        ))
+
+    async def record_page_problem(self, job_id: int, status: str, error: str, checked_at: datetime) -> None:
+        if status not in {"unavailable", "failed"}:
+            raise ValueError("A page problem is either 'unavailable' or 'failed'.")
+        await self._session.execute(update(Job).where(Job.id == job_id).values(
+            page_status=status, page_checked_at=checked_at, page_error=error,
+        ))
+
     @staticmethod
     def _content(job: ParsedJobDTO) -> dict[str, object]:
         return job.model_dump() | {"quality_flags": list(job.quality_flags)}
@@ -127,3 +157,12 @@ def listed_condition(county_id: int | None = None) -> ColumnElement[bool]:
 def open_condition(open_on: date) -> ColumnElement[bool]:
     """True unless the job's known deadline is before open_on."""
     return or_(Job.deadline_on.is_(None), Job.deadline_on >= open_on)
+
+
+def page_due_condition(retry_before: datetime) -> ColumnElement[bool]:
+    """True for jobs whose detail page was never fetched, is outdated, or may be retried."""
+    return or_(
+        Job.page_status == "pending",
+        and_(Job.page_status == "fetched", Job.page_source_hash != Job.content_hash),
+        and_(Job.page_status.in_(("unavailable", "failed")), Job.page_checked_at < retry_before),
+    )

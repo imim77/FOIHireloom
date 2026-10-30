@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Identity,
     Index,
+    Integer,
     Text,
     UniqueConstraint,
     func,
@@ -62,6 +63,14 @@ class Job(Base):
             name="content_change_within_observation",
         ),
         Index("ix_jobs_search_vector", "search_vector", postgresql_using="gin"),
+        CheckConstraint(
+            "page_status IN ('pending', 'fetched', 'unavailable', 'failed')", name="page_status_known"
+        ),
+        CheckConstraint("(page_status = 'pending') = (page_checked_at IS NULL)", name="page_check_recorded"),
+        CheckConstraint(
+            "page_status <> 'fetched' OR (page_fetched_at IS NOT NULL AND page_source_hash IS NOT NULL)",
+            name="page_fetch_recorded",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
@@ -91,6 +100,28 @@ class Job(Base):
     search_vector: Mapped[str | None] = mapped_column(
         TSVECTOR, Computed(SEARCH_DOCUMENT, persisted=True), deferred=True
     )
+    # Fields from the job's HZZ detail page, kept apart from the feed's values.
+    # A later failed check keeps the last fetched values; page_source_hash is
+    # the feed content hash they were fetched for.
+    page_status: Mapped[str] = mapped_column(Text, default="pending", server_default="pending")
+    page_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    page_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    page_source_hash: Mapped[str | None] = mapped_column(Text)
+    page_error: Mapped[str | None] = mapped_column(Text)
+    page_title: Mapped[str | None] = mapped_column(Text)
+    page_work_place: Mapped[str | None] = mapped_column(Text)
+    page_workers_needed: Mapped[int | None] = mapped_column(Integer)
+    page_employment_type: Mapped[str | None] = mapped_column(Text)
+    page_working_hours: Mapped[str | None] = mapped_column(Text)
+    page_work_schedule: Mapped[str | None] = mapped_column(Text)
+    page_accommodation: Mapped[str | None] = mapped_column(Text)
+    page_transport_allowance: Mapped[str | None] = mapped_column(Text)
+    page_valid_from: Mapped[date | None] = mapped_column(Date)
+    page_valid_until: Mapped[date | None] = mapped_column(Date)
+    page_education: Mapped[str | None] = mapped_column(Text)
+    page_experience: Mapped[str | None] = mapped_column(Text)
+    page_description_text: Mapped[str | None] = mapped_column(Text)
+    page_employer_name: Mapped[str | None] = mapped_column(Text)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     content_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

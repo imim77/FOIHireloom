@@ -2,7 +2,9 @@ from .base import ModelConfigBaseModel
 from .ckan import CkanPackage, CkanResource
 from .county import CountyDefinitionDTO, CountyDTO
 from .hzz_feed import FeedResponseDTO
+from .hzz_job_page import ParsedJobPageDTO
 from .job import ParsedFeedDTO, ParsedJobDTO
+from .job_page import JobPageTargetDTO
 from .job_search import (
     CategoryDTO,
     CountyFeedCheckDTO,
@@ -51,6 +53,7 @@ __all__ = [
     "JobCursorDTO",
     "JobDetailsDTO",
     "JobListingDTO",
+    "JobPageTargetDTO",
     "JobSearchCriteriaDTO",
     "JobSearchFiltersDTO",
     "JobSearchPageDTO",
@@ -61,6 +64,7 @@ __all__ = [
     "ModelConfigBaseModel",
     "ParsedFeedDTO",
     "ParsedJobDTO",
+    "ParsedJobPageDTO",
     "PlannedSourceDTO",
     "RegionDTO",
     "RegionFreshnessDTO",
