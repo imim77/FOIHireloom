@@ -8,6 +8,8 @@ from FOIHireloom.dto.hzz_feed import FeedResponseDTO
 from FOIHireloom.exceptions import HzzFeedHttpError, HzzFeedTooLargeError, HzzFeedTransportError
 from FOIHireloom.integrations.interfaces.hzz_feed import HzzFeedClientInterface
 
+from .http import read_limited
+
 
 class HzzFeedClient(HzzFeedClientInterface):
     """Download HZZ feeds using a caller-owned async HTTP client.
@@ -54,7 +56,9 @@ class HzzFeedClient(HzzFeedClientInterface):
                     )
                 if not response.is_success:
                     raise HzzFeedHttpError(response.status_code)
-                content = await self._read_limited(response)
+                content = await read_limited(
+                    response, self._max_bytes, lambda: HzzFeedTooLargeError(f"HZZ feed exceeds {self._max_bytes} bytes.")
+                )
         except httpx.RequestError as error:
             raise HzzFeedTransportError("Could not download the HZZ feed.") from error
         return FeedResponseDTO(
@@ -63,16 +67,6 @@ class HzzFeedClient(HzzFeedClientInterface):
             etag=response.headers.get("etag"),
             last_modified=self._http_date(response.headers.get("last-modified")),
         )
-
-    async def _read_limited(self, response: httpx.Response) -> bytes:
-        # Counted after decompression, so a small gzip body cannot expand unchecked.
-        chunks, size = [], 0
-        async for chunk in response.aiter_bytes():
-            size += len(chunk)
-            if size > self._max_bytes:
-                raise HzzFeedTooLargeError(f"HZZ feed exceeds {self._max_bytes} bytes.")
-            chunks.append(chunk)
-        return b"".join(chunks)
 
     @staticmethod
     def _http_date(value: str | None) -> datetime | None:

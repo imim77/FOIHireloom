@@ -87,3 +87,34 @@ class HzzFeedTooLargeError(HzzFeedError):
 
 class HzzFeedParseError(HzzFeedError):
     """The response is not a well-formed, safe RSS 2.0 document."""
+
+
+class HzzJobPageError(FOIHireloomException, RuntimeError):
+    """An HZZ job detail page could not be downloaded or read."""
+
+    code = "hzz_job_page_error"
+
+
+class HzzJobPageTransportError(HzzJobPageError):
+    """The HTTP request failed, including timeouts."""
+
+
+class HzzJobPageHttpError(HzzJobPageError):
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
+        super().__init__(f"HZZ job page returned HTTP {status_code}.")
+
+
+class HzzJobPageTooLargeError(HzzJobPageError):
+    """The decoded response exceeded the configured size limit."""
+
+
+class HzzJobPageUnavailableError(HzzJobPageError):
+    """HZZ redirected to its error page instead of the job, e.g. for a withdrawn job.
+
+    This is not evidence that the job is closed.
+    """
+
+
+class HzzJobPageParseError(HzzJobPageError):
+    """The page does not have the expected job page structure."""
