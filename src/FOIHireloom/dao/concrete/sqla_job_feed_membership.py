@@ -4,8 +4,9 @@ from datetime import datetime
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from FOIHireloom.db.models import JobFeedMembership, SourceFeed
+from FOIHireloom.db.models import County, JobFeedMembership, SourceFeed
 from FOIHireloom.dao.interfaces.job_feed_membership import JobFeedMembershipRepository
+from FOIHireloom.dto.job_search import JobListingDTO
 from FOIHireloom.dto.job_sync import MembershipSnapshotDTO
 
 
@@ -33,6 +34,25 @@ class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
         )
         result = await self._session.scalars(statement)
         return list(result.all())
+
+    async def list_listings(self, job_id: int) -> list[JobListingDTO]:
+        statement = (
+            select(
+                County.code.label("county_code"),
+                County.name.label("county_name"),
+                JobFeedMembership.presence_status,
+                JobFeedMembership.first_seen_at,
+                JobFeedMembership.last_seen_at,
+                JobFeedMembership.missing_since_at,
+            )
+            .select_from(JobFeedMembership)
+            .join(SourceFeed)
+            .join(County)
+            .where(JobFeedMembership.job_id == job_id, SourceFeed.scope == "county")
+            .order_by(County.name, SourceFeed.id)
+        )
+        result = await self._session.execute(statement)
+        return [JobListingDTO.model_validate(row) for row in result.all()]
 
     async def add(self, membership: JobFeedMembership) -> None:
         await self._require_county_feed(membership.feed_id)

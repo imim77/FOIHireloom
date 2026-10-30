@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 from collections.abc import Collection, Mapping, Sequence
-from datetime import datetime
+from datetime import date, datetime
 
 from FOIHireloom.db.models import Job
 from FOIHireloom.dto.job import ParsedJobDTO
+from FOIHireloom.dto.job_search import CategoryDTO, JobSearchCriteriaDTO
 from FOIHireloom.dto.job_sync import JobSnapshotDTO
 
 
@@ -21,6 +22,22 @@ class JobRepository(ABC):
     @abstractmethod
     async def get_by_canonical_url(self, provider: str, canonical_url: str) -> Job | None:
         """Look up a canonical URL within its provider's namespace."""
+
+    @abstractmethod
+    async def search(self, criteria: JobSearchCriteriaDTO) -> list[Job]:
+        """Return up to criteria.limit listed jobs matching every criterion.
+
+        A job is listed while it is present in at least one county feed. Jobs
+        are ordered by publication date, newest first and unknown dates last,
+        then by descending ID; criteria.after continues after that position.
+        """
+
+    @abstractmethod
+    async def list_categories(self, open_on: date) -> list[CategoryDTO]:
+        """Count listed jobs per category whose known deadline is not before open_on.
+
+        Most common categories come first; jobs without a category are left out.
+        """
 
     @abstractmethod
     async def add(self, job: Job) -> None:

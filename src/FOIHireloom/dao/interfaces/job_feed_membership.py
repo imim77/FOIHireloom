@@ -3,6 +3,7 @@ from collections.abc import Collection
 from datetime import datetime
 
 from FOIHireloom.db.models import JobFeedMembership
+from FOIHireloom.dto.job_search import JobListingDTO
 from FOIHireloom.dto.job_sync import MembershipSnapshotDTO
 
 
@@ -23,6 +24,10 @@ class JobFeedMembershipRepository(ABC):
     @abstractmethod
     async def list_for_feed(self, feed_id: int) -> list[JobFeedMembership]:
         """Return all county-feed memberships ordered by ascending job ID."""
+
+    @abstractmethod
+    async def list_listings(self, job_id: int) -> list[JobListingDTO]:
+        """Return the job's present and missing county-feed memberships by county name."""
 
     @abstractmethod
     async def add(self, membership: JobFeedMembership) -> None:

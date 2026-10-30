@@ -9,8 +9,10 @@ from FOIHireloom.db.database import PostgresDatabase
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
 from FOIHireloom.exceptions import PersistenceError
+from FOIHireloom.factories.job_search import JobSearchServiceFactory
 from FOIHireloom.factories.job_sync import JobSyncServiceFactory
 from FOIHireloom.factories.source_feed_registration import SourceFeedRegistrationServiceFactory
+from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 from FOIHireloom.services.interfaces.job_sync import JobSyncServiceInterface
 from FOIHireloom.services.interfaces.source_feed_registration import SourceFeedRegistrationServiceInterface
 
@@ -47,6 +49,12 @@ class DependencyService:
         async with httpx.AsyncClient(headers={"User-Agent": USER_AGENT}) as http:
             async with self._unit_of_work_factory() as uow_factory:
                 yield factory.create(http, uow_factory)
+
+    @asynccontextmanager
+    async def job_search_service(self) -> AsyncIterator[JobSearchServiceInterface]:
+        """Yield a read-only search service; keep it open for as long as requests arrive."""
+        async with self._unit_of_work_factory() as uow_factory:
+            yield JobSearchServiceFactory().create(uow_factory)
 
     @asynccontextmanager
     async def _unit_of_work_factory(self) -> AsyncIterator[SqlAlchemyUnitOfWorkFactory]:

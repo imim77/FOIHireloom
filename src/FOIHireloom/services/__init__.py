@@ -3,15 +3,18 @@
 from .concrete import (
     CroatianCountyCatalog,
     HzzFeedParser,
+    JobSearchService,
     JobSyncService,
     SourceFeedRegistrationPlanner,
     SourceFeedRegistrationService,
 )
-from .interfaces import JobSyncServiceInterface, SourceFeedRegistrationServiceInterface
+from .interfaces import JobSearchServiceInterface, JobSyncServiceInterface, SourceFeedRegistrationServiceInterface
 
 __all__ = [
     "CroatianCountyCatalog",
     "HzzFeedParser",
+    "JobSearchService",
+    "JobSearchServiceInterface",
     "JobSyncService",
     "JobSyncServiceInterface",
     "SourceFeedRegistrationPlanner",

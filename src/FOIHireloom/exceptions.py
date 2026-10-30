@@ -29,6 +29,12 @@ class ConflictError(PersistenceError):
     code = "conflict"
 
 
+class InvalidJobSearchError(FOIHireloomException):
+    """The search filters or cursor cannot be used as given."""
+
+    code = "invalid_job_search"
+
+
 class SourceFeedRegistrationError(FOIHireloomException):
     """The metadata cannot be registered without ambiguity or conflicting data."""
 
