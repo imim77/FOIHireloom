@@ -28,6 +28,7 @@ from FOIHireloom.exceptions import InvalidJobSearchError, NotFoundError
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 
 from .croatian_counties import CroatianCountyCatalog
+from .croatian_stem import stem
 
 # HZZ deadlines are Croatian calendar days and stay open until the end of the day.
 LOCAL_TIME_ZONE = ZoneInfo("Europe/Zagreb")
@@ -201,7 +202,9 @@ class JobSearchService(JobSearchServiceInterface):
     def _terms(query: str | None) -> tuple[str, ...]:
         if query is None or not query.strip():
             return ()
-        terms = tuple(dict.fromkeys(SEARCH_TERM.findall(query.translate(SEARCH_FOLD).casefold())))
+        # Stemmed, so "medicinske sestre" also finds "MEDICINSKA SESTRA".
+        words = SEARCH_TERM.findall(query.translate(SEARCH_FOLD).casefold())
+        terms = tuple(dict.fromkeys(stem(word) for word in words))
         if not terms:
             raise InvalidJobSearchError("The query contains no searchable words.")
         return terms

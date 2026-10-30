@@ -107,6 +107,10 @@ class JobSearchServiceTests(ModelTestCase):
             "Vozač  C": ["driver"],
             "čistačica": ["cleaner"],
             "cistac": ["cleaner"],
+            # Query words are stemmed: other cases and feminine forms match.
+            "kuharice": ["cook"],
+            "medicinske sestre": ["nurse"],
+            "vozači": ["driver"],
             "a:* | b & !c": [],
         }
         for query, expected in cases.items():

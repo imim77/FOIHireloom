@@ -46,7 +46,7 @@ class JobCursorDTO(ModelConfigBaseModel):
 class JobSearchCriteriaDTO(ModelConfigBaseModel):
     """Validated filters for the job repository.
 
-    terms are ASCII-folded, lowercase words; each must match a word prefix.
+    terms are ASCII-folded, lowercase words or their stems; each must match a word prefix.
     open_on leaves out jobs whose known deadline is before that day.
     """
 
