@@ -86,3 +86,32 @@ class JobMarketStatsDTO(JobMarketAggregatesDTO):
     today: date
     window_days: int = MARKET_WINDOW_DAYS
     coverage: CoverageDTO
+
+
+class CountyShareDTO(ModelConfigBaseModel):
+    """One county's jobs; share is its percentage of all matching jobs."""
+
+    code: str
+    name: str
+    short_name: str
+    jobs: int
+    workers_needed: int
+    share: float
+
+
+class JobsByCountyDTO(ModelConfigBaseModel):
+    """The counties with the most matching jobs, for the jobs-by-county chart.
+
+    counties holds at most top counties, most jobs first; counties_total is
+    how many counties have any. total_jobs and total_workers_needed cover
+    every county.
+    """
+
+    title: str
+    description: str
+    today: date
+    total_jobs: int
+    total_workers_needed: int
+    counties_total: int
+    counties: tuple[CountyShareDTO, ...]
+    coverage: CoverageDTO

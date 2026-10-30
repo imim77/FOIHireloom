@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="hr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Oglasi po županijama</title>
+  <style>
+    body { margin: 0; padding: 16px; font: 14px/1.4 system-ui, sans-serif; background: #fff; color: #111; }
+  </style>
+</head>
+<body>
+  <h1 id="title">Oglasi po županijama</h1>
+  <p id="description">Učitavanje…</p>
+  <ol id="counties"></ol>
+  <script type="module">
+    import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@2.0.3/app-with-deps";
+
+    const app = new App({ name: "FOIHireloom jobs by county", version: "1.0.0" }, {}, { autoResize: true });
+    app.ontoolresult = ({ structuredContent: data }) => {
+      if (!data) return;
+      document.getElementById("title").textContent = data.title;
+      document.getElementById("description").textContent = data.description;
+      document.getElementById("counties").replaceChildren(...data.counties.map((county) => {
+        const item = document.createElement("li");
+        item.textContent = `${county.name}: ${county.jobs}`;
+        return item;
+      }));
+    };
+    await app.connect();
+  </script>
+</body>
+</html>

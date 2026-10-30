@@ -6,10 +6,12 @@ from .hzz_job_page import ParsedJobPageDTO
 from .job import ParsedFeedDTO, ParsedJobDTO
 from .job_market import (
     CountyMarketCountDTO,
+    CountyShareDTO,
     JobMarketAggregatesDTO,
     JobMarketCriteriaDTO,
     JobMarketFiltersDTO,
     JobMarketStatsDTO,
+    JobsByCountyDTO,
     MarketCountDTO,
 )
 from .job_page import JobPageFetchResultDTO, JobPageTargetDTO
@@ -55,6 +57,7 @@ __all__ = [
     "CountyDefinitionDTO",
     "CountyFeedCheckDTO",
     "CountyMarketCountDTO",
+    "CountyShareDTO",
     "CoverageDTO",
     "FeedCheckDTO",
     "FeedResponseDTO",
@@ -68,6 +71,7 @@ __all__ = [
     "JobMarketCriteriaDTO",
     "JobMarketFiltersDTO",
     "JobMarketStatsDTO",
+    "JobsByCountyDTO",
     "JobPageFetchResultDTO",
     "JobPageTargetDTO",
     "JobSearchCriteriaDTO",
