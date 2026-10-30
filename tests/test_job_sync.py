@@ -93,9 +93,7 @@ class JobSyncTests(ModelTestCase):
         self.assertEqual(job.canonical_url, "https://burzarada.hzz.hr/RadnoMjesto_Ispis.aspx?WebSifra=1")
         self.assertEqual(job.first_seen_at, job.last_seen_at)
         self.assertEqual(await self.memberships(1), {"1": "present", "2": "present", "3": "present"})
-        async with self.sessions.session() as reader:
-            item = await reader.scalar(select(JobFeedMembership.source_item).join(Job).where(Job.source_job_id == "1"))
-        self.assertEqual(item["guid"], "http://burzarada.hzz.hr/RadnoMjesto_Ispis.aspx?WebSifra=1")
+        self.assertEqual((job.location_text, job.municipality), ("BJELOVAR", "BJELOVAR"))
         feed = await self.feed(1)
         self.assertEqual(feed.etag, '"v1"')
         self.assertIsNotNone(feed.source_last_modified_at)

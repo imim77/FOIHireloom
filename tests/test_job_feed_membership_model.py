@@ -25,7 +25,6 @@ class JobFeedMembershipModelTests(ModelTestCase):
     def membership(self, **overrides: object) -> JobFeedMembership:
         return JobFeedMembership(**({
             "job_id": self.job.id, "feed_id": self.feed.id,
-            "source_item": {"title": "Čuvar", "details": {"hours": 40}},
         } | overrides))
 
     async def test_same_job_can_appear_in_multiple_feeds_without_duplicate_membership(self) -> None:
@@ -39,18 +38,8 @@ class JobFeedMembershipModelTests(ModelTestCase):
         with self.assertRaises(IntegrityError):
             async with self.session.begin_nested():
                 await self.session.execute(insert(JobFeedMembership).values(
-                    job_id=self.job.id, feed_id=self.feed.id, source_item={}
+                    job_id=self.job.id, feed_id=self.feed.id
                 ))
-
-    async def test_jsonb_roundtrip_and_top_level_mutation(self) -> None:
-        membership = self.membership()
-        self.session.add(membership)
-        await self.session.commit()
-        membership.source_item["title"] = "Čuvar/ica"
-        await self.session.commit()
-        await self.session.refresh(membership)
-        self.assertEqual(membership.source_item["title"], "Čuvar/ica")
-        self.assertEqual(membership.source_item["details"], {"hours": 40})
 
     async def test_missing_observation_requires_time_and_does_not_close_job(self) -> None:
         now = datetime.now(timezone.utc)

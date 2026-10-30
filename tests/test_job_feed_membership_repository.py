@@ -43,7 +43,6 @@ class JobFeedMembershipRepositoryTests(ModelTestCase):
     def membership(self, **overrides: object) -> JobFeedMembership:
         values = {
             "job_id": self.job_id, "feed_id": self.feed_id,
-            "source_item": {"title": "Čuvar", "details": {"hours": 40}},
         }
         return JobFeedMembership(**(values | overrides))
 
@@ -58,7 +57,7 @@ class JobFeedMembershipRepositoryTests(ModelTestCase):
         async with self.sessions.session() as reader:
             self.assertIsNone(await reader.get(JobFeedMembership, (self.job_id, self.feed_id)))
 
-    async def test_explicit_commit_roundtrips_json_and_membership_for_another_session(self) -> None:
+    async def test_explicit_commit_makes_membership_visible_to_another_session(self) -> None:
         membership = self.membership()
         await self.repository.add(membership)
         await self.session.commit()
@@ -67,7 +66,7 @@ class JobFeedMembershipRepositoryTests(ModelTestCase):
             saved = await repository.get_by_job_and_feed(self.job_id, self.feed_id)
             self.assertIsNotNone(saved)
             self.assertIsNot(saved, membership)
-            self.assertEqual(saved.source_item, {"title": "Čuvar", "details": {"hours": 40}})
+            self.assertEqual(saved.presence_status, "present")
             self.assertEqual(saved.first_seen_at, membership.first_seen_at)
             self.assertEqual(await repository.list_for_feed(self.feed_id), [saved])
 
@@ -87,7 +86,7 @@ class JobFeedMembershipRepositoryTests(ModelTestCase):
         await self.repository.add(later_job)
         first_job = self.membership()
         await self.repository.add(first_job)
-        other_feed = self.membership(feed_id=second_feed.id, source_item={"title": "Other feed"})
+        other_feed = self.membership(feed_id=second_feed.id)
         await self.repository.add(other_feed)
         later_job.presence_status = "missing"
         later_job.missing_since_at = later_job.last_seen_at + timedelta(seconds=1)
@@ -100,24 +99,25 @@ class JobFeedMembershipRepositoryTests(ModelTestCase):
             self.assertEqual([row.presence_status for row in memberships], ["present", "missing"])
             self.assertIs(await repository.get_by_job_and_feed(self.job_id, self.feed_id), memberships[0])
             other = await repository.get_by_job_and_feed(self.job_id, second_feed.id)
-            self.assertEqual(other.source_item, {"title": "Other feed"})
+            self.assertEqual((other.job_id, other.feed_id), (self.job_id, second_feed.id))
             self.assertEqual(await repository.list_for_feed(second_feed.id), [other])
             self.assertEqual(await reader.scalar(select(func.count(Job.id))), 2)
 
-    async def test_loaded_source_item_changes_persist_on_caller_commit(self) -> None:
+    async def test_loaded_presence_changes_persist_on_caller_commit(self) -> None:
         await self.repository.add(self.membership())
         await self.session.commit()
         async with self.sessions.session() as writer:
             loaded = await SqlAlchemyJobFeedMembershipRepository(writer).get_by_job_and_feed(
                 self.job_id, self.feed_id
             )
-            loaded.source_item["title"] = "Čuvar/ica"
+            loaded.presence_status = "missing"
+            loaded.missing_since_at = loaded.last_seen_at
             await writer.commit()
         async with self.sessions.session() as reader:
             saved = await SqlAlchemyJobFeedMembershipRepository(reader).get_by_job_and_feed(
                 self.job_id, self.feed_id
             )
-            self.assertEqual(saved.source_item, {"title": "Čuvar/ica", "details": {"hours": 40}})
+            self.assertEqual(saved.presence_status, "missing")
 
     async def test_missing_and_reappearance_preserve_job_status_and_other_feed(self) -> None:
         second_feed = self.new_feed()

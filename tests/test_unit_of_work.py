@@ -257,7 +257,7 @@ class UnitOfWorkTests(ModelTestCase):
             job = self.job()
             await work.jobs.add(job)
             membership = JobFeedMembership(
-                job_id=job.id, feed_id=feed.id, source_item={"title": "Programer"}
+                job_id=job.id, feed_id=feed.id
             )
             await work.job_feed_memberships.add(membership)
             self.assertIs(
@@ -276,7 +276,7 @@ class UnitOfWorkTests(ModelTestCase):
             self.assertEqual([saved.id for saved in await feeds.list_enabled()], [feed.id])
             self.assertIsNotNone(await SqlAlchemyJobRepository(reader).get_by_id(job.id))
             membership = await reader.get(JobFeedMembership, (job.id, feed.id))
-            self.assertEqual(membership.source_item, {"title": "Programer"})
+            self.assertEqual(membership.presence_status, "present")
         self.assertEqual(self.engine.pool.checkedout(), 0)
 
     async def test_uncommitted_source_feed_job_and_membership_are_rolled_back_together(self) -> None:
@@ -286,7 +286,7 @@ class UnitOfWorkTests(ModelTestCase):
             job = self.job()
             await work.jobs.add(job)
             await work.job_feed_memberships.add(JobFeedMembership(
-                job_id=job.id, feed_id=feed.id, source_item={"title": "Programer"}
+                job_id=job.id, feed_id=feed.id
             ))
             feed_id, job_id, county_id = feed.id, job.id, feed.county_id
 
@@ -411,11 +411,11 @@ class UnitOfWorkTests(ModelTestCase):
                 record = SyncRun(feed_id=feed.id)
                 await work.sync_runs.add(record)
                 await work.job_feed_memberships.add(JobFeedMembership(
-                    job_id=job.id, feed_id=feed.id, source_item={}
+                    job_id=job.id, feed_id=feed.id
                 ))
                 feed_id, job_id, run_id, county_id = feed.id, job.id, record.id, feed.county_id
                 await work.job_feed_memberships.add(JobFeedMembership(
-                    job_id=job.id + 1, feed_id=feed.id, source_item={}
+                    job_id=job.id + 1, feed_id=feed.id
                 ))
 
         self.assertIn("fk_job_feed_memberships_job_id_jobs", str(error.exception))

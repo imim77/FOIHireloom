@@ -119,14 +119,16 @@ class JobSyncService(JobSyncServiceInterface):
                 m.job_id: m.presence_status
                 for m in await work.job_feed_memberships.list_snapshots_for_feed(feed.id)
             }
-            items = {job_ids[job.source_job_id]: job.source_item for job in parsed.jobs}
-            missing = [job_id for job_id, status in memberships.items() if status == "present" and job_id not in items]
-            returned = sum(memberships.get(job_id) == "missing" for job_id in items)
+            present_ids = {job_ids[job.source_job_id] for job in parsed.jobs}
+            missing = [
+                job_id for job_id, status in memberships.items() if status == "present" and job_id not in present_ids
+            ]
+            returned = sum(memberships.get(job_id) == "missing" for job_id in present_ids)
             await work.job_feed_memberships.create_many(
-                feed.id, {job_id: item for job_id, item in items.items() if job_id not in memberships}, now
+                feed.id, [job_id for job_id in present_ids if job_id not in memberships], now
             )
             await work.job_feed_memberships.mark_present(
-                feed.id, {job_id: item for job_id, item in items.items() if job_id in memberships}, now
+                feed.id, [job_id for job_id in present_ids if job_id in memberships], now
             )
             await work.job_feed_memberships.mark_missing(feed.id, missing, now)
             await work.source_feeds.record_check(feed.id, FeedCheckDTO(

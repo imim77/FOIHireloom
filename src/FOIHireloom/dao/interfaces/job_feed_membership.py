@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from collections.abc import Collection, Mapping
+from collections.abc import Collection
 from datetime import datetime
 
 from FOIHireloom.db.models import JobFeedMembership
@@ -39,12 +39,12 @@ class JobFeedMembershipRepository(ABC):
         """Return each membership's job ID and presence status for a county feed."""
 
     @abstractmethod
-    async def create_many(self, feed_id: int, items: Mapping[int, dict[str, str]], seen_at: datetime) -> None:
-        """Add present memberships keyed by job ID; raise ValueError for a non-county feed."""
+    async def create_many(self, feed_id: int, job_ids: Collection[int], seen_at: datetime) -> None:
+        """Add present memberships for these jobs; raise ValueError for a non-county feed."""
 
     @abstractmethod
-    async def mark_present(self, feed_id: int, items: Mapping[int, dict[str, str]], seen_at: datetime) -> None:
-        """Mark existing memberships present at seen_at and store their current items."""
+    async def mark_present(self, feed_id: int, job_ids: Collection[int], seen_at: datetime) -> None:
+        """Mark existing memberships of these jobs present at seen_at."""
 
     @abstractmethod
     async def mark_missing(self, feed_id: int, job_ids: Collection[int], missing_since: datetime) -> None:

@@ -79,19 +79,17 @@ class HzzFeedParser:
         ]
         return ParsedJobDTO(
             source_job_id=match.group(1),
-            source_guid=(item.findtext("guid") or link).strip(),
             canonical_url=CANONICAL_URL.format(match.group(1)),
             title=title,
-            subject=(item.findtext("subject") or "").strip() or None,
             description_raw=raw,
             description_text=self._text(body),
             published_on=published_on,
             deadline_on=deadline_on,
             category=fields.get("Kategorija"),
             location_text=fields.get("Mjesto rada"),
+            municipality=fields.get("Općina"),
             quality_flags=tuple(flags),
             content_hash=hashlib.sha256("\x1f".join((title or "", pub, raw)).encode()).hexdigest(),
-            source_item={child.tag: child.text or "" for child in item},
         )
 
     @classmethod

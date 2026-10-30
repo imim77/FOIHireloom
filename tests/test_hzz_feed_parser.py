@@ -29,8 +29,6 @@ class HzzFeedParserTests(unittest.TestCase):
         self.assertEqual((len(result.jobs), result.invalid_items), (7, 0))
         job = self.jobs["167800201"]
         self.assertEqual(job.title, "KUHAR/KUHARICA - II")
-        self.assertEqual(job.subject, job.title)
-        self.assertEqual(job.source_guid, "http://burzarada.hzz.hr/RadnoMjesto_Ispis.aspx?WebSifra=167800201")
         self.assertEqual(job.canonical_url, "https://burzarada.hzz.hr/RadnoMjesto_Ispis.aspx?WebSifra=167800201")
         self.assertEqual(job.published_on, date(2026, 10, 27))
         self.assertIn("ZAŠTITE", self.jobs["167777512"].title)
@@ -40,13 +38,13 @@ class HzzFeedParserTests(unittest.TestCase):
         self.assertEqual(job.category, "UGOSTITELJI, RADNICI U TURIZMU")
         self.assertEqual(job.deadline_on, date(2026, 11, 2))
         self.assertEqual(job.location_text, "BJELOVAR")
+        self.assertEqual(job.municipality, "BJELOVAR")
         self.assertEqual(job.description_text, "KUHAR/KUHARICA - II")
         self.assertEqual(job.quality_flags, ())
 
     def test_empty_title_is_none_and_flagged_without_inventing_one(self) -> None:
         job = self.jobs["167488856"]
         self.assertIsNone(job.title)
-        self.assertIsNone(job.subject)
         self.assertEqual(job.quality_flags, ("title_missing",))
         self.assertTrue(job.description_text.startswith("Priprema i obrada namirnica"))
         self.assertEqual(job.deadline_on, date(2026, 10, 30))
@@ -70,6 +68,7 @@ class HzzFeedParserTests(unittest.TestCase):
         cut = "Opis posla: X, Kategorija: TRGOVCI, Rok za prijavu: 30.10.2026, Mjesto rada: SPLI"
         job = self.parser.parse(feed(item(description=cut))).jobs[0]
         self.assertEqual((job.category, job.deadline_on, job.location_text), ("TRGOVCI", date(2026, 10, 30), None))
+        self.assertIsNone(job.municipality)
         self.assertIn("description_truncated", job.quality_flags)
         cut_deadline = "Opis posla: X, Kategorija: TRGOVCI, Rok za prijavu: 30.10.20"
         self.assertIsNone(self.parser.parse(feed(item(description=cut_deadline))).jobs[0].deadline_on)

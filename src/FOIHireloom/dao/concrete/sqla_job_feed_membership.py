@@ -1,4 +1,4 @@
-from collections.abc import Collection, Mapping
+from collections.abc import Collection
 from datetime import datetime
 
 from sqlalchemy import select, update
@@ -49,24 +49,23 @@ class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
         result = await self._session.execute(statement)
         return [MembershipSnapshotDTO.model_validate(row) for row in result.all()]
 
-    async def create_many(self, feed_id: int, items: Mapping[int, dict[str, str]], seen_at: datetime) -> None:
-        if not items:
+    async def create_many(self, feed_id: int, job_ids: Collection[int], seen_at: datetime) -> None:
+        if not job_ids:
             return
         await self._require_county_feed(feed_id)
         self._session.add_all([
-            JobFeedMembership(job_id=job_id, feed_id=feed_id, source_item=dict(item),
-                              first_seen_at=seen_at, last_seen_at=seen_at)
-            for job_id, item in items.items()
+            JobFeedMembership(job_id=job_id, feed_id=feed_id, first_seen_at=seen_at, last_seen_at=seen_at)
+            for job_id in job_ids
         ])
         await self._session.flush()
 
-    async def mark_present(self, feed_id: int, items: Mapping[int, dict[str, str]], seen_at: datetime) -> None:
-        if items:
-            await self._session.execute(update(JobFeedMembership), [
-                {"job_id": job_id, "feed_id": feed_id, "source_item": dict(item), "presence_status": "present",
-                 "last_seen_at": seen_at, "missing_since_at": None}
-                for job_id, item in items.items()
-            ])
+    async def mark_present(self, feed_id: int, job_ids: Collection[int], seen_at: datetime) -> None:
+        if job_ids:
+            await self._session.execute(
+                update(JobFeedMembership)
+                .where(JobFeedMembership.feed_id == feed_id, JobFeedMembership.job_id.in_(job_ids))
+                .values(presence_status="present", last_seen_at=seen_at, missing_since_at=None)
+            )
 
     async def mark_missing(self, feed_id: int, job_ids: Collection[int], missing_since: datetime) -> None:
         if job_ids:

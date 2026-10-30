@@ -72,6 +72,4 @@ class SqlAlchemyJobRepository(JobRepository):
 
     @staticmethod
     def _content(job: ParsedJobDTO) -> dict[str, object]:
-        content = job.model_dump(exclude={"source_item"})
-        content["quality_flags"] = list(job.quality_flags)
-        return content
+        return job.model_dump() | {"quality_flags": list(job.quality_flags)}
