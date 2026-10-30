@@ -47,7 +47,8 @@ class JobsByCountyAppTests(unittest.TestCase):
                          "prefers-reduced-motion", 'id="lit-right"', "M23.9672 0.0161L47.7527 8.05164",
                          'new Intl.NumberFormat("hr-HR"', "short_name", "workers_needed", "coverage?.warning",
                          'requestDisplayMode({ mode })', 'availableDisplayModes: ["inline", "fullscreen"]',
-                         "all.slice(0, data.top)", "mask-image"):
+                         "all.slice(0, data.top)", "mask-image", 'id: "selected-workers"',
+                         '"traženi radnik", "tražena radnika", "traženih radnika"'):
             with self.subTest(expected=expected):
                 self.assertIn(expected, html)
 

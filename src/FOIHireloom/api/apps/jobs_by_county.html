@@ -194,6 +194,15 @@
     const percent = new Intl.NumberFormat("hr-HR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     const formatJobs = (value) => integer.format(Math.round(value));
     const formatShare = (value) => `${percent.format(value)} %`;
+    // Croatian plurals: 1, 21 … "traženi radnik"; 2–4, 22–24 … "tražena radnika"; otherwise "traženih radnika".
+    const plural = (count, one, few, many) => {
+      const n = Math.round(count);
+      if (n % 10 === 1 && n % 100 !== 11) return one;
+      return n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? few : many;
+    };
+    const formatWorkers = (value) =>
+      `${formatJobs(value)} ${plural(value, "traženi radnik", "tražena radnika", "traženih radnika")}`;
+    const formatAds = (value) => `${formatJobs(value)} ${plural(value, "oglas", "oglasa", "oglasa")}`;
     const round = (n) => Math.round(n * 1000) / 1000;
     const $ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
     const element = (tag, attributes = {}, children = []) => {
@@ -299,7 +308,7 @@
       }
       const selection = element("div", { class: "selection", "data-entrance": "selection" }, [
         element("p", { class: "soft", id: "selected-name" }),
-        element("p", { class: "big", id: "selected-share" }),
+        element("p", { class: "big", id: "selected-workers" }),
       ]);
       const plot = element("div", { class: "plot", role: "group", "aria-label": "Oglasi po županijama" });
       const axis = element("div", { class: "axis", "aria-hidden": "true" }, [element("span", { class: "pill" })]);
@@ -311,7 +320,7 @@
           svg("path", { d: BAR_EDGES, style: "fill: var(--card)" }),
         ]);
         const column = element("button", { type: "button", class: "column", "data-index": i,
-          "aria-label": `${county.name}: ${formatJobs(county.jobs)} oglasa, ${formatJobs(county.workers_needed)} traženih radnika, ${formatShare(county.share)}` }, [
+          "aria-label": `${county.name}: ${formatAds(county.jobs)}, ${formatWorkers(county.workers_needed)}, ${formatShare(county.share)}` }, [
           svg("svg", { class: "bar", viewBox: BAR_VIEW, preserveAspectRatio: "none", "aria-hidden": "true" }, [look(false), look(true)]),
           element("span", { class: "value", "aria-hidden": "true" }, [element("span", { text: formatJobs(county.jobs) })]),
           element("span", { class: "focus-ring", "aria-hidden": "true" }),
@@ -329,7 +338,7 @@
         ? `Prikazano ${counties.length} od ${all.length} županija s oglasima`
         : `Sve županije s oglasima (${all.length})`;
       const footer = element("p", { class: "soft footer",
-        text: `${shown} · ukupno ${formatJobs(data.total_jobs)} oglasa, ${formatJobs(data.total_workers_needed)} traženih radnika` });
+        text: `${shown} · ukupno ${formatAds(data.total_jobs)}, ${formatWorkers(data.total_workers_needed)}` });
       const scroller = element("div", { class: "scroller" }, [element("div", { class: "chart",
         style: { minWidth: `${counties.length * MIN_COLUMN + (counties.length - 1) * COLUMN_GAP}px` } }, [plot, axis])]);
       parts.push(selection, scroller, footer);
@@ -339,7 +348,7 @@
       chart = {
         counties, plot, axis,
         heights: counties.map((county) => (max > 0 ? round((county.jobs / max) * MAX_BAR) : 0)),
-        selected: 0, hovered: null, active: -1, columnWidth: 0, shareShown: 0, shareTween: null,
+        selected: 0, hovered: null, active: -1, columnWidth: 0, workersShown: 0, workersTween: null,
       };
       layout();
       setActive(true);
@@ -372,9 +381,9 @@
       });
     }
 
-    function showShare(value) {
-      chart.shareShown = value;
-      document.getElementById("selected-share").textContent = `${formatShare(value)} oglasa`;
+    function showWorkers(value) {
+      chart.workersShown = value;
+      document.getElementById("selected-workers").textContent = formatWorkers(value);
     }
 
     // Selection: hover previews a county, a click or a key selects it.
@@ -405,14 +414,14 @@
       $(".axis-label", chart.axis).forEach((label, i) => label.classList.toggle("active", i === active));
       const county = chart.counties[active];
       document.getElementById("selected-name").textContent =
-        `${county.name} · ${formatJobs(county.workers_needed)} traženih radnika`;
+        `${county.name} · ${formatAds(county.jobs)}`;
       layout();
       if (initial || before === active) {
-        if (initial) showShare(county.share);
+        if (initial) showWorkers(county.workers_needed);
         return;
       }
-      if (reduced) { showShare(county.share); return; }
-      // The pill slides over from the previous county, its count pops and the share counts to the new one.
+      if (reduced) { showWorkers(county.workers_needed); return; }
+      // The pill slides over from the previous county, its count pops and the workers count to the new number.
       const pill = chart.axis.querySelector(".pill");
       const offset = (before - active) * (chart.columnWidth + COLUMN_GAP);
       tween({ duration: 550, update: (p) => { pill.style.transform = `translateX(${offset * (1 - p)}px)`; },
@@ -420,13 +429,14 @@
       const value = $(".value span", chart.plot)[active];
       pop(value, { from: 0.86, overshoot: 2, fade: false });
       fadeIn([document.getElementById("selected-name")], { duration: 300, from: 0.4 });
-      chart.shareTween?.cancel();
-      const from = chart.shareShown;
-      chart.shareTween = tween({ duration: 600, update: (p) => showShare(from + (county.share - from) * p) });
+      chart.workersTween?.cancel();
+      const from = chart.workersShown;
+      chart.workersTween = tween({ duration: 600,
+        update: (p) => showWorkers(from + (county.workers_needed - from) * p) });
     }
 
     // Entrance: the tile pops, the header comes in, the columns rise one after another while their counts count up,
-    // the share counts up and the pill pops in under the selected county.
+    // the workers sought count up and the pill pops in under the selected county.
     function entrance() {
       if (reduced) { draw(chart.heights); return; }
       const { heights, counties } = chart;
@@ -439,9 +449,9 @@
       grow();
       pop(document.querySelector('[data-entrance="tile"]'), { duration: 700, from: 0.6, overshoot: 1.8 });
       fadeIn($('[data-entrance="selection"] > *'), { at: 100, stagger: 80, rise: 6 });
-      const share = counties[chart.selected].share;
-      showShare(0);
-      chart.shareTween = tween({ duration: 1400, delay: 150, update: (p) => showShare(share * p) });
+      const workers = counties[chart.selected].workers_needed;
+      showWorkers(0);
+      chart.workersTween = tween({ duration: 1400, delay: 150, update: (p) => showWorkers(workers * p) });
       fadeIn($(".value", chart.plot), { at: BARS_AT, duration: 400, stagger: BAR_STAGGER });
       fadeIn($(".axis-label > span", chart.axis), { at: 350, stagger: 50, rise: 4 });
       heights.forEach((_, i) => tween({ duration: GROW, delay: BARS_AT + i * BAR_STAGGER,
