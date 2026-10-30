@@ -15,6 +15,7 @@ from pydantic import ValidationError
 
 from FOIHireloom.api.mcp_server import McpServer
 from FOIHireloom.config.settings import Settings
+from FOIHireloom.dto.job_market import JobMarketFiltersDTO, JobMarketStatsDTO
 from FOIHireloom.dto.job_search import (
     CategoryDTO,
     CoverageDTO,
@@ -47,6 +48,12 @@ class FakeJobSearchService(JobSearchServiceInterface):
         self.filters.append(filters)
         self.raise_error()
         return JobSearchPageDTO(jobs=(JobSummaryDTO(**SUMMARY),), next_cursor="next", coverage=COVERAGE)
+
+    async def market_stats(self, filters: JobMarketFiltersDTO) -> JobMarketStatsDTO:
+        self.raise_error()
+        return JobMarketStatsDTO(jobs=0, with_details=0, workers_needed=0, published_recently=0, closing_soon=0,
+                                 counties=(), categories=(), employers=(), employment_types=(), working_hours=(),
+                                 education=(), experience=(), accommodation=(), today=SEEN.date(), coverage=COVERAGE)
 
     async def get_job(self, job_id: int) -> JobDetailsDTO:
         self.raise_error()

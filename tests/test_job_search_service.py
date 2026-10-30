@@ -10,6 +10,7 @@ from model_test_case import ModelTestCase
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
+from FOIHireloom.dto.job_market import JobMarketFiltersDTO
 from FOIHireloom.dto.job_search import JobSearchCriteriaDTO, JobSearchFiltersDTO, JobSummaryDTO
 from FOIHireloom.exceptions import InvalidJobSearchError, NotFoundError
 from FOIHireloom.services import CroatianCountyCatalog, JobSearchService
@@ -329,3 +330,36 @@ class JobSearchServiceTests(ModelTestCase):
         self.assertEqual((await self.service.get_job(self.ids["gone"])).description_source, None)
         regions = {region.code: region.open_jobs for region in await self.service.list_regions()}
         self.assertEqual(regions["bjelovarsko-bilogorska"], 1)
+
+    async def test_market_stats_count_what_search_finds(self) -> None:
+        await self.set_page("cook", page_employer_name="HOTEL d.o.o.", page_workers_needed=3,
+                            page_employment_type="Na neodređeno; sezonski")
+        stats = await self.service.market_stats(JobMarketFiltersDTO())
+        self.assertEqual(stats.jobs, len(await self.keys()))
+        self.assertEqual((stats.today, stats.window_days, stats.with_details, stats.workers_needed), (self.today, 7, 1, 3))
+        self.assertEqual([(county.code, county.jobs) for county in stats.counties],
+                         [("bjelovarsko-bilogorska", 2), ("grad-zagreb", 2)])
+        self.assertEqual([(item.name, item.jobs) for item in stats.employment_types],
+                         [("Na neodređeno", 1), ("sezonski", 1)])
+        # Istria has no feed, so coverage reports it as a search would.
+        self.assertEqual(stats.coverage, (await self.service.search(JobSearchFiltersDTO())).coverage)
+        for filters in ({"query": "kuharice"}, {"category": HOSPITALITY.lower()}, {"include_expired": True},
+                        {"county": "Grad Zagreb", "query": "vozač"}):
+            with self.subTest(filters=filters):
+                stats = await self.service.market_stats(JobMarketFiltersDTO(**filters))
+                self.assertEqual(stats.jobs, len(await self.keys(**filters)))
+
+    async def test_market_stats_report_the_requested_county_freshness_and_reject_bad_filters(self) -> None:
+        await self.set_feed("zg", success_hours_ago=7)
+        zagreb = (await self.service.market_stats(JobMarketFiltersDTO(county="grad-zagreb"))).coverage
+        self.assertEqual((zagreb.data_status, [region.code for region in zagreb.affected_regions]),
+                         ("stale", ["grad-zagreb"]))
+        bjelovar = (await self.service.market_stats(JobMarketFiltersDTO(county="bjelovarsko-bilogorska"))).coverage
+        self.assertEqual((bjelovar.data_status, bjelovar.warning), ("fresh", None))
+        with self.assertRaises(NotFoundError):
+            await self.service.market_stats(JobMarketFiltersDTO(county="Atlantida"))
+        with self.assertRaises(InvalidJobSearchError):
+            await self.service.market_stats(JobMarketFiltersDTO(query="!!!"))
+        for top in (0, 51):
+            with self.subTest(top=top), self.assertRaises(ValidationError):
+                JobMarketFiltersDTO(top=top)

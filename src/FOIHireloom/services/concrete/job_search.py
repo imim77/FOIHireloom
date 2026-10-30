@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from FOIHireloom.db.models import Job
 from FOIHireloom.db.models.job import SEARCH_FOLD_FROM, SEARCH_FOLD_TO
 from FOIHireloom.db.uow.base import UnitOfWork
+from FOIHireloom.dto.job_market import JobMarketCriteriaDTO, JobMarketFiltersDTO, JobMarketStatsDTO
 from FOIHireloom.dto.job_search import (
     SEARCH_TERM,
     CategoryDTO,
@@ -69,12 +70,7 @@ class JobSearchService(JobSearchServiceInterface):
         async with self._uow_factory() as work:
             now = await work.transaction_time()
             today = self._local_date(now)
-            county_id = county_code = None
-            if county := (filters.county or "").strip():
-                entity = await work.counties.get_by_code(self._county_code(county))
-                if entity is None:
-                    raise NotFoundError("county", county)
-                county_id, county_code = entity.id, entity.code
+            county_id, county_code = await self._resolve_county(work, filters.county)
             criteria = JobSearchCriteriaDTO(
                 terms=terms,
                 county_id=county_id,
@@ -93,6 +89,25 @@ class JobSearchService(JobSearchServiceInterface):
         page = jobs[:filters.limit]
         next_cursor = self._encode_cursor(page[-1]) if len(jobs) > filters.limit else None
         return JobSearchPageDTO(jobs=tuple(page), next_cursor=next_cursor, coverage=self._coverage(regions))
+
+    async def market_stats(self, filters: JobMarketFiltersDTO) -> JobMarketStatsDTO:
+        terms = self._terms(filters.query)
+        async with self._uow_factory() as work:
+            now = await work.transaction_time()
+            today = self._local_date(now)
+            county_id, county_code = await self._resolve_county(work, filters.county)
+            aggregates = await work.jobs.market_aggregates(JobMarketCriteriaDTO(
+                terms=terms,
+                county_id=county_id,
+                category=(filters.category or "").strip() or None,
+                open_on=None if filters.include_expired else today,
+                today=today,
+                top=filters.top,
+            ))
+            regions = self._freshness(await work.counties.list_feed_checks(), now)
+        if county_code is not None:
+            regions = [region for region in regions if region.code == county_code]
+        return JobMarketStatsDTO(**aggregates.model_dump(), today=today, coverage=self._coverage(regions))
 
     async def get_job(self, job_id: int) -> JobDetailsDTO:
         async with self._uow_factory() as work:
@@ -208,6 +223,15 @@ class JobSearchService(JobSearchServiceInterface):
         if not terms:
             raise InvalidJobSearchError("The query contains no searchable words.")
         return terms
+
+    async def _resolve_county(self, work: UnitOfWork, county: str | None) -> tuple[int | None, str | None]:
+        """ID and code of the requested county, or None for both without one; raise NotFoundError if unknown."""
+        if not (county := (county or "").strip()):
+            return None, None
+        entity = await work.counties.get_by_code(self._county_code(county))
+        if entity is None:
+            raise NotFoundError("county", county)
+        return entity.id, entity.code
 
     def _county_code(self, county: str) -> str:
         """Accept a county name as well as a code; 'Grad Zagreb' and 'grad-zagreb' are the same county."""

@@ -4,7 +4,14 @@ from .county import CountyDefinitionDTO, CountyDTO
 from .hzz_feed import FeedResponseDTO
 from .hzz_job_page import ParsedJobPageDTO
 from .job import ParsedFeedDTO, ParsedJobDTO
-from .job_market import CountyMarketCountDTO, JobMarketAggregatesDTO, JobMarketCriteriaDTO, MarketCountDTO
+from .job_market import (
+    CountyMarketCountDTO,
+    JobMarketAggregatesDTO,
+    JobMarketCriteriaDTO,
+    JobMarketFiltersDTO,
+    JobMarketStatsDTO,
+    MarketCountDTO,
+)
 from .job_page import JobPageFetchResultDTO, JobPageTargetDTO
 from .job_search import (
     CategoryDTO,
@@ -59,6 +66,8 @@ __all__ = [
     "JobListingDTO",
     "JobMarketAggregatesDTO",
     "JobMarketCriteriaDTO",
+    "JobMarketFiltersDTO",
+    "JobMarketStatsDTO",
     "JobPageFetchResultDTO",
     "JobPageTargetDTO",
     "JobSearchCriteriaDTO",

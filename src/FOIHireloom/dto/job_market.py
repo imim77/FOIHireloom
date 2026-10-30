@@ -3,10 +3,25 @@ from datetime import date
 from pydantic import Field
 
 from .base import ModelConfigBaseModel
-from .job_search import JobFilterCriteriaDTO
+from .job_search import MAX_QUERY_LENGTH, CoverageDTO, JobFilterCriteriaDTO
 
 # Days, today included, counted as "recent" and "closing soon".
 MARKET_WINDOW_DAYS = 7
+DEFAULT_MARKET_TOP = 10
+MAX_MARKET_TOP = 50
+
+
+class JobMarketFiltersDTO(ModelConfigBaseModel):
+    """The jobs to count, chosen as JobSearchFiltersDTO chooses jobs to list.
+
+    top is the length of the employer, working hours and experience breakdowns.
+    """
+
+    query: str | None = Field(default=None, max_length=MAX_QUERY_LENGTH)
+    county: str | None = None
+    category: str | None = None
+    include_expired: bool = False
+    top: int = Field(default=DEFAULT_MARKET_TOP, ge=1, le=MAX_MARKET_TOP)
 
 
 class JobMarketCriteriaDTO(JobFilterCriteriaDTO):
@@ -57,3 +72,14 @@ class JobMarketAggregatesDTO(ModelConfigBaseModel):
     education: tuple[MarketCountDTO, ...]
     experience: tuple[MarketCountDTO, ...]
     accommodation: tuple[MarketCountDTO, ...]
+
+
+class JobMarketStatsDTO(JobMarketAggregatesDTO):
+    """Market statistics as of today (Europe/Zagreb) with the freshness of the counties they cover.
+
+    When coverage is not fresh, the counts may be outdated or incomplete.
+    """
+
+    today: date
+    window_days: int = MARKET_WINDOW_DAYS
+    coverage: CoverageDTO

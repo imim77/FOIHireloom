@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+from FOIHireloom.dto.job_market import JobMarketFiltersDTO, JobMarketStatsDTO
 from FOIHireloom.dto.job_search import CategoryDTO, JobDetailsDTO, JobSearchFiltersDTO, JobSearchPageDTO, RegionDTO
 
 
@@ -14,6 +15,14 @@ class JobSearchServiceInterface(ABC):
         and every word must match. Pass next_cursor back to get the next page.
         Raise NotFoundError for an unknown county and InvalidJobSearchError
         for a query without words or a malformed cursor.
+        """
+
+    @abstractmethod
+    async def market_stats(self, filters: JobMarketFiltersDTO) -> JobMarketStatsDTO:
+        """Count the jobs search() would find for the same filters, by county, category, employer and page fields.
+
+        Raise NotFoundError for an unknown county and InvalidJobSearchError
+        for a query without words.
         """
 
     @abstractmethod
