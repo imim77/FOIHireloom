@@ -53,7 +53,7 @@ class FakeJobSearchService(JobSearchServiceInterface):
     async def market_stats(self, filters: JobMarketFiltersDTO) -> JobMarketStatsDTO:
         self.market_filters.append(filters)
         self.raise_error()
-        return JobMarketStatsDTO(jobs=0, with_details=0, workers_needed=0, published_recently=0, closing_soon=0,
+        return JobMarketStatsDTO(jobs=0, with_details=0, with_category=0, workers_needed=0, published_recently=0, closing_soon=0,
                                  counties=(), categories=(), employers=(), employment_types=(), working_hours=(),
                                  education=(), experience=(), accommodation=(), today=SEEN.date(), coverage=COVERAGE)
 

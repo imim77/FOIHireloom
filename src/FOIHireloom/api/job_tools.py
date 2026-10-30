@@ -53,7 +53,8 @@ class JobTools(ToolGroup):
                 description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
             )] = None,
             category: Annotated[str | None, Field(
-                description="Exact category name from list_categories; letter case is ignored.",
+                description="Exact category name from list_categories; letter case is ignored. Only about half "
+                            "of the jobs state a category, so prefer query to find an occupation.",
             )] = None,
             include_expired: Annotated[bool, Field(
                 description="Also return jobs whose application deadline has passed.",
@@ -101,7 +102,8 @@ class JobTools(ToolGroup):
                 description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
             )] = None,
             category: Annotated[str | None, Field(
-                description="Exact category name from list_categories; letter case is ignored.",
+                description="Exact category name from list_categories; letter case is ignored. Only about half "
+                            "of the jobs state a category, so prefer query to find an occupation.",
             )] = None,
             include_expired: Annotated[bool, Field(
                 description="Also count jobs whose application deadline has passed.",
@@ -119,10 +121,12 @@ class JobTools(ToolGroup):
             can seek several workers. Each breakdown entry gives jobs and
             workers_needed per value, most common first.
 
-            counties and categories cover every matching job. employers,
-            employment_types, working_hours, education, experience and
-            accommodation come from the job pages and cover only with_details
-            jobs; values a job does not state are left out. A job can list
+            counties cover every matching job. categories cover only the
+            with_category jobs, about half, because HZZ often leaves the
+            category out; do not read a missing category as a different one.
+            employers, employment_types, working_hours, education, experience
+            and accommodation come from the job pages and cover only
+            with_details jobs; values a job does not state are left out. A job can list
             several employment types (e.g. 'Na neodređeno' and 'novootvoreni
             poslovi') and several education levels, so those counts may add
             up to more than jobs. published_recently and closing_soon count
@@ -170,7 +174,11 @@ class JobTools(ToolGroup):
 
         @server.tool(annotations=READ_ONLY)
         async def list_categories(ctx: Context) -> list[CategoryDTO]:
-            """List job categories with the number of jobs search_jobs finds in each by default, most common first."""
+            """List job categories with the number of jobs search_jobs finds in each by default, most common first.
+
+            Only about half of the jobs state a category, so the counts do
+            not add up to all jobs; search by query to find an occupation.
+            """
             return list(await self._call(service(ctx).list_categories()))
 
     @staticmethod

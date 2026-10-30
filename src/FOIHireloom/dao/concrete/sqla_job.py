@@ -80,13 +80,14 @@ class SqlAlchemyJobRepository(JobRepository):
         totals = (await self._session.execute(select(
             func.count(),
             func.count().filter(found.c.page_fetched_at.is_not(None)),
+            func.count().filter(found.c.category.is_not(None)),
             func.coalesce(func.sum(found.c.workers), 0),
             func.count().filter(found.c.published_on > criteria.today - timedelta(days=MARKET_WINDOW_DAYS)),
             func.count().filter(found.c.deadline.between(criteria.today, window_end)),
         ))).one()
         return JobMarketAggregatesDTO(
-            jobs=totals[0], with_details=totals[1], workers_needed=totals[2], published_recently=totals[3],
-            closing_soon=totals[4],
+            jobs=totals[0], with_details=totals[1], with_category=totals[2], workers_needed=totals[3],
+            published_recently=totals[4], closing_soon=totals[5],
             counties=await self._county_counts(found),
             categories=await self._value_counts(found, found.c.category),
             employers=await self._value_counts(found, found.c.page_employer_name, criteria.top),

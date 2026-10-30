@@ -1,7 +1,7 @@
 from datetime import timedelta
 from uuid import uuid4
 
-from sqlalchemy import func, text
+from sqlalchemy import func, text, update
 
 from model_test_case import ModelTestCase
 
@@ -70,7 +70,7 @@ class JobMarketRepositoryTests(ModelTestCase):
 
     async def test_counts_open_listed_jobs_by_field(self) -> None:
         stats = await self.aggregates()
-        self.assertEqual((stats.jobs, stats.with_details, stats.workers_needed), (3, 2, 5))
+        self.assertEqual((stats.jobs, stats.with_details, stats.with_category, stats.workers_needed), (3, 2, 3, 5))
         # The cook and the nurse were published within a week and close within a week.
         self.assertEqual((stats.published_recently, stats.closing_soon), (2, 2))
         # The cook is listed by two Istrian feeds but counts once.
@@ -95,6 +95,13 @@ class JobMarketRepositoryTests(ModelTestCase):
         self.assertEqual(zagreb.experience, ())
         nothing = await self.aggregates(terms=("pilot",))
         self.assertEqual((nothing.jobs, nothing.workers_needed, nothing.counties, nothing.employers), (0, 0, (), ()))
+
+    async def test_categories_cover_only_jobs_that_state_one(self) -> None:
+        await self.session.execute(update(Job).where(Job.source_job_id == "nurse").values(category=None))
+        await self.session.commit()
+        stats = await self.aggregates()
+        self.assertEqual((stats.jobs, stats.with_category), (3, 2))
+        self.assertEqual(self.counts(stats.categories), [(HOSPITALITY, 2, 5)])
 
     async def test_top_limits_only_long_breakdowns(self) -> None:
         stats = await self.aggregates(top=1)
