@@ -10,6 +10,7 @@ from pydantic import Field
 from FOIHireloom.dto.job_market import (
     DEFAULT_MARKET_TOP,
     MAX_MARKET_TOP,
+    CountyMetric,
     JobMarketFiltersDTO,
     JobMarketStatsDTO,
     JobsByCountyDTO,
@@ -168,21 +169,26 @@ class JobTools(ToolGroup):
                 description="Columns the chart shows before the user expands it to every county; keep the default "
                             "unless the user asks for a number.",
             )] = jobs_by_county.DEFAULT_TOP,
+            metric: Annotated[CountyMetric, Field(
+                description="What to rank and draw the counties by: 'jobs' (job ads) or 'workers_needed' (positions "
+                            "the ads seek; one ad can seek several workers). Pick the one the question is about, "
+                            "e.g. 'workers_needed' for which county needs the most workers.",
+            )] = "jobs",
         ) -> JobsByCountyDTO:
-            """Show the user a chart of the counties with the most matching jobs.
+            """Show the user a chart of the counties ranked by matching jobs or by workers sought.
 
-            Use it when the user wants to see where jobs of a kind are, not
-            just read it. Hosts that support MCP Apps draw the top counties
-            as columns the user can hover and select, with a button that
-            opens every county full screen. Every host also gets the data:
-            each county with matching jobs, most first, with jobs,
-            workers_needed and share (percent of total_jobs). When
-            coverage.warning is set, tell the user the numbers may be
-            outdated or incomplete.
+            Use it when the user wants to see where jobs of a kind are, or
+            which county needs the most workers, not just read it. Hosts that
+            support MCP Apps draw the top counties as columns the user can
+            hover and select, with a button that opens every county full
+            screen. Every host also gets the data: each county with matching
+            jobs, ranked by metric, with jobs, workers_needed and share
+            (percent of total_jobs). When coverage.warning is set, tell the
+            user the numbers may be outdated or incomplete.
             """
             filters = JobMarketFiltersDTO(query=query, category=category, include_expired=include_expired)
             stats = await self._call(service(ctx).market_stats(filters))
-            return jobs_by_county.jobs_by_county(stats, top, query, category)
+            return jobs_by_county.jobs_by_county(stats, top, query, category, metric)
 
         @server.resource(
             jobs_by_county.RESOURCE_URI,

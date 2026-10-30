@@ -161,7 +161,7 @@
     const SAMPLE = {
       title: "Broj oglasa po županijama",
       description: "Pregled s probnim podacima",
-      total_jobs: 7676, total_workers_needed: 15922, top: 7,
+      total_jobs: 7676, total_workers_needed: 15922, top: 7, metric: "jobs",
       counties: [
         ["Grad Zagreb", "Grad Zagreb", 1325, 3093], ["Splitsko-dalmatinska županija", "Splitsko-dalmatinska", 656, 1315],
         ["Zagrebačka županija", "Zagrebačka", 607, 1266], ["Osječko-baranjska županija", "Osječko-baranjska", 531, 992],
@@ -282,6 +282,8 @@
       document.getElementById("description").textContent = data.description;
       const body = document.getElementById("body");
       const all = data.counties ?? [];
+      // The columns and the numbers over them show this value; the server has ranked the counties by it.
+      const metric = data.metric === "workers_needed" ? "workers_needed" : "jobs";
       const counties = expanded ? all : all.slice(0, data.top);
       const button = document.getElementById("expand");
       button.hidden = !expanded && all.length <= data.top;
@@ -312,7 +314,7 @@
         const column = element("button", { type: "button", class: "column", "data-index": i,
           "aria-label": `${county.name}: ${formatAds(county.jobs)}, ${formatWorkers(county.workers_needed)}, ${formatShare(county.share)}` }, [
           svg("svg", { class: "bar", viewBox: BAR_VIEW, preserveAspectRatio: "none", "aria-hidden": "true" }, [look(false), look(true)]),
-          element("span", { class: "value", "aria-hidden": "true" }, [element("span", { text: formatJobs(county.jobs) })]),
+          element("span", { class: "value", "aria-hidden": "true" }, [element("span", { text: formatJobs(county[metric]) })]),
           element("span", { class: "focus-ring", "aria-hidden": "true" }),
         ]);
         column.addEventListener("pointerenter", () => setHovered(i));
@@ -334,10 +336,10 @@
       parts.push(selection, scroller, footer);
       body.replaceChildren(...parts);
 
-      const max = Math.max(0, ...counties.map((county) => county.jobs));
+      const max = Math.max(0, ...counties.map((county) => county[metric]));
       chart = {
         counties, plot, axis,
-        heights: counties.map((county) => (max > 0 ? round((county.jobs / max) * MAX_BAR) : 0)),
+        heights: counties.map((county) => (max > 0 ? round((county[metric] / max) * MAX_BAR) : 0)), metric,
         selected: 0, hovered: null, active: -1, columnWidth: 0, workersShown: 0, workersTween: null,
       };
       layout();
@@ -434,7 +436,7 @@
       const values = $(".value span", chart.plot);
       const grow = () => {
         draw(heights.map((height, i) => height * growth[i]));
-        values.forEach((node, i) => { node.textContent = formatJobs(counties[i].jobs * growth[i]); });
+        values.forEach((node, i) => { node.textContent = formatJobs(counties[i][chart.metric] * growth[i]); });
       };
       grow();
       fadeIn($('[data-entrance="selection"] > *'), { at: 100, stagger: 80, rise: 6 });
@@ -477,6 +479,12 @@
     }
 
     if (window.parent === window) {
+      // "?metric=workers_needed" previews the chart ranked by workers sought.
+      if (new URLSearchParams(location.search).get("metric") === "workers_needed") {
+        SAMPLE.metric = "workers_needed";
+        SAMPLE.title = "Broj traženih radnika po županijama";
+        SAMPLE.counties.sort((a, b) => b.workers_needed - a.workers_needed);
+      }
       render(SAMPLE);
     } else {
       const { App } = await import(SDK);

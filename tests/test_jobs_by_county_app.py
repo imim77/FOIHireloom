@@ -31,6 +31,21 @@ class JobsByCountyAppTests(unittest.TestCase):
         self.assertEqual(chart.counties[1].name, "Istarska županija")
         self.assertEqual(chart.coverage, FRESH)
 
+    def test_ranks_and_titles_the_counties_by_the_chosen_metric(self) -> None:
+        by_jobs = jobs_by_county(stats(), 7, None, None)
+        self.assertEqual((by_jobs.metric, by_jobs.title), ("jobs", "Broj oglasa po županijama"))
+        stats_ = stats(counties=(
+            {"code": "a", "name": "Alfa", "jobs": 10, "workers_needed": 10},
+            {"code": "b", "name": "Beta", "jobs": 5, "workers_needed": 40},
+            {"code": "c", "name": "Ceta", "jobs": 5, "workers_needed": 10},
+        ))
+        by_workers = jobs_by_county(stats_, 7, None, None, "workers_needed")
+        self.assertEqual((by_workers.metric, by_workers.title),
+                         ("workers_needed", "Broj traženih radnika po županijama"))
+        self.assertEqual([county.code for county in by_workers.counties], ["b", "a", "c"])
+        # Ties keep name order.
+        self.assertEqual([county.code for county in jobs_by_county(stats_, 7, None, None).counties], ["a", "b", "c"])
+
     def test_description_names_the_filters_and_the_day(self) -> None:
         self.assertEqual(jobs_by_county(stats(), 8, None, " ").description, "Aktivni oglasi na dan 30. 10. 2026.")
         self.assertEqual(jobs_by_county(stats(), 8, "kuhar", "UGOSTITELJI").description,
@@ -47,7 +62,7 @@ class JobsByCountyAppTests(unittest.TestCase):
                          "prefers-reduced-motion", 'id="lit-right"', "M23.9672 0.0161L47.7527 8.05164",
                          'new Intl.NumberFormat("hr-HR"', "short_name", "workers_needed", "coverage?.warning",
                          'requestDisplayMode({ mode })', 'availableDisplayModes: ["inline", "fullscreen"]',
-                         "all.slice(0, data.top)", "mask-image", 'id: "selected-workers"',
+                         "all.slice(0, data.top)", "mask-image", 'id: "selected-workers"', "county[metric]",
                          "`${formatJobs(value)} traženih radnika`"):
             with self.subTest(expected=expected):
                 self.assertIn(expected, html)

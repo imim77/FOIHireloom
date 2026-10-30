@@ -136,13 +136,16 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
             resources = {str(resource.uri): resource for resource in await client.list_resources()}
             chart_page = (await client.read_resource(uri))[0]
             chart = (await client.call_tool("show_jobs_by_county", {"query": "kuhar", "top": 3})).structured_content
+            by_workers = (await client.call_tool("show_jobs_by_county", {"metric": "workers_needed"})).structured_content
         self.assertRegex(uri, r"^ui://foihireloom/jobs-by-county-[0-9a-f]{12}\.html$")
         self.assertEqual(resources[uri].mimeType, "text/html;profile=mcp-app")
         self.assertEqual(chart_page.meta["ui"]["csp"]["resourceDomains"], ["https://unpkg.com"])
         self.assertIn("<html", chart_page.text)
-        self.assertEqual(self.service.market_filters, [JobMarketFiltersDTO(query="kuhar")])
+        self.assertEqual(self.service.market_filters, [JobMarketFiltersDTO(query="kuhar"), JobMarketFiltersDTO()])
         self.assertEqual((chart["title"], chart["top"], chart["counties"], chart["coverage"]["warning"]),
                          ("Broj oglasa po županijama", 3, [], COVERAGE.warning))
+        self.assertEqual((by_workers["metric"], by_workers["title"]),
+                         ("workers_needed", "Broj traženih radnika po županijama"))
 
     async def test_job_market_stats_passes_filters_and_returns_coverage(self) -> None:
         async with Client(self.server) as client:
@@ -157,6 +160,7 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
             for tool, arguments in (("search_jobs", {"limit": 21}), ("search_jobs", {"query": "x" * 201}),
                                     ("job_market_stats", {"top": 0}), ("job_market_stats", {"top": 51}),
                                     ("show_jobs_by_county", {"top": 0}), ("show_jobs_by_county", {"top": 22}),
+                                    ("show_jobs_by_county", {"metric": "share"}),
                                     ("get_job", {"job_id": 0}), ("get_job", {})):
                 with self.subTest(tool=tool, arguments=arguments), self.assertRaises(ToolError):
                     await client.call_tool(tool, arguments)

@@ -1,9 +1,13 @@
 from datetime import date
+from typing import Literal
 
 from pydantic import Field
 
 from .base import ModelConfigBaseModel
 from .job_search import MAX_QUERY_LENGTH, CoverageDTO, JobFilterCriteriaDTO
+
+# What the jobs-by-county chart ranks and draws the counties by.
+type CountyMetric = Literal["jobs", "workers_needed"]
 
 # Days, today included, counted as "recent" and "closing soon".
 MARKET_WINDOW_DAYS = 7
@@ -100,11 +104,13 @@ class CountyShareDTO(ModelConfigBaseModel):
 
 
 class JobsByCountyDTO(ModelConfigBaseModel):
-    """Every county with matching jobs, most jobs first, for the jobs-by-county chart.
+    """Every county with matching jobs, for the jobs-by-county chart.
 
-    The chart shows the first top counties and lets the user expand it to all.
+    Counties are ranked by metric, highest first; the chart draws that value
+    as columns, shows the first top counties and lets the user expand it to all.
     """
 
+    metric: CountyMetric
     title: str
     description: str
     today: date
