@@ -6,6 +6,7 @@ from fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from FOIHireloom.dto.job_market import DEFAULT_MARKET_TOP, MAX_MARKET_TOP, JobMarketFiltersDTO, JobMarketStatsDTO
 from FOIHireloom.dto.job_search import (
     MAX_PAGE_SIZE,
     MAX_QUERY_LENGTH,
@@ -88,6 +89,53 @@ class JobTools(ToolGroup):
             filters = JobSearchFiltersDTO(query=query, county=county, category=category,
                                           include_expired=include_expired, limit=limit, cursor=cursor)
             return await self._call(service(ctx).search(filters))
+
+        @server.tool(annotations=READ_ONLY)
+        async def job_market_stats(
+            ctx: Context,
+            query: Annotated[str | None, Field(
+                max_length=MAX_QUERY_LENGTH,
+                description="Words chosen as for search_jobs, e.g. 'kuhar' or 'njemački'; leave out for all jobs.",
+            )] = None,
+            county: Annotated[str | None, Field(
+                description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
+            )] = None,
+            category: Annotated[str | None, Field(
+                description="Exact category name from list_categories; letter case is ignored.",
+            )] = None,
+            include_expired: Annotated[bool, Field(
+                description="Also count jobs whose application deadline has passed.",
+            )] = False,
+            top: Annotated[int, Field(
+                ge=1, le=MAX_MARKET_TOP, description="Entries in the employers, working_hours and experience lists.",
+            )] = DEFAULT_MARKET_TOP,
+        ) -> JobMarketStatsDTO:
+            """Count the jobs search_jobs would find for the same filters, broken down for labour market questions.
+
+            Use it for questions such as where most jobs of a kind are, which
+            employers hire most, or what share is permanent; use search_jobs
+            to list the jobs themselves. jobs is the number of matching jobs
+            and workers_needed the positions their HZZ pages state, so one job
+            can seek several workers. Each breakdown entry gives jobs and
+            workers_needed per value, most common first.
+
+            counties and categories cover every matching job. employers,
+            employment_types, working_hours, education, experience and
+            accommodation come from the job pages and cover only with_details
+            jobs; values a job does not state are left out. A job can list
+            several employment types (e.g. 'Na neodređeno' and 'novootvoreni
+            poslovi') and several education levels, so those counts may add
+            up to more than jobs. published_recently and closing_soon count
+            jobs published in the last window_days days, or closing within
+            the next window_days days, counted from today.
+
+            coverage says how current the counted counties are. When
+            coverage.warning is set, tell the user the numbers may be
+            outdated or incomplete.
+            """
+            filters = JobMarketFiltersDTO(query=query, county=county, category=category,
+                                          include_expired=include_expired, top=top)
+            return await self._call(service(ctx).market_stats(filters))
 
         @server.tool(annotations=READ_ONLY)
         async def get_job(

@@ -42,6 +42,7 @@ COVERAGE = CoverageDTO(data_status="stale", data_as_of=SEEN, stale_after_hours=6
 class FakeJobSearchService(JobSearchServiceInterface):
     def __init__(self) -> None:
         self.filters: list[JobSearchFiltersDTO] = []
+        self.market_filters: list[JobMarketFiltersDTO] = []
         self.error: Exception | None = None
 
     async def search(self, filters: JobSearchFiltersDTO) -> JobSearchPageDTO:
@@ -50,6 +51,7 @@ class FakeJobSearchService(JobSearchServiceInterface):
         return JobSearchPageDTO(jobs=(JobSummaryDTO(**SUMMARY),), next_cursor="next", coverage=COVERAGE)
 
     async def market_stats(self, filters: JobMarketFiltersDTO) -> JobMarketStatsDTO:
+        self.market_filters.append(filters)
         self.raise_error()
         return JobMarketStatsDTO(jobs=0, with_details=0, workers_needed=0, published_recently=0, closing_soon=0,
                                  counties=(), categories=(), employers=(), employment_types=(), working_hours=(),
@@ -92,7 +94,7 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
             tools = {tool.name: tool for tool in await client.list_tools()}
             self.assertEqual(self.open_services, 1)
         self.assertEqual(self.open_services, 0)
-        self.assertEqual(set(tools), {"search_jobs", "get_job", "list_regions", "list_categories"})
+        self.assertEqual(set(tools), {"search_jobs", "job_market_stats", "get_job", "list_regions", "list_categories"})
         for tool in tools.values():
             with self.subTest(tool=tool.name):
                 self.assertTrue(tool.annotations.readOnlyHint)
@@ -101,6 +103,7 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNotNone(tool.outputSchema)
         self.assertNotIn("ctx", tools["search_jobs"].inputSchema["properties"])
         self.assertEqual(tools["search_jobs"].inputSchema["properties"]["limit"]["maximum"], 20)
+        self.assertEqual(tools["job_market_stats"].inputSchema["properties"]["top"]["maximum"], 50)
 
     async def test_search_jobs_passes_filters_and_returns_structured_page(self) -> None:
         async with Client(self.server) as client:
@@ -125,13 +128,22 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
                                               "data_status": "fresh", "last_success_at": "2026-10-29T03:31:00Z"}])
         self.assertEqual(categories["result"][0]["open_jobs"], 2)
 
+    async def test_job_market_stats_passes_filters_and_returns_coverage(self) -> None:
+        async with Client(self.server) as client:
+            stats = (await client.call_tool("job_market_stats", {"query": "kuhar", "county": "istarska",
+                                                                 "top": 3})).structured_content
+        self.assertEqual(self.service.market_filters, [JobMarketFiltersDTO(query="kuhar", county="istarska", top=3)])
+        self.assertEqual((stats["jobs"], stats["window_days"], stats["today"]), (0, 7, "2026-10-29"))
+        self.assertEqual(stats["coverage"]["warning"], COVERAGE.warning)
+
     async def test_invalid_arguments_are_rejected_before_the_service(self) -> None:
         async with Client(self.server) as client:
             for tool, arguments in (("search_jobs", {"limit": 21}), ("search_jobs", {"query": "x" * 201}),
+                                    ("job_market_stats", {"top": 0}), ("job_market_stats", {"top": 51}),
                                     ("get_job", {"job_id": 0}), ("get_job", {})):
                 with self.subTest(tool=tool, arguments=arguments), self.assertRaises(ToolError):
                     await client.call_tool(tool, arguments)
-        self.assertEqual(self.service.filters, [])
+        self.assertEqual((self.service.filters, self.service.market_filters), ([], []))
 
     async def test_errors_the_caller_can_act_on_keep_their_message(self) -> None:
         cases = {
@@ -196,7 +208,7 @@ class McpHttpTransportTests(unittest.IsolatedAsyncioTestCase):
     async def test_tools_and_health_are_served_over_http(self) -> None:
         base = await self.serve(MCP_PATH="/tools")
         async with Client(f"{base}/tools") as client:
-            self.assertEqual(len(await client.list_tools()), 4)
+            self.assertEqual(len(await client.list_tools()), 5)
             page = (await client.call_tool("search_jobs", {"query": "kuhar"})).structured_content
         self.assertEqual(page["jobs"][0]["title"], "KUHAR/KUHARICA")
         async with httpx.AsyncClient() as http:

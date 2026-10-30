@@ -65,3 +65,13 @@ class JobToolsDatabaseTests(ModelTestCase):
         self.assertEqual(job["listings"][0]["county_code"], "grad-zagreb")
         self.assertEqual(regions, [{"code": "grad-zagreb", "name": "Grad Zagreb", "open_jobs": 3,
                                     "data_status": "unavailable", "last_success_at": None}])
+
+    async def test_job_market_stats_over_mcp(self) -> None:
+        async with Client(self.server) as client:
+            stats = (await client.call_tool("job_market_stats", {"query": "čistačice"})).structured_content
+            with self.assertRaisesRegex(ToolError, "County Atlantida not found"):
+                await client.call_tool("job_market_stats", {"county": "Atlantida"})
+        self.assertEqual((stats["jobs"], stats["with_details"], stats["workers_needed"]), (3, 0, 0))
+        self.assertEqual(stats["counties"], [{"code": "grad-zagreb", "name": "Grad Zagreb", "jobs": 3,
+                                              "workers_needed": 0}])
+        self.assertEqual((stats["employers"], stats["coverage"]["data_status"]), ([], "unavailable"))
