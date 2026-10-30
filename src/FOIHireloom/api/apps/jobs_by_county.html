@@ -262,6 +262,15 @@
       }, done: () => { node.style.transform = ""; node.style.opacity = ""; } });
     }
 
+    // A failure shows in the card instead of leaving it empty.
+    function showError(error) {
+      const body = document.getElementById("body");
+      body.replaceChildren(element("p", { class: "warning", text: `Graf se nije mogao prikazati: ${error?.message ?? error}` }));
+      console.error(error);
+    }
+    addEventListener("error", (event) => showError(event.error ?? event.message));
+    addEventListener("unhandledrejection", (event) => showError(event.reason));
+
     let chart = null;
     let current = null;
     let expanded = false;
@@ -474,7 +483,10 @@
       const { App } = await import(SDK);
       app = new App({ name: "FOIHireloom jobs by county", version: "1.0.0" },
         { availableDisplayModes: ["inline", "fullscreen"] }, { autoResize: true });
-      app.ontoolresult = ({ structuredContent }) => { if (structuredContent) render(structuredContent); };
+      app.ontoolresult = ({ structuredContent }) => {
+        if (!structuredContent) return;
+        try { render(structuredContent); } catch (error) { showError(error); }
+      };
       app.onhostcontextchanged = applyContext;
       await app.connect();
       applyContext(app.getHostContext());

@@ -1,7 +1,8 @@
+import hashlib
 import unittest
 from datetime import date
 
-from FOIHireloom.api.apps.jobs_by_county import jobs_by_county, page
+from FOIHireloom.api.apps.jobs_by_county import RESOURCE_URI, jobs_by_county, page
 from FOIHireloom.dto.job_market import JobMarketStatsDTO
 from FOIHireloom.dto.job_search import CoverageDTO
 
@@ -49,3 +50,6 @@ class JobsByCountyAppTests(unittest.TestCase):
                          "all.slice(0, data.top)", "mask-image"):
             with self.subTest(expected=expected):
                 self.assertIn(expected, html)
+
+    def test_resource_uri_changes_with_the_page(self) -> None:
+        self.assertIn(hashlib.sha256(page().encode()).hexdigest()[:12], RESOURCE_URI)

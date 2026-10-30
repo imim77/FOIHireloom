@@ -5,11 +5,10 @@ page in a sandboxed iframe and passes it that result over the MCP Apps
 bridge. Text-only hosts still get the same data.
 """
 
+import hashlib
 from importlib.resources import files
 
 from FOIHireloom.dto.job_market import CountyShareDTO, JobMarketStatsDTO, JobsByCountyDTO
-
-RESOURCE_URI = "ui://foihireloom/jobs-by-county.html"
 # The page loads the MCP Apps SDK from this origin, so its CSP must allow it.
 SDK_ORIGIN = "https://unpkg.com"
 DEFAULT_TOP = 7
@@ -19,6 +18,10 @@ MAX_TOP = 21
 
 def page() -> str:
     return files(__package__).joinpath("jobs_by_county.html").read_text(encoding="utf-8")
+
+
+# Hosts cache a page by its URI (Claude did not reread a changed page), so the URI names the page's version.
+RESOURCE_URI = f"ui://foihireloom/jobs-by-county-{hashlib.sha256(page().encode()).hexdigest()[:12]}.html"
 
 
 def jobs_by_county(stats: JobMarketStatsDTO, top: int, query: str | None, category: str | None) -> JobsByCountyDTO:

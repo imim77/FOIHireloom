@@ -136,7 +136,7 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
             resources = {str(resource.uri): resource for resource in await client.list_resources()}
             chart_page = (await client.read_resource(uri))[0]
             chart = (await client.call_tool("show_jobs_by_county", {"query": "kuhar", "top": 3})).structured_content
-        self.assertEqual(uri, "ui://foihireloom/jobs-by-county.html")
+        self.assertRegex(uri, r"^ui://foihireloom/jobs-by-county-[0-9a-f]{12}\.html$")
         self.assertEqual(resources[uri].mimeType, "text/html;profile=mcp-app")
         self.assertEqual(chart_page.meta["ui"]["csp"]["resourceDomains"], ["https://unpkg.com"])
         self.assertIn("<html", chart_page.text)
