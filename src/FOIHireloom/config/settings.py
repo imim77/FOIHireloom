@@ -1,5 +1,7 @@
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Annotated, Literal
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -26,3 +28,18 @@ class Settings(BaseSettings):
     HZZ_FEED_MAX_BYTES: int = Field(default=5 * 1024 * 1024, gt=0)
     HZZ_MIN_RETAINED_RATIO: float = Field(default=0.5, ge=0, le=1)
     HZZ_STALE_AFTER_HOURS: float = Field(default=6.0, gt=0, allow_inf_nan=False)
+
+    MCP_TRANSPORT: Literal["stdio", "http"] = "stdio"
+    MCP_HOST: str = Field(default="127.0.0.1", min_length=1)
+    MCP_PORT: int = Field(default=8000, ge=1, le=65535)
+    MCP_PATH: str = Field(default="/mcp", pattern=r"^/[^\s]*$")
+    # Host names, besides localhost, that clients may use to reach the HTTP
+    # server, e.g. a tunnel or proxy domain. Comma-separated in the environment.
+    MCP_ALLOWED_HOSTS: Annotated[list[str], NoDecode] = []
+
+    @field_validator("MCP_ALLOWED_HOSTS", mode="before")
+    @classmethod
+    def split_hosts(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [host.strip() for host in value.split(",") if host.strip()]
+        return value

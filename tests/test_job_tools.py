@@ -9,6 +9,7 @@ from fastmcp.exceptions import ToolError
 from model_test_case import ModelTestCase
 
 from FOIHireloom.api.mcp_server import McpServer
+from FOIHireloom.config.settings import Settings
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
@@ -37,7 +38,7 @@ class JobToolsDatabaseTests(ModelTestCase):
             self.session.add(JobFeedMembership(job_id=job.id, feed_id=feed.id))
             self.job_ids.append(job.id)
         await self.session.commit()
-        self.server = McpServer(self.open_service).server
+        self.server = McpServer(Settings(_env_file=None), job_search_service=self.open_service).server
 
     @asynccontextmanager
     async def open_service(self) -> AsyncIterator[JobSearchServiceInterface]:
