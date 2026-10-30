@@ -39,7 +39,11 @@ class JobsByCountyAppTests(unittest.TestCase):
         chart = jobs_by_county(stats(jobs=0).model_copy(update={"counties": ()}), 8, "pilot", None)
         self.assertEqual((chart.total_jobs, chart.counties_total, chart.counties), (0, 0, ()))
 
-    def test_page_loads_the_pinned_sdk(self) -> None:
+    def test_page_loads_the_pinned_sdk_and_draws_3d_columns(self) -> None:
         html = page()
         self.assertIn("https://unpkg.com/@modelcontextprotocol/ext-apps@2.0.3/app-with-deps", html)
-        self.assertIn("ontoolresult", html)
+        for expected in ("app.ontoolresult", "app.onhostcontextchanged", "structuredContent", 'data-theme="dark"',
+                         "prefers-reduced-motion", 'id="lit-right"', "M23.9672 0.0161L47.7527 8.05164",
+                         'new Intl.NumberFormat("hr-HR"', "short_name", "workers_needed", "coverage?.warning"):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, html)

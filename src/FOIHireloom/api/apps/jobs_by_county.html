@@ -5,28 +5,422 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Oglasi po županijama</title>
   <style>
-    body { margin: 0; padding: 16px; font: 14px/1.4 system-ui, sans-serif; background: #fff; color: #111; }
+    :root {
+      --card: #ffffff;
+      --fg-loud: #18181b;
+      --fg-soft: #71717a;
+      --border: #ececef;
+      --surface-subdued: #eceef2;
+      --surface-disable: #c4c8d0;
+      --surface-muted: #27272a;
+      --fg-on-muted: #ffffff;
+      --orange-100: #ffd9c2;
+      --orange-300: #ff9a5c;
+      --orange-500: #f26419;
+      --warning-bg: #fff4e5;
+      --warning-fg: #9a4d00;
+      color-scheme: light;
+    }
+    :root[data-theme="dark"] {
+      --card: #18181b;
+      --fg-loud: #fafafa;
+      --fg-soft: #a1a1aa;
+      --border: #2e2e33;
+      --surface-subdued: #3f3f46;
+      --surface-disable: #71717a;
+      --surface-muted: #f4f4f5;
+      --fg-on-muted: #18181b;
+      --orange-100: #ffb98f;
+      --orange-300: #e8742f;
+      --warning-bg: #3a2a14;
+      --warning-fg: #ffc77a;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: transparent; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .card {
+      display: flex; flex-direction: column; gap: 24px; padding: 20px;
+      background: var(--card); color: var(--fg-loud); border: 1px solid var(--border); border-radius: 20px;
+    }
+    .header { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .tile {
+      display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 12px;
+      background: var(--orange-500); color: #fff;
+    }
+    .tile svg { width: 24px; height: 24px; }
+    .titles { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .title { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.25; }
+    .soft { margin: 0; font-size: 12px; font-weight: 500; line-height: 1.25; color: var(--fg-soft); }
+    .truncate { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .selection { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+    .big { margin: 0; font-size: 28px; font-weight: 600; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .warning { margin: 0; padding: 10px 12px; border-radius: 12px; font-size: 12px; line-height: 1.4;
+      background: var(--warning-bg); color: var(--warning-fg); }
+    .chart { display: flex; flex-direction: column; gap: 8px; }
+    .plot { position: relative; isolation: isolate; display: flex; gap: 8px; height: 208.921px; }
+    .column { position: relative; flex: 1; min-width: 0; padding: 0; border: 0; background: none; cursor: pointer; outline: none; }
+    .bar { position: absolute; bottom: 0; pointer-events: none; overflow: visible; }
+    .bar .look { transition: opacity 300ms; }
+    .value {
+      position: absolute; left: 50%; z-index: 1; transform: translateX(-50%); pointer-events: none;
+      font-size: 12px; font-weight: 500; line-height: 16px; white-space: nowrap; color: var(--fg-soft);
+      font-variant-numeric: tabular-nums; transition: color 200ms;
+    }
+    .value span { display: block; }
+    .column.active .value { font-weight: 600; color: var(--orange-500); }
+    .focus-ring { position: absolute; inset: -4px; z-index: 1; border-radius: 12px; pointer-events: none; opacity: 0;
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--orange-500) 40%, transparent); transition: opacity 150ms; }
+    .column:focus-visible .focus-ring { opacity: 1; }
+    .fade { position: absolute; inset-inline: 0; top: 151px; height: 58px; pointer-events: none;
+      background: linear-gradient(to bottom, color-mix(in srgb, var(--card) 0%, transparent), var(--card) 83.58%); }
+    .axis { position: relative; display: flex; gap: 8px; }
+    .pill { position: absolute; inset-block: 0; border-radius: 8px; background: var(--surface-muted); }
+    .axis-label { position: relative; display: flex; flex: 1; min-width: 0; justify-content: center; padding: 6px 2px; }
+    .axis-label span {
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
+      text-align: center; font-size: 12px; line-height: 1.25; color: var(--fg-soft); transition: color 200ms;
+    }
+    .axis-label.active span { font-weight: 600; color: var(--fg-on-muted); }
+    #body { display: flex; flex-direction: column; gap: 24px; }
+    #body:empty { display: none; }
+    .footer { margin-top: -8px; }
+    .empty { margin: 0; font-size: 14px; color: var(--fg-soft); }
+    @media (prefers-reduced-motion: reduce) { .bar .look, .value, .axis-label span { transition: none; } }
   </style>
 </head>
 <body>
-  <h1 id="title">Oglasi po županijama</h1>
-  <p id="description">Učitavanje…</p>
-  <ol id="counties"></ol>
-  <script type="module">
-    import { App } from "https://unpkg.com/@modelcontextprotocol/ext-apps@2.0.3/app-with-deps";
+  <div class="card" id="card" role="group" aria-label="Oglasi po županijama">
+    <div class="header">
+      <div class="tile" data-entrance="tile" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 21h18"/><path d="M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/>
+        </svg>
+      </div>
+      <div class="titles">
+        <p class="title truncate" id="title">Oglasi po županijama</p>
+        <p class="soft truncate" id="description">Učitavanje…</p>
+      </div>
+    </div>
+    <div id="body"></div>
+  </div>
 
-    const app = new App({ name: "FOIHireloom jobs by county", version: "1.0.0" }, {}, { autoResize: true });
-    app.ontoolresult = ({ structuredContent: data }) => {
-      if (!data) return;
+  <svg aria-hidden="true" width="0" height="0" style="position:absolute">
+    <defs>
+      <linearGradient id="grey-right" gradientUnits="userSpaceOnUse" x1="35.8613" y1="8.0502" x2="35.8613" y2="188.448">
+        <stop style="stop-color: var(--surface-disable)"/><stop offset="1" style="stop-color: var(--surface-subdued)"/>
+      </linearGradient>
+      <linearGradient id="grey-left" gradientUnits="userSpaceOnUse" x1="23.9673" y1="0" x2="0.181152" y2="0">
+        <stop style="stop-color: var(--surface-disable)"/><stop offset="1" style="stop-color: var(--surface-subdued)"/>
+      </linearGradient>
+      <linearGradient id="lit-right" gradientUnits="userSpaceOnUse" x1="23.9683" y1="0" x2="47.7538" y2="0">
+        <stop style="stop-color: var(--orange-100)"/><stop offset="1" style="stop-color: var(--orange-300)"/>
+      </linearGradient>
+      <linearGradient id="lit-left" gradientUnits="userSpaceOnUse" x1="23.9672" y1="0" x2="0.181641" y2="0">
+        <stop style="stop-color: var(--orange-100)"/><stop offset="1" style="stop-color: var(--orange-300)"/>
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <script type="module">
+    // A 3D column per county, after the "Investment App User Age Chart" design: the selected county is orange, the
+    // others grey; hovering previews a county, clicking or the arrow keys select one.
+    const SDK = "https://unpkg.com/@modelcontextprotocol/ext-apps@2.0.3/app-with-deps";
+
+    const PLOT_HEIGHT = 208.921;
+    const COLUMN_GAP = 8;
+    const BAR_WIDTH = 48;
+    const BAR_RATIO = 48 / 64;
+    const VALUE_GAP = 4;
+    const MAX_BAR = PLOT_HEIGHT - 16 - VALUE_GAP;
+    const BARS_AT = 250;
+    const BAR_STAGGER = 70;
+    const GROW = 1100;
+    const MORPH = 700;
+
+    // One column drawn once (48 × 188.921) and stretched to each bar's height: two faces, a lid and white edges.
+    const BAR_VIEW = "0 0 48 188.921";
+    const BAR_RIGHT = "M23.9683 15.685L47.0527 8.2763V181.04L23.9683 188.449Z";
+    const BAR_LID = "M23.9672 0.0161L47.7527 8.05164L23.9672 15.6854L0.181641 8.05164Z";
+    const BAR_LEFT = "M0.881216 8.2758L23.9672 15.6849V188.449L0.881216 180.6494Z";
+    const BAR_EDGES = [
+      "M23.6187 15.6855h0.699575v172.764h-0.699575Z",
+      "M23.9683 16.4893L23.9684 15.6856L47.7527 8.05167L47.7527 8.8553Z",
+      "M24.1562 16.4884L24.1561 15.6847L0.181752 8.05066L0.181702 8.85444Z",
+      "M23.9683 0.0161L23.9684 0.81981L47.7527 8.4537L47.7527 7.65007Z",
+      "M24.1562 0.016L24.1561 0.81974L0.181752 8.45374L0.181702 7.64996Z",
+      "M24.1994 188.618C23.8191 188.744 23.4483 188.47 23.4484 188.063L47.7536 180.011L47.7536 180.815Z",
+      "M23.5824 188.628C23.966 188.749 24.3359 188.472 24.3359 188.063L0.180678 180.413L0.18066 181.217Z",
+    ].join("");
+
+    // Shown when the page is opened outside a host, e.g. to preview it in a browser.
+    const SAMPLE = {
+      title: "Oglasi po županijama",
+      description: "Pregled s probnim podacima",
+      total_jobs: 7676, total_workers_needed: 15922, counties_total: 21,
+      counties: [
+        ["Grad Zagreb", "Grad Zagreb", 1325, 3093], ["Splitsko-dalmatinska županija", "Splitsko-dalmatinska", 656, 1315],
+        ["Zagrebačka županija", "Zagrebačka", 607, 1266], ["Osječko-baranjska županija", "Osječko-baranjska", 531, 992],
+        ["Istarska županija", "Istarska", 507, 1185], ["Primorsko-goranska županija", "Primorsko-goranska", 498, 1040],
+        ["Varaždinska županija", "Varaždinska", 402, 801], ["Zadarska županija", "Zadarska", 344, 690],
+      ].map(([name, short_name, jobs, workers_needed]) => ({ name, short_name, jobs, workers_needed,
+        share: Math.round((1000 * jobs) / 7676) / 10 })),
+      coverage: { warning: null },
+    };
+
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const integer = new Intl.NumberFormat("hr-HR", { maximumFractionDigits: 0 });
+    const percent = new Intl.NumberFormat("hr-HR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const formatJobs = (value) => integer.format(Math.round(value));
+    const formatShare = (value) => `${percent.format(value)} %`;
+    const round = (n) => Math.round(n * 1000) / 1000;
+    const $ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+    const element = (tag, attributes = {}, children = []) => {
+      const node = document.createElement(tag);
+      for (const [key, value] of Object.entries(attributes)) {
+        if (key === "text") node.textContent = value;
+        else if (key === "style") Object.assign(node.style, value);
+        else node.setAttribute(key, value);
+      }
+      node.append(...children);
+      return node;
+    };
+    const svg = (tag, attributes = {}, children = []) => {
+      const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+      for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
+      node.append(...children);
+      return node;
+    };
+
+    // Easings and a requestAnimationFrame tween, standing in for anime.js.
+    const ease = {
+      outExpo: (t) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t)),
+      outQuad: (t) => 1 - (1 - t) * (1 - t),
+      outBack: (s) => (t) => 1 + (s + 1) * (t - 1) ** 3 + s * (t - 1) ** 2,
+    };
+    const running = new Set();
+    function tween({ duration, delay = 0, easing = ease.outExpo, update, done }) {
+      const job = { finished: false };
+      running.add(job);
+      const start = performance.now() + delay;
+      const finish = () => {
+        if (job.finished) return;
+        job.finished = true;
+        running.delete(job);
+        clearTimeout(job.timer);
+        update(1, 1);
+        done?.();
+      };
+      const frame = (now) => {
+        if (job.finished) return;
+        const t = Math.min(1, Math.max(0, (now - start) / duration));
+        if (t >= 1) return finish();
+        update(easing(t), t);
+        requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+      // Browsers pause animation frames in hidden frames; the end state must still arrive.
+      job.timer = setTimeout(finish, delay + duration + 100);
+      job.cancel = () => { job.finished = true; running.delete(job); clearTimeout(job.timer); };
+      return job;
+    }
+    function fadeIn(nodes, { at = 0, duration = 600, stagger = 0, rise = 0, from = 0 } = {}) {
+      nodes.forEach((node, i) => {
+        node.style.opacity = String(from);
+        if (rise) node.style.transform = `translateY(${rise}px)`;
+        tween({ duration, delay: at + i * stagger, easing: ease.outQuad, update: (p) => {
+          node.style.opacity = String(from + (1 - from) * p);
+          if (rise) node.style.transform = `translateY(${rise * (1 - p)}px)`;
+        }, done: () => { node.style.opacity = ""; node.style.transform = ""; } });
+      });
+    }
+    function pop(node, { at = 0, duration = 500, from = 0.7, overshoot = 1.7, fade = true } = {}) {
+      tween({ duration, delay: at, easing: ease.outBack(overshoot), update: (p) => {
+        node.style.transform = `scale(${from + (1 - from) * p})`;
+        if (fade) node.style.opacity = String(Math.min(1, Math.max(0, p)));
+      }, done: () => { node.style.transform = ""; node.style.opacity = ""; } });
+    }
+
+    let chart = null;
+
+    function render(data) {
+      for (const job of [...running]) job.cancel();
       document.getElementById("title").textContent = data.title;
       document.getElementById("description").textContent = data.description;
-      document.getElementById("counties").replaceChildren(...data.counties.map((county) => {
-        const item = document.createElement("li");
-        item.textContent = `${county.name}: ${county.jobs}`;
-        return item;
-      }));
-    };
-    await app.connect();
+      const body = document.getElementById("body");
+      const counties = data.counties ?? [];
+      const parts = [];
+      if (data.coverage?.warning) parts.push(element("p", { class: "warning", text: data.coverage.warning }));
+      if (!counties.length) {
+        parts.push(element("p", { class: "empty", text: "Nema aktivnih oglasa za zadane filtre." }));
+        body.replaceChildren(...parts);
+        chart = null;
+        return;
+      }
+      const selection = element("div", { class: "selection", "data-entrance": "selection" }, [
+        element("p", { class: "soft", id: "selected-name" }),
+        element("p", { class: "big", id: "selected-share" }),
+      ]);
+      const plot = element("div", { class: "plot", role: "group", "aria-label": "Oglasi po županijama" });
+      const axis = element("div", { class: "axis", "aria-hidden": "true" }, [element("span", { class: "pill" })]);
+      counties.forEach((county, i) => {
+        const look = (lit) => svg("g", { class: `look ${lit ? "lit" : "grey"}` }, [
+          svg("path", { d: BAR_RIGHT, fill: `url(#${lit ? "lit" : "grey"}-right)` }),
+          svg("path", { d: BAR_LID, style: `fill: var(${lit ? "--orange-100" : "--surface-subdued"})` }),
+          svg("path", { d: BAR_LEFT, fill: `url(#${lit ? "lit" : "grey"}-left)` }),
+          svg("path", { d: BAR_EDGES, style: "fill: var(--card)" }),
+        ]);
+        const column = element("button", { type: "button", class: "column", "data-index": i,
+          "aria-label": `${county.name}: ${formatJobs(county.jobs)} oglasa, ${formatJobs(county.workers_needed)} traženih radnika, ${formatShare(county.share)}` }, [
+          svg("svg", { class: "bar", viewBox: BAR_VIEW, preserveAspectRatio: "none", "aria-hidden": "true" }, [look(false), look(true)]),
+          element("span", { class: "value", "aria-hidden": "true" }, [element("span", { text: formatJobs(county.jobs) })]),
+          element("span", { class: "focus-ring", "aria-hidden": "true" }),
+        ]);
+        column.addEventListener("pointerenter", () => setHovered(i));
+        column.addEventListener("click", () => select(i));
+        column.addEventListener("keydown", onKeyDown);
+        plot.append(column);
+        axis.append(element("span", { class: "axis-label", title: county.name }, [element("span", { text: county.short_name })]));
+      });
+      plot.append(element("span", { class: "fade", "aria-hidden": "true" }));
+      plot.addEventListener("pointerleave", () => setHovered(null));
+      const shown = counties.length < data.counties_total
+        ? `Prikazano ${counties.length} od ${data.counties_total} županija s oglasima`
+        : `Sve županije s oglasima (${data.counties_total})`;
+      const footer = element("p", { class: "soft footer",
+        text: `${shown} · ukupno ${formatJobs(data.total_jobs)} oglasa, ${formatJobs(data.total_workers_needed)} traženih radnika` });
+      parts.push(selection, element("div", { class: "chart" }, [plot, axis]), footer);
+      body.replaceChildren(...parts);
+
+      const max = Math.max(0, ...counties.map((county) => county.jobs));
+      chart = {
+        counties, plot, axis,
+        heights: counties.map((county) => (max > 0 ? round((county.jobs / max) * MAX_BAR) : 0)),
+        selected: 0, hovered: null, active: -1, columnWidth: 0, shareShown: 0, shareTween: null,
+      };
+      layout();
+      setActive(true);
+      entrance();
+    }
+
+    // Bar widths follow the plot's width: a 48px bar in a 64px column, narrower columns narrow it in proportion.
+    function layout() {
+      if (!chart) return;
+      const n = chart.counties.length;
+      const gaps = COLUMN_GAP * (n - 1);
+      chart.columnWidth = (chart.plot.clientWidth - gaps) / n;
+      const barWidth = round(Math.max(2, Math.min(BAR_WIDTH, chart.columnWidth * BAR_RATIO)));
+      $(".bar", chart.plot).forEach((bar) => {
+        bar.style.width = `${barWidth}px`;
+        bar.style.left = `calc(50% - ${barWidth / 2}px)`;
+      });
+      const pill = chart.axis.querySelector(".pill");
+      pill.style.width = `calc((100% - ${gaps}px) / ${n})`;
+      pill.style.left = `calc(${Math.max(0, chart.active)} * ((100% - ${gaps}px) / ${n} + ${COLUMN_GAP}px))`;
+    }
+    new ResizeObserver(layout).observe(document.body);
+
+    function draw(frame) {
+      const bars = $(".bar", chart.plot);
+      const values = $(".value", chart.plot);
+      frame.forEach((height, i) => {
+        bars[i].style.height = `${round(height)}px`;
+        values[i].style.bottom = `${round(height + VALUE_GAP)}px`;
+      });
+    }
+
+    function showShare(value) {
+      chart.shareShown = value;
+      document.getElementById("selected-share").textContent = `${formatShare(value)} oglasa`;
+    }
+
+    // Selection: hover previews a county, a click or a key selects it.
+    function setHovered(index) { chart.hovered = index; setActive(); }
+    function select(index) { chart.selected = Math.min(Math.max(index, 0), chart.counties.length - 1); setActive(); }
+    function onKeyDown(event) {
+      const n = chart.counties.length;
+      const next = { ArrowRight: chart.selected + 1, ArrowDown: chart.selected + 1, ArrowLeft: chart.selected - 1,
+        ArrowUp: chart.selected - 1, Home: 0, End: n - 1 }[event.key];
+      if (next === undefined) return;
+      event.preventDefault();
+      chart.hovered = null;
+      select(next);
+      $(".column", chart.plot)[chart.selected].focus();
+    }
+
+    function setActive(initial = false) {
+      const before = chart.active;
+      const active = chart.hovered ?? chart.selected;
+      chart.active = active;
+      $(".column", chart.plot).forEach((column, i) => {
+        column.classList.toggle("active", i === active);
+        column.setAttribute("aria-pressed", String(i === chart.selected));
+        column.tabIndex = i === chart.selected ? 0 : -1;
+        column.querySelector(".grey").style.opacity = i === active ? "0" : "0.32";
+        column.querySelector(".lit").style.opacity = i === active ? "1" : "0";
+      });
+      $(".axis-label", chart.axis).forEach((label, i) => label.classList.toggle("active", i === active));
+      const county = chart.counties[active];
+      document.getElementById("selected-name").textContent =
+        `${county.name} · ${formatJobs(county.workers_needed)} traženih radnika`;
+      layout();
+      if (initial || before === active) {
+        if (initial) showShare(county.share);
+        return;
+      }
+      if (reduced) { showShare(county.share); return; }
+      // The pill slides over from the previous county, its count pops and the share counts to the new one.
+      const pill = chart.axis.querySelector(".pill");
+      const offset = (before - active) * (chart.columnWidth + COLUMN_GAP);
+      tween({ duration: 550, update: (p) => { pill.style.transform = `translateX(${offset * (1 - p)}px)`; },
+        done: () => { pill.style.transform = ""; } });
+      const value = $(".value span", chart.plot)[active];
+      pop(value, { from: 0.86, overshoot: 2, fade: false });
+      fadeIn([document.getElementById("selected-name")], { duration: 300, from: 0.4 });
+      chart.shareTween?.cancel();
+      const from = chart.shareShown;
+      chart.shareTween = tween({ duration: 600, update: (p) => showShare(from + (county.share - from) * p) });
+    }
+
+    // Entrance: the tile pops, the header comes in, the columns rise one after another while their counts count up,
+    // the share counts up and the pill pops in under the selected county.
+    function entrance() {
+      if (reduced) { draw(chart.heights); return; }
+      const { heights, counties } = chart;
+      const growth = heights.map(() => 0);
+      const values = $(".value span", chart.plot);
+      const grow = () => {
+        draw(heights.map((height, i) => height * growth[i]));
+        values.forEach((node, i) => { node.textContent = formatJobs(counties[i].jobs * growth[i]); });
+      };
+      grow();
+      pop(document.querySelector('[data-entrance="tile"]'), { duration: 700, from: 0.6, overshoot: 1.8 });
+      fadeIn($('[data-entrance="selection"] > *'), { at: 100, stagger: 80, rise: 6 });
+      const share = counties[chart.selected].share;
+      showShare(0);
+      chart.shareTween = tween({ duration: 1400, delay: 150, update: (p) => showShare(share * p) });
+      fadeIn($(".value", chart.plot), { at: BARS_AT, duration: 400, stagger: BAR_STAGGER });
+      fadeIn($(".axis-label > span", chart.axis), { at: 350, stagger: 50, rise: 4 });
+      heights.forEach((_, i) => tween({ duration: GROW, delay: BARS_AT + i * BAR_STAGGER,
+        update: (p) => { growth[i] = p; grow(); } }));
+      const pill = chart.axis.querySelector(".pill");
+      pill.style.opacity = "0";
+      pop(pill, { at: BARS_AT + chart.selected * BAR_STAGGER + GROW * 0.45 });
+    }
+
+    function applyTheme(context) {
+      if (context?.theme) document.documentElement.dataset.theme = context.theme;
+    }
+
+    if (window.parent === window) {
+      render(SAMPLE);
+    } else {
+      const { App } = await import(SDK);
+      const app = new App({ name: "FOIHireloom jobs by county", version: "1.0.0" }, {}, { autoResize: true });
+      app.ontoolresult = ({ structuredContent }) => { if (structuredContent) render(structuredContent); };
+      app.onhostcontextchanged = applyTheme;
+      await app.connect();
+      applyTheme(app.getHostContext());
+    }
   </script>
 </body>
 </html>
