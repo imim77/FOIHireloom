@@ -29,7 +29,7 @@ def jobs_by_county(stats: JobMarketStatsDTO, top: int, query: str | None, catego
                f"kategorija {category.strip()}" if category and category.strip() else None]
     description = " · ".join([*(f for f in filters if f), f"aktivni oglasi na dan {stats.today:%d. %m. %Y.}"])
     return JobsByCountyDTO(
-        title="Oglasi po županijama",
+        title="Broj oglasa po županijama",
         description=description[0].upper() + description[1:],
         today=stats.today,
         total_jobs=stats.jobs,

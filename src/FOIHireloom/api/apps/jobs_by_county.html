@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Oglasi po županijama</title>
+  <title>Broj oglasa po županijama</title>
   <style>
     :root {
       --card: #ffffff;
@@ -52,11 +52,6 @@
     .expand:focus-visible { outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--orange-500) 40%, transparent); }
     .expand svg { width: 18px; height: 18px; }
     .expand[hidden] { display: none; }
-    .tile {
-      display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 12px;
-      background: var(--orange-500); color: #fff;
-    }
-    .tile svg { width: 24px; height: 24px; }
     .titles { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
     .title { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.25; }
     .soft { margin: 0; font-size: 12px; font-weight: 500; line-height: 1.25; color: var(--fg-soft); }
@@ -100,15 +95,10 @@
   </style>
 </head>
 <body>
-  <div class="card" id="card" role="group" aria-label="Oglasi po županijama">
+  <div class="card" id="card" role="group" aria-label="Broj oglasa po županijama">
     <div class="header">
-      <div class="tile" data-entrance="tile" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 21h18"/><path d="M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/>
-        </svg>
-      </div>
       <div class="titles">
-        <p class="title truncate" id="title">Oglasi po županijama</p>
+        <p class="title truncate" id="title">Broj oglasa po županijama</p>
         <p class="soft truncate" id="description">Učitavanje…</p>
       </div>
       <button class="expand" id="expand" type="button" hidden></button>
@@ -169,7 +159,7 @@
 
     // Shown when the page is opened outside a host, e.g. to preview it in a browser.
     const SAMPLE = {
-      title: "Oglasi po županijama",
+      title: "Broj oglasa po županijama",
       description: "Pregled s probnim podacima",
       total_jobs: 7676, total_workers_needed: 15922, top: 7,
       counties: [
@@ -310,7 +300,7 @@
         element("p", { class: "soft", id: "selected-name" }),
         element("p", { class: "big", id: "selected-workers" }),
       ]);
-      const plot = element("div", { class: "plot", role: "group", "aria-label": "Oglasi po županijama" });
+      const plot = element("div", { class: "plot", role: "group", "aria-label": "Broj oglasa po županijama" });
       const axis = element("div", { class: "axis", "aria-hidden": "true" }, [element("span", { class: "pill" })]);
       counties.forEach((county, i) => {
         const look = (lit) => svg("g", { class: `look ${lit ? "lit" : "grey"}` }, [
@@ -435,7 +425,7 @@
         update: (p) => showWorkers(from + (county.workers_needed - from) * p) });
     }
 
-    // Entrance: the tile pops, the header comes in, the columns rise one after another while their counts count up,
+    // Entrance: the header comes in, the columns rise one after another while their counts count up,
     // the workers sought count up and the pill pops in under the selected county.
     function entrance() {
       if (reduced) { draw(chart.heights); return; }
@@ -447,7 +437,6 @@
         values.forEach((node, i) => { node.textContent = formatJobs(counties[i].jobs * growth[i]); });
       };
       grow();
-      pop(document.querySelector('[data-entrance="tile"]'), { duration: 700, from: 0.6, overshoot: 1.8 });
       fadeIn($('[data-entrance="selection"] > *'), { at: 100, stagger: 80, rise: 6 });
       const workers = counties[chart.selected].workers_needed;
       showWorkers(0);

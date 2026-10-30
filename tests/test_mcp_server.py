@@ -142,7 +142,7 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("<html", chart_page.text)
         self.assertEqual(self.service.market_filters, [JobMarketFiltersDTO(query="kuhar")])
         self.assertEqual((chart["title"], chart["top"], chart["counties"], chart["coverage"]["warning"]),
-                         ("Oglasi po županijama", 3, [], COVERAGE.warning))
+                         ("Broj oglasa po županijama", 3, [], COVERAGE.warning))
 
     async def test_job_market_stats_passes_filters_and_returns_coverage(self) -> None:
         async with Client(self.server) as client:
