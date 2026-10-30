@@ -43,7 +43,7 @@ class JobCursorDTO(ModelConfigBaseModel):
     id: int = Field(ge=1, le=2**63 - 1)
 
 
-class JobSearchCriteriaDTO(ModelConfigBaseModel):
+class JobFilterCriteriaDTO(ModelConfigBaseModel):
     """Validated filters for the job repository.
 
     terms are ASCII-folded, lowercase words or their stems; each must match a word prefix.
@@ -54,8 +54,6 @@ class JobSearchCriteriaDTO(ModelConfigBaseModel):
     county_id: int | None = None
     category: str | None = None
     open_on: date | None = None
-    after: JobCursorDTO | None = None
-    limit: int = Field(ge=1)
 
     @field_validator("terms")
     @classmethod
@@ -64,6 +62,13 @@ class JobSearchCriteriaDTO(ModelConfigBaseModel):
         if not all(SEARCH_TERM.fullmatch(term) for term in terms):
             raise ValueError("Search terms must be single words without punctuation.")
         return terms
+
+
+class JobSearchCriteriaDTO(JobFilterCriteriaDTO):
+    """Filters plus the page to return; after continues after a previous page."""
+
+    after: JobCursorDTO | None = None
+    limit: int = Field(ge=1)
 
 
 class JobSummaryDTO(ModelConfigBaseModel):

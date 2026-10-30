@@ -6,6 +6,7 @@ from typing import NamedTuple
 from FOIHireloom.db.models import Job
 from FOIHireloom.dto.hzz_job_page import ParsedJobPageDTO
 from FOIHireloom.dto.job import ParsedJobDTO
+from FOIHireloom.dto.job_market import JobMarketAggregatesDTO, JobMarketCriteriaDTO
 from FOIHireloom.dto.job_page import JobPageTargetDTO
 from FOIHireloom.dto.job_search import CategoryDTO, JobSearchCriteriaDTO
 from FOIHireloom.dto.job_sync import JobSnapshotDTO
@@ -43,6 +44,10 @@ class JobRepository(ABC):
         last, then by descending ID; criteria.after continues after that
         position.
         """
+
+    @abstractmethod
+    async def market_aggregates(self, criteria: JobMarketCriteriaDTO) -> JobMarketAggregatesDTO:
+        """Count the listed jobs matching criteria, as search() would find them, by county and other fields."""
 
     @abstractmethod
     async def list_categories(self, open_on: date) -> list[CategoryDTO]:

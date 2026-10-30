@@ -4,6 +4,7 @@ from .county import CountyDefinitionDTO, CountyDTO
 from .hzz_feed import FeedResponseDTO
 from .hzz_job_page import ParsedJobPageDTO
 from .job import ParsedFeedDTO, ParsedJobDTO
+from .job_market import CountyMarketCountDTO, JobMarketAggregatesDTO, JobMarketCriteriaDTO, MarketCountDTO
 from .job_page import JobPageFetchResultDTO, JobPageTargetDTO
 from .job_search import (
     CategoryDTO,
@@ -12,6 +13,7 @@ from .job_search import (
     JobCountyDTO,
     JobCursorDTO,
     JobDetailsDTO,
+    JobFilterCriteriaDTO,
     JobListingDTO,
     JobSearchCriteriaDTO,
     JobSearchFiltersDTO,
@@ -43,8 +45,9 @@ __all__ = [
     "CkanPackage",
     "CkanResource",
     "CountyDTO",
-    "CountyFeedCheckDTO",
     "CountyDefinitionDTO",
+    "CountyFeedCheckDTO",
+    "CountyMarketCountDTO",
     "CoverageDTO",
     "FeedCheckDTO",
     "FeedResponseDTO",
@@ -52,7 +55,10 @@ __all__ = [
     "JobCountyDTO",
     "JobCursorDTO",
     "JobDetailsDTO",
+    "JobFilterCriteriaDTO",
     "JobListingDTO",
+    "JobMarketAggregatesDTO",
+    "JobMarketCriteriaDTO",
     "JobPageFetchResultDTO",
     "JobPageTargetDTO",
     "JobSearchCriteriaDTO",
@@ -61,6 +67,7 @@ __all__ = [
     "JobSnapshotDTO",
     "JobSummaryDTO",
     "JobSyncResultDTO",
+    "MarketCountDTO",
     "MembershipSnapshotDTO",
     "ModelConfigBaseModel",
     "ParsedFeedDTO",

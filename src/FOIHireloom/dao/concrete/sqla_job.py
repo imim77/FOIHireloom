@@ -1,15 +1,22 @@
 from collections.abc import Collection, Mapping, Sequence
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
-from sqlalchemy import ColumnElement, and_, func, not_, or_, select, update
+from sqlalchemy import CTE, ColumnElement, and_, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from FOIHireloom.db.models import Job, JobFeedMembership, SourceFeed
+from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.db.models.job import SEARCH_TITLE_WEIGHT
 from FOIHireloom.dto.hzz_job_page import ParsedJobPageDTO
 from FOIHireloom.dto.job import ParsedJobDTO
+from FOIHireloom.dto.job_market import (
+    MARKET_WINDOW_DAYS,
+    CountyMarketCountDTO,
+    JobMarketAggregatesDTO,
+    JobMarketCriteriaDTO,
+    MarketCountDTO,
+)
 from FOIHireloom.dto.job_page import JobPageTargetDTO
-from FOIHireloom.dto.job_search import CategoryDTO, JobSearchCriteriaDTO
+from FOIHireloom.dto.job_search import CategoryDTO, JobFilterCriteriaDTO, JobSearchCriteriaDTO
 from FOIHireloom.dto.job_sync import JobSnapshotDTO
 from FOIHireloom.dao.interfaces.job import JobRepository, JobSearchHit
 
@@ -38,20 +45,8 @@ class SqlAlchemyJobRepository(JobRepository):
         return result.scalar_one_or_none()
 
     async def search(self, criteria: JobSearchCriteriaDTO) -> list[JobSearchHit]:
-        title_match = None
-        if criteria.terms:
-            matches = Job.search_vector.bool_op("@@")
-            title_match = matches(func.to_tsquery(
-                "simple", " & ".join(f"{term}:*{SEARCH_TITLE_WEIGHT}" for term in criteria.terms)
-            ))
-        statement = select(Job, title_match).where(listed_condition(criteria.county_id))
-        if criteria.terms:
-            query = " & ".join(f"{term}:*" for term in criteria.terms)
-            statement = statement.where(matches(func.to_tsquery("simple", query)))
-        if criteria.category is not None:
-            statement = statement.where(func.upper(Job.category) == func.upper(criteria.category))
-        if criteria.open_on is not None:
-            statement = statement.where(open_condition(criteria.open_on))
+        title_match = terms_condition(criteria.terms, SEARCH_TITLE_WEIGHT) if criteria.terms else None
+        statement = select(Job, title_match).where(*filter_conditions(criteria))
         if (after := criteria.after) is not None:
             if after.published_on is None:
                 later = and_(Job.published_on.is_(None), Job.id < after.id)
@@ -70,6 +65,74 @@ class SqlAlchemyJobRepository(JobRepository):
             order.insert(0, title_match.desc())
         statement = statement.order_by(*order).limit(criteria.limit)
         return [JobSearchHit(job, title_match) for job, title_match in await self._session.execute(statement)]
+
+    async def market_aggregates(self, criteria: JobMarketCriteriaDTO) -> JobMarketAggregatesDTO:
+        found = (
+            select(
+                Job.id, Job.category, Job.published_on, effective_deadline().label("deadline"), Job.page_fetched_at,
+                Job.page_workers_needed.label("workers"), Job.page_employer_name, Job.page_employment_type,
+                Job.page_working_hours, Job.page_education, Job.page_experience, Job.page_accommodation,
+            )
+            .where(*filter_conditions(criteria))
+            .cte("found")
+        )
+        window_end = criteria.today + timedelta(days=MARKET_WINDOW_DAYS - 1)
+        totals = (await self._session.execute(select(
+            func.count(),
+            func.count().filter(found.c.page_fetched_at.is_not(None)),
+            func.coalesce(func.sum(found.c.workers), 0),
+            func.count().filter(found.c.published_on > criteria.today - timedelta(days=MARKET_WINDOW_DAYS)),
+            func.count().filter(found.c.deadline.between(criteria.today, window_end)),
+        ))).one()
+        return JobMarketAggregatesDTO(
+            jobs=totals[0], with_details=totals[1], workers_needed=totals[2], published_recently=totals[3],
+            closing_soon=totals[4],
+            counties=await self._county_counts(found),
+            categories=await self._value_counts(found, found.c.category),
+            employers=await self._value_counts(found, found.c.page_employer_name, criteria.top),
+            employment_types=await self._value_counts(found, found.c.page_employment_type, listed=True),
+            working_hours=await self._value_counts(found, found.c.page_working_hours, criteria.top),
+            education=await self._value_counts(found, found.c.page_education, listed=True),
+            experience=await self._value_counts(found, found.c.page_experience, criteria.top),
+            accommodation=await self._value_counts(found, found.c.page_accommodation),
+        )
+
+    async def _county_counts(self, found: CTE) -> tuple[CountyMarketCountDTO, ...]:
+        # A job listed by two feeds of one county counts once.
+        placed = (
+            select(JobFeedMembership.job_id, SourceFeed.county_id)
+            .join(SourceFeed)
+            .where(JobFeedMembership.presence_status == "present", SourceFeed.scope == "county",
+                   JobFeedMembership.job_id.in_(select(found.c.id)))
+            .distinct()
+            .subquery()
+        )
+        jobs = func.count().label("jobs")
+        statement = (
+            select(County.code, County.name, jobs, func.coalesce(func.sum(found.c.workers), 0).label("workers_needed"))
+            .select_from(placed)
+            .join(County, County.id == placed.c.county_id)
+            .join(found, found.c.id == placed.c.job_id)
+            .group_by(County.id)
+            .order_by(jobs.desc(), County.name)
+        )
+        return tuple(CountyMarketCountDTO.model_validate(row) for row in (await self._session.execute(statement)).all())
+
+    async def _value_counts(
+        self, found: CTE, column: ColumnElement[str | None], limit: int | None = None, listed: bool = False,
+    ) -> tuple[MarketCountDTO, ...]:
+        """Jobs per value, most common first; listed values are the "; "-joined items the page parser stores."""
+        value = func.unnest(func.string_to_array(column, "; ")) if listed else column
+        values = select(found.c.id, value.label("name"), found.c.workers).distinct().subquery()
+        jobs = func.count().label("jobs")
+        statement = (
+            select(values.c.name, jobs, func.coalesce(func.sum(values.c.workers), 0).label("workers_needed"))
+            .where(values.c.name.is_not(None), values.c.name != "")
+            .group_by(values.c.name)
+            .order_by(jobs.desc(), values.c.name)
+            .limit(limit)
+        )
+        return tuple(MarketCountDTO.model_validate(row) for row in (await self._session.execute(statement)).all())
 
     async def list_categories(self, open_on: date) -> list[CategoryDTO]:
         open_jobs = func.count().label("open_jobs")
@@ -166,6 +229,24 @@ def listed_condition(county_id: int | None = None) -> ColumnElement[bool]:
     if county_id is not None:
         listed = listed.where(SourceFeed.county_id == county_id)
     return listed.exists()
+
+
+def terms_condition(terms: Sequence[str], weight: str = "") -> ColumnElement[bool]:
+    """True when every term starts a word of the search document, or of its part with that weight."""
+    query = " & ".join(f"{term}:*{weight}" for term in terms)
+    return Job.search_vector.bool_op("@@")(func.to_tsquery("simple", query))
+
+
+def filter_conditions(criteria: JobFilterCriteriaDTO) -> list[ColumnElement[bool]]:
+    """Conditions for listed jobs matching every criterion, so search and statistics count the same jobs."""
+    conditions = [listed_condition(criteria.county_id)]
+    if criteria.terms:
+        conditions.append(terms_condition(criteria.terms))
+    if criteria.category is not None:
+        conditions.append(func.upper(Job.category) == func.upper(criteria.category))
+    if criteria.open_on is not None:
+        conditions.append(open_condition(criteria.open_on))
+    return conditions
 
 
 def effective_deadline() -> ColumnElement[date]:

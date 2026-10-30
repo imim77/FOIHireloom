@@ -1,0 +1,102 @@
+from datetime import timedelta
+from uuid import uuid4
+
+from sqlalchemy import func, text
+
+from model_test_case import ModelTestCase
+
+from FOIHireloom.dao.concrete.sqla_job import SqlAlchemyJobRepository
+from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
+from FOIHireloom.dto.job_market import JobMarketCriteriaDTO
+
+HOSPITALITY, HEALTH = "UGOSTITELJI", "ZDRAVSTVO"
+
+
+class JobMarketRepositoryTests(ModelTestCase):
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        self.today = await self.session.scalar(text("SELECT (now() AT TIME ZONE 'Europe/Zagreb')::date"))
+        counties = {code: County(code=code, name=name) for code, name in (("istarska", "Istarska županija"),
+                                                                           ("grad-zagreb", "Grad Zagreb"))}
+        self.session.add_all(counties.values())
+        await self.session.flush()
+        self.county_ids = {code: county.id for code, county in counties.items()}
+        feeds = {
+            name: SourceFeed(county_id=counties[code].id, ckan_resource_id=uuid4(), label=name, scope="county",
+                             feed_url=f"http://burzarada.hzz.hr/rss/{name}.xml")
+            for name, code in (("is1", "istarska"), ("is2", "istarska"), ("zg", "grad-zagreb"))
+        }
+        self.session.add_all(feeds.values())
+        await self.session.flush()
+        page = {"page_status": "fetched", "page_checked_at": func.now(), "page_fetched_at": func.now()}
+        for key, values, listings in (
+            ("cook", dict(title="KUHAR/ICA", category=HOSPITALITY, published_on=self.today - timedelta(days=1),
+                          page_valid_until=self.today + timedelta(days=3), page_workers_needed=3,
+                          page_employer_name="HOTEL d.o.o.", page_employment_type="Na neodređeno; sezonski",
+                          page_working_hours="Puno radno vrijeme",
+                          page_education="Srednja škola 3 godine; Srednja škola 4 godine", page_experience="1 godinu",
+                          page_accommodation="Zajednički smještaj", **page), {"is1": "present", "is2": "present"}),
+            ("waiter", dict(title="KONOBAR", category=HOSPITALITY, published_on=self.today - timedelta(days=10),
+                            page_valid_until=self.today + timedelta(days=20), page_workers_needed=2,
+                            page_employer_name="HOTEL d.o.o.", page_employment_type="Na određeno",
+                            page_working_hours="20 sati tjedno", page_education="Srednja škola 3 godine",
+                            page_experience="Nije važno", page_accommodation="Nema smještaja", **page),
+             {"is1": "present"}),
+            ("nurse", dict(title="MEDICINSKA SESTRA", category=HEALTH, published_on=self.today,
+                           deadline_on=self.today + timedelta(days=1)), {"zg": "present"}),
+            ("expired", dict(title="LIJEČNIK", category=HEALTH, published_on=self.today - timedelta(days=30),
+                             page_valid_until=self.today - timedelta(days=1), page_workers_needed=5,
+                             page_employer_name="BOLNICA", page_experience="", **page), {"zg": "present"}),
+            ("gone", dict(title="KUHAR", category=HOSPITALITY, page_workers_needed=9, page_employer_name="HOTEL d.o.o.",
+                          **page), {"is1": "missing"}),
+        ):
+            job = Job(provider="hzz", source_job_id=key, canonical_url=f"https://example.com/{key}",
+                      content_hash=key, page_source_hash=key if "page_status" in values else None, **values)
+            self.session.add(job)
+            await self.session.flush()
+            for feed, status in listings.items():
+                self.session.add(JobFeedMembership(job_id=job.id, feed_id=feeds[feed].id, presence_status=status,
+                                                   missing_since_at=func.now() if status == "missing" else None))
+        await self.session.commit()
+        self.repository = SqlAlchemyJobRepository(self.session)
+
+    async def aggregates(self, **criteria: object):
+        values = {"open_on": self.today, "today": self.today, "top": 10} | criteria
+        return await self.repository.market_aggregates(JobMarketCriteriaDTO(**values))
+
+    @staticmethod
+    def counts(items) -> list[tuple[str, int, int]]:
+        return [(item.name, item.jobs, item.workers_needed) for item in items]
+
+    async def test_counts_open_listed_jobs_by_field(self) -> None:
+        stats = await self.aggregates()
+        self.assertEqual((stats.jobs, stats.with_details, stats.workers_needed), (3, 2, 5))
+        # The cook and the nurse were published within a week and close within a week.
+        self.assertEqual((stats.published_recently, stats.closing_soon), (2, 2))
+        # The cook is listed by two Istrian feeds but counts once.
+        self.assertEqual([(county.code, county.name, county.jobs, county.workers_needed) for county in stats.counties],
+                         [("istarska", "Istarska županija", 2, 5), ("grad-zagreb", "Grad Zagreb", 1, 0)])
+        self.assertEqual(self.counts(stats.categories), [(HOSPITALITY, 2, 5), (HEALTH, 1, 0)])
+        self.assertEqual(self.counts(stats.employers), [("HOTEL d.o.o.", 2, 5)])
+        self.assertEqual(self.counts(stats.employment_types),
+                         [("Na neodređeno", 1, 3), ("Na određeno", 1, 2), ("sezonski", 1, 3)])
+        self.assertEqual(self.counts(stats.education),
+                         [("Srednja škola 3 godine", 2, 5), ("Srednja škola 4 godine", 1, 3)])
+        self.assertEqual(self.counts(stats.working_hours), [("20 sati tjedno", 1, 2), ("Puno radno vrijeme", 1, 3)])
+        self.assertEqual(self.counts(stats.accommodation), [("Nema smještaja", 1, 2), ("Zajednički smještaj", 1, 3)])
+
+    async def test_uses_the_search_filters(self) -> None:
+        self.assertEqual((await self.aggregates(terms=("kuhar",))).jobs, 1)
+        self.assertEqual((await self.aggregates(category="zdravstvo")).jobs, 1)
+        # Expired jobs count only without open_on; blank values are left out.
+        zagreb = await self.aggregates(county_id=self.county_ids["grad-zagreb"], open_on=None)
+        self.assertEqual((zagreb.jobs, zagreb.workers_needed), (2, 5))
+        self.assertEqual([county.code for county in zagreb.counties], ["grad-zagreb"])
+        self.assertEqual(zagreb.experience, ())
+        nothing = await self.aggregates(terms=("pilot",))
+        self.assertEqual((nothing.jobs, nothing.workers_needed, nothing.counties, nothing.employers), (0, 0, (), ()))
+
+    async def test_top_limits_only_long_breakdowns(self) -> None:
+        stats = await self.aggregates(top=1)
+        self.assertEqual((len(stats.employers), len(stats.working_hours), len(stats.experience)), (1, 1, 1))
+        self.assertEqual((len(stats.categories), len(stats.employment_types), len(stats.accommodation)), (2, 3, 2))
