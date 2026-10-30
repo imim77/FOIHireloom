@@ -1,5 +1,4 @@
 import hashlib
-import html
 import re
 from datetime import date, datetime
 
@@ -9,16 +8,14 @@ from defusedxml.ElementTree import ParseError, fromstring
 from FOIHireloom.dto.job import ParsedFeedDTO, ParsedJobDTO
 from FOIHireloom.exceptions import HzzFeedParseError
 
+from .hzz_text import DANGLING_TAG, decode_entities, html_to_text
+
 LINK = re.compile(r"^https?://burzarada\.hzz\.hr/RadnoMjesto_Ispis\.aspx\?WebSifra=(\d+)$")
 CANONICAL_URL = "https://burzarada.hzz.hr/RadnoMjesto_Ispis.aspx?WebSifra={}"
 DESCRIPTION_PREFIX = "Opis posla:"
 SUFFIX_START = ", Kategorija: "
 SUFFIX_LABEL = re.compile(r", (Kategorija|Rok za prijavu|Mjesto rada|Općina|Županija): ")
 DEADLINE = re.compile(r"(\d{2})\.(\d{2})\.(\d{4})")
-BLOCK_TAG = re.compile(r"</?(?:p|br|li|ul|ol|div|h[1-6]|tr|table)\b[^>]*>", re.I)
-TAG = re.compile(r"<[^>]*>")
-DANGLING_TAG = re.compile(r"<[^>]*$")
-NBSP = re.compile(r"&nbsp;", re.I)
 # HZZ cuts descriptions at 512 characters before its last escaping pass.
 TRUNCATION_LENGTH = 500
 TITLE_LIMIT = 150
@@ -82,7 +79,7 @@ class HzzFeedParser:
             canonical_url=CANONICAL_URL.format(match.group(1)),
             title=title,
             description_raw=raw,
-            description_text=self._text(body),
+            description_text=html_to_text(decode_entities(body)),
             published_on=published_on,
             deadline_on=deadline_on,
             category=fields.get("Kategorija"),
@@ -110,7 +107,7 @@ class HzzFeedParser:
         for current, following in zip(labels, labels[1:] + [None]):
             if following is None and current.group(1) != "Rok za prijavu":
                 continue
-            value = cls._decode(suffix[current.end():following.start() if following else None]).strip()
+            value = decode_entities(suffix[current.end():following.start() if following else None]).strip()
             if value:
                 fields[current.group(1)] = value
         return description[:start], fields, labels[-1].group(1) == "Županija"
@@ -124,20 +121,3 @@ class HzzFeedParser:
             return date(int(match.group(3)), int(match.group(2)), int(match.group(1)))
         except ValueError:
             return None
-
-    @staticmethod
-    def _decode(text: str) -> str:
-        """Undo HZZ's repeated escaping, e.g. "&amp;amp;AMP;NBSP;"."""
-        for _ in range(5):
-            decoded = html.unescape(NBSP.sub(" ", text))
-            if decoded == text:
-                break
-            text = decoded
-        return text
-
-    @classmethod
-    def _text(cls, body: str) -> str | None:
-        text = cls._decode(body)
-        text = TAG.sub("", DANGLING_TAG.sub("", BLOCK_TAG.sub("\n", text)))
-        lines = (" ".join(line.replace(" ", " ").split()) for line in text.splitlines())
-        return "\n".join(line for line in lines if line) or None

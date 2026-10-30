@@ -3,6 +3,7 @@
 from .concrete import (
     CroatianCountyCatalog,
     HzzFeedParser,
+    HzzJobPageParser,
     JobSearchService,
     JobSyncService,
     SourceFeedRegistrationPlanner,
@@ -13,6 +14,7 @@ from .interfaces import JobSearchServiceInterface, JobSyncServiceInterface, Sour
 __all__ = [
     "CroatianCountyCatalog",
     "HzzFeedParser",
+    "HzzJobPageParser",
     "JobSearchService",
     "JobSearchServiceInterface",
     "JobSyncService",
