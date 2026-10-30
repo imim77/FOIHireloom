@@ -99,7 +99,19 @@ class JobSearchService(JobSearchServiceInterface):
             county = self._first_county(await work.job_feed_memberships.list_counties([job_id])).get(job_id)
             return JobDetailsDTO.model_validate(job).model_copy(update={
                 **self._county_fields(county),
-                "deadline_passed": self._deadline_passed(job, self._local_date(now)),
+                **self._page_fields(job, self._local_date(now)),
+                "description_text": job.page_description_text or job.description_text,
+                "description_source": "job_page" if job.page_description_text else "feed" if job.description_text else None,
+                "valid_from": job.page_valid_from,
+                "workers_needed": job.page_workers_needed,
+                "employment_type": job.page_employment_type,
+                "working_hours": job.page_working_hours,
+                "work_schedule": job.page_work_schedule,
+                "accommodation": job.page_accommodation,
+                "transport_allowance": job.page_transport_allowance,
+                "education": job.page_education,
+                "experience": job.page_experience,
+                "details_checked_at": job.page_checked_at,
                 "listings": tuple(
                     listing.model_copy(update={"data_status": self._status([listing.feed_last_success_at], now)})
                     for listing in listings
@@ -195,14 +207,32 @@ class JobSearchService(JobSearchServiceInterface):
         definition = self._counties.match(county)
         return definition.code if definition is not None else county.casefold()
 
-    @staticmethod
-    def _deadline_passed(job: Job, today: date) -> bool | None:
-        return None if job.deadline_on is None else job.deadline_on < today
-
     def _summary(self, job: Job, today: date, county: JobCountyDTO | None) -> JobSummaryDTO:
         return JobSummaryDTO.model_validate(job).model_copy(
-            update={"deadline_passed": self._deadline_passed(job, today), **self._county_fields(county)}
+            update={**self._page_fields(job, today), **self._county_fields(county)}
         )
+
+    @staticmethod
+    def _page_fields(job: Job, today: date) -> dict[str, object]:
+        """Values the job page refines once read; page columns stay None until then.
+
+        Quality flags for a weakness the page made up for are dropped.
+        """
+        deadline = job.page_valid_until or job.deadline_on
+        resolved = {
+            "title_missing": bool(job.page_title), "title_truncated": bool(job.page_title),
+            "description_truncated": bool(job.page_description_text), "deadline_unknown": deadline is not None,
+        }
+        return {
+            "title": job.page_title or job.title,
+            "deadline_on": deadline,
+            "deadline_source": "job_page" if job.page_valid_until else "feed" if job.deadline_on else None,
+            "deadline_passed": None if deadline is None else deadline < today,
+            "work_place": job.page_work_place,
+            "employer_name": job.page_employer_name,
+            "quality_flags": tuple(flag for flag in job.quality_flags if not resolved.get(flag)),
+            "details_status": job.page_status,
+        }
 
     @staticmethod
     def _first_county(counties: Sequence[JobCountyDTO]) -> dict[int, JobCountyDTO]:

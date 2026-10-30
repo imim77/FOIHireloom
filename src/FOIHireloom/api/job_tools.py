@@ -60,14 +60,16 @@ class JobTools(ToolGroup):
         ) -> JobSearchPageDTO:
             """Search Croatian Employment Service (HZZ) job advertisements, newest first.
 
-            Returns jobs still listed in an HZZ county feed. Jobs whose known
-            deadline has passed are left out unless include_expired is true;
-            jobs without a stated deadline are included, with deadline_passed
-            null. Null fields were not stated by the source; display_title
-            labels jobs without a title. Show display_location as the job's
-            location: HZZ states the town for only about half of the jobs, and
-            for the rest the county is the most precise known location. Use
-            get_job for the description, which sometimes names the place, and
+            Returns jobs still listed in an HZZ county feed. deadline_on is
+            the application deadline; with deadline_source 'job_page' it is
+            the "Natječaj vrijedi do" date from the job's HZZ page. Jobs whose
+            known deadline has passed are left out unless include_expired is
+            true; jobs without a known deadline are included, with
+            deadline_passed null. Null fields were not stated by the source;
+            display_title labels jobs without a title. Show display_location
+            as the job's location: it is the place of work from the job page
+            when that has been read, otherwise the town from the feed or, when
+            HZZ gave none, the county. Use get_job for the full details, and
             canonical_url to view or apply on the HZZ site.
 
             coverage says how current the searched counties are. When
@@ -84,10 +86,15 @@ class JobTools(ToolGroup):
             ctx: Context,
             job_id: Annotated[int, Field(ge=1, le=2**63 - 1, description="id of a job from search_jobs.")],
         ) -> JobDetailsDTO:
-            """Return one stored job advertisement with its description and county listings.
+            """Return one stored job advertisement with its details and county listings.
 
-            HZZ cuts descriptions at 512 characters; quality_flags marks fields
-            that may be incomplete. A listing with presence_status 'missing'
+            Once the job's HZZ page has been read (details_status 'fetched'),
+            description_text is the full text and the employment type, working
+            hours, accommodation, education and experience come from the page.
+            Before that, description_text is the feed's summary, which HZZ
+            cuts at 512 characters; quality_flags marks fields that may be
+            incomplete. details_status 'unavailable' means HZZ showed an error
+            page, not that the job closed. A listing with presence_status 'missing'
             means the job left that feed, not that it was filled or closed;
             availability_status stays 'unknown' without evidence either way.
             A listing is only as current as its feed: data_status 'stale' or

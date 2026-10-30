@@ -154,9 +154,15 @@ def listed_condition(county_id: int | None = None) -> ColumnElement[bool]:
     return listed.exists()
 
 
+def effective_deadline() -> ColumnElement[date]:
+    """The closing date from the job page ("Natječaj vrijedi do"), else the feed's deadline."""
+    return func.coalesce(Job.page_valid_until, Job.deadline_on)
+
+
 def open_condition(open_on: date) -> ColumnElement[bool]:
     """True unless the job's known deadline is before open_on."""
-    return or_(Job.deadline_on.is_(None), Job.deadline_on >= open_on)
+    deadline = effective_deadline()
+    return or_(deadline.is_(None), deadline >= open_on)
 
 
 def page_due_condition(retry_before: datetime) -> ColumnElement[bool]:

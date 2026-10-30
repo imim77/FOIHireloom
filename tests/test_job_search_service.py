@@ -249,3 +249,48 @@ class JobSearchServiceTests(ModelTestCase):
                          ("Grad Zagreb", "Grad Zagreb (mjesto rada nije navedeno)"))
         self.assertEqual(page.jobs[0].model_copy(update={"location_text": None, "county_name": None}).display_location,
                          "Mjesto rada nije navedeno")
+
+    async def set_page(self, key: str, **values: object) -> None:
+        await self.session.execute(update(Job).where(Job.id == self.ids[key]).values(
+            page_status="fetched", page_checked_at=func.now(), page_fetched_at=func.now(), page_source_hash=key,
+            **values))
+        await self.session.commit()
+
+    async def test_job_page_values_take_precedence_over_the_feed(self) -> None:
+        # The feed's deadline for the cleaner has passed, but its page says the job is still open.
+        await self.set_page("cleaner", page_valid_until=self.today + timedelta(days=5),
+                            page_work_place="SESVETE, GRAD ZAGREB")
+        # The feed gave the cook no deadline; its page says the deadline was yesterday.
+        await self.set_page("cook", page_valid_until=self.today - timedelta(days=1), page_title="KUHAR/KUHARICA - SAMOSTALNI",
+                            page_work_place="BJELOVAR, BJELOVARSKO-BILOGORSKA ŽUPANIJA", page_employer_name="HOTEL d.o.o.",
+                            page_description_text="Puni opis posla.", page_employment_type="Na neodređeno")
+        await self.set_page("nurse", page_description_text="Cijeli opis.", page_work_place="ZAGREB")
+        self.assertEqual(await self.keys(), ["driver", "cleaner", "nurse", "waiter"])
+
+        page = await self.service.search(JobSearchFiltersDTO(include_expired=True))
+        jobs = {job.source_job_id: job for job in page.jobs}
+        cleaner, cook, nurse = jobs["cleaner"], jobs["cook"], jobs["nurse"]
+        self.assertEqual((cleaner.deadline_on, cleaner.deadline_source, cleaner.deadline_passed),
+                         (self.today + timedelta(days=5), "job_page", False))
+        self.assertEqual(cleaner.display_location, "SESVETE, GRAD ZAGREB")
+        self.assertEqual((cook.title, cook.deadline_source, cook.deadline_passed, cook.employer_name),
+                         ("KUHAR/KUHARICA - SAMOSTALNI", "job_page", True, "HOTEL d.o.o."))
+        self.assertEqual(cook.display_location, "BJELOVAR, BJELOVARSKO-BILOGORSKA ŽUPANIJA")
+        # The feed's deadline stays in use when the page has none; Zagreb's page omits the county.
+        self.assertEqual((nurse.deadline_on, nurse.deadline_source, nurse.display_location),
+                         (self.today, "feed", "ZAGREB, Grad Zagreb"))
+        self.assertEqual(nurse.quality_flags, ())
+        self.assertEqual((jobs["driver"].details_status, jobs["driver"].deadline_source), ("pending", "feed"))
+        self.assertIsNone(jobs["waiter"].deadline_source)
+
+        details = await self.service.get_job(self.ids["cook"])
+        self.assertEqual((details.description_text, details.description_source, details.employment_type),
+                         ("Puni opis posla.", "job_page", "Na neodređeno"))
+        self.assertEqual(details.details_status, "fetched")
+        self.assertIsNotNone(details.details_checked_at)
+        feed_only = await self.service.get_job(self.ids["driver"])
+        self.assertEqual((feed_only.description_source, feed_only.employment_type, feed_only.details_checked_at),
+                         (None, None, None))
+        self.assertEqual((await self.service.get_job(self.ids["gone"])).description_source, None)
+        regions = {region.code: region.open_jobs for region in await self.service.list_regions()}
+        self.assertEqual(regions["bjelovarsko-bilogorska"], 1)
