@@ -1,6 +1,6 @@
 import base64
-from collections.abc import Callable
-from datetime import date
+from collections.abc import Callable, Sequence
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
@@ -11,6 +11,9 @@ from FOIHireloom.db.uow.base import UnitOfWork
 from FOIHireloom.dto.job_search import (
     SEARCH_TERM,
     CategoryDTO,
+    CountyFeedCheckDTO,
+    CoverageDTO,
+    DataStatus,
     JobCursorDTO,
     JobDetailsDTO,
     JobSearchCriteriaDTO,
@@ -18,6 +21,7 @@ from FOIHireloom.dto.job_search import (
     JobSearchPageDTO,
     JobSummaryDTO,
     RegionDTO,
+    RegionFreshnessDTO,
 )
 from FOIHireloom.exceptions import InvalidJobSearchError, NotFoundError
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
@@ -28,28 +32,43 @@ from .croatian_counties import CroatianCountyCatalog
 LOCAL_TIME_ZONE = ZoneInfo("Europe/Zagreb")
 # The same folding as the stored search vector.
 SEARCH_FOLD = str.maketrans(SEARCH_FOLD_FROM, SEARCH_FOLD_TO)
+# Counties named in a coverage warning before the rest are only counted.
+WARNING_REGION_LIMIT = 5
 
 
 class JobSearchService(JobSearchServiceInterface):
     """Missing from every feed does not mean closed: such jobs leave the
     default search but stay available through get_job().
+
+    A county's data is stale once its feeds last succeeded more than
+    stale_after ago. Every search page reports the freshness of the counties
+    it covered, so a gap in the data is not mistaken for an absence of jobs.
     """
 
-    def __init__(self, uow_factory: Callable[[], UnitOfWork], counties: CroatianCountyCatalog) -> None:
+    def __init__(
+        self,
+        uow_factory: Callable[[], UnitOfWork],
+        counties: CroatianCountyCatalog,
+        stale_after: timedelta = timedelta(hours=6),
+    ) -> None:
+        if stale_after <= timedelta(0):
+            raise ValueError("stale_after must be positive.")
         self._uow_factory = uow_factory
         self._counties = counties
+        self._stale_after = stale_after
 
     async def search(self, filters: JobSearchFiltersDTO) -> JobSearchPageDTO:
         terms = self._terms(filters.query)
         after = self._decode_cursor(filters.cursor) if filters.cursor else None
         async with self._uow_factory() as work:
-            today = await self._today(work)
-            county_id = None
+            now = await work.transaction_time()
+            today = self._local_date(now)
+            county_id = county_code = None
             if county := (filters.county or "").strip():
                 entity = await work.counties.get_by_code(self._county_code(county))
                 if entity is None:
                     raise NotFoundError("county", county)
-                county_id = entity.id
+                county_id, county_code = entity.id, entity.code
             criteria = JobSearchCriteriaDTO(
                 terms=terms,
                 county_id=county_id,
@@ -60,33 +79,102 @@ class JobSearchService(JobSearchServiceInterface):
                 limit=filters.limit + 1,
             )
             jobs = [self._summary(job, today) for job in await work.jobs.search(criteria)]
+            regions = self._freshness(await work.counties.list_feed_checks(), now)
+        if county_code is not None:
+            regions = [region for region in regions if region.code == county_code]
         page = jobs[:filters.limit]
         next_cursor = self._encode_cursor(page[-1]) if len(jobs) > filters.limit else None
-        return JobSearchPageDTO(jobs=tuple(page), next_cursor=next_cursor)
+        return JobSearchPageDTO(jobs=tuple(page), next_cursor=next_cursor, coverage=self._coverage(regions))
 
     async def get_job(self, job_id: int) -> JobDetailsDTO:
         async with self._uow_factory() as work:
             job = await work.jobs.get_by_id(job_id)
             if job is None:
                 raise NotFoundError("job", str(job_id))
-            today = await self._today(work)
+            now = await work.transaction_time()
             listings = await work.job_feed_memberships.list_listings(job_id)
             return JobDetailsDTO.model_validate(job).model_copy(update={
-                "deadline_passed": self._deadline_passed(job, today),
-                "listings": tuple(listings),
+                "deadline_passed": self._deadline_passed(job, self._local_date(now)),
+                "listings": tuple(
+                    listing.model_copy(update={"data_status": self._status([listing.feed_last_success_at], now)})
+                    for listing in listings
+                ),
             })
 
     async def list_regions(self) -> tuple[RegionDTO, ...]:
         async with self._uow_factory() as work:
-            return tuple(await work.counties.list_regions(await self._today(work)))
+            now = await work.transaction_time()
+            regions = await work.counties.list_regions(self._local_date(now))
+            freshness = {region.code: region for region in self._freshness(await work.counties.list_feed_checks(), now)}
+        return tuple(
+            region.model_copy(update={
+                "data_status": freshness[region.code].data_status,
+                "last_success_at": freshness[region.code].last_success_at,
+            })
+            for region in regions
+        )
 
     async def list_categories(self) -> tuple[CategoryDTO, ...]:
         async with self._uow_factory() as work:
-            return tuple(await work.jobs.list_categories(await self._today(work)))
+            now = await work.transaction_time()
+            return tuple(await work.jobs.list_categories(self._local_date(now)))
 
     @staticmethod
-    async def _today(work: UnitOfWork) -> date:
-        return (await work.transaction_time()).astimezone(LOCAL_TIME_ZONE).date()
+    def _local_date(moment: datetime) -> date:
+        return moment.astimezone(LOCAL_TIME_ZONE).date()
+
+    def _status(self, successes: Sequence[datetime | None], now: datetime) -> DataStatus:
+        if not successes or None in successes:
+            return "unavailable"
+        return "stale" if min(successes) < now - self._stale_after else "fresh"
+
+    def _freshness(self, checks: Sequence[CountyFeedCheckDTO], now: datetime) -> list[RegionFreshnessDTO]:
+        counties: dict[str, tuple[str, list[datetime | None]]] = {}
+        for check in checks:
+            _, successes = counties.setdefault(check.code, (check.name, []))
+            if check.feed_id is not None:
+                successes.append(check.last_success_at)
+        return [
+            RegionFreshnessDTO(
+                code=code, name=name, data_status=self._status(successes, now),
+                last_success_at=min((moment for moment in successes if moment is not None), default=None),
+            )
+            for code, (name, successes) in counties.items()
+        ]
+
+    def _coverage(self, regions: Sequence[RegionFreshnessDTO]) -> CoverageDTO:
+        affected = tuple(region for region in regions if region.data_status != "fresh")
+        statuses = {region.data_status for region in affected}
+        successes = [region.last_success_at for region in regions if region.last_success_at is not None]
+        return CoverageDTO(
+            data_status="unavailable" if "unavailable" in statuses or not regions else "stale" if affected else "fresh",
+            data_as_of=min(successes, default=None),
+            stale_after_hours=self._stale_after.total_seconds() / 3600,
+            affected_regions=affected,
+            warning=self._warning(affected, len(regions)),
+        )
+
+    def _warning(self, affected: Sequence[RegionFreshnessDTO], total: int) -> str | None:
+        if total == 0:
+            return "No counties are registered, so there is no job data to search."
+        if not affected:
+            return None
+        named = ", ".join(self._describe(region) for region in affected[:WARNING_REGION_LIMIT])
+        if len(affected) > WARNING_REGION_LIMIT:
+            named += f" and {len(affected) - WARNING_REGION_LIMIT} more"
+        scope = "the requested county" if total == 1 else f"{len(affected)} of {total} counties"
+        hours = f"{self._stale_after.total_seconds() / 3600:g}"
+        return (f"Job data for {scope} was not updated in the last {hours} hours or is unavailable: {named}. "
+                "Results there may be outdated or incomplete; a job missing from them may still be advertised by HZZ.")
+
+    @staticmethod
+    def _describe(region: RegionFreshnessDTO) -> str:
+        if region.last_success_at is None:
+            return f"{region.name} (never loaded)"
+        updated = f"last updated {region.last_success_at.astimezone(UTC):%Y-%m-%d %H:%M} UTC"
+        if region.data_status == "unavailable":
+            updated += ", a feed never loaded"
+        return f"{region.name} ({updated})"
 
     @staticmethod
     def _terms(query: str | None) -> tuple[str, ...]:

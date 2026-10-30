@@ -1,11 +1,11 @@
 from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.dto.county import CountyDefinitionDTO, CountyDTO
-from FOIHireloom.dto.job_search import RegionDTO
+from FOIHireloom.dto.job_search import CountyFeedCheckDTO, RegionDTO
 from FOIHireloom.dao.concrete.sqla_job import open_condition
 from FOIHireloom.dao.interfaces.county import CountyRepository
 
@@ -39,6 +39,19 @@ class SqlAlchemyCountyRepository(CountyRepository):
         statement = select(County.code, County.name, open_jobs.label("open_jobs")).order_by(County.name)
         result = await self._session.execute(statement)
         return [RegionDTO.model_validate(row) for row in result.all()]
+
+    async def list_feed_checks(self) -> list[CountyFeedCheckDTO]:
+        statement = (
+            select(County.code, County.name, SourceFeed.id.label("feed_id"), SourceFeed.last_success_at)
+            .outerjoin(SourceFeed, and_(
+                SourceFeed.county_id == County.id,
+                SourceFeed.scope == "county",
+                SourceFeed.enabled.is_(True),
+            ))
+            .order_by(County.name, SourceFeed.id)
+        )
+        result = await self._session.execute(statement)
+        return [CountyFeedCheckDTO.model_validate(row) for row in result.all()]
 
     async def add(self, county: County) -> None:
         self._session.add(county)

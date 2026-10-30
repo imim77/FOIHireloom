@@ -3,7 +3,7 @@ from datetime import date
 
 from FOIHireloom.db.models import County
 from FOIHireloom.dto.county import CountyDefinitionDTO, CountyDTO
-from FOIHireloom.dto.job_search import RegionDTO
+from FOIHireloom.dto.job_search import CountyFeedCheckDTO, RegionDTO
 
 
 class CountyRepository(ABC):
@@ -20,6 +20,13 @@ class CountyRepository(ABC):
     @abstractmethod
     async def list_regions(self, open_on: date) -> list[RegionDTO]:
         """Return every county by name with its listed jobs whose known deadline is not before open_on."""
+
+    @abstractmethod
+    async def list_feed_checks(self) -> list[CountyFeedCheckDTO]:
+        """Return each county's enabled feeds with their last success, by county name.
+
+        A county without an enabled feed appears once with feed_id None.
+        """
 
     @abstractmethod
     async def add(self, county: County) -> None:

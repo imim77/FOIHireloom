@@ -1,16 +1,16 @@
 import base64
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from uuid import uuid4
 
 from pydantic import ValidationError
-from sqlalchemy import func, text
+from sqlalchemy import func, text, update
 
 from model_test_case import ModelTestCase
 
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
-from FOIHireloom.dto.job_search import JobSearchCriteriaDTO, JobSearchFiltersDTO
+from FOIHireloom.dto.job_search import JobSearchCriteriaDTO, JobSearchFiltersDTO, JobSummaryDTO
 from FOIHireloom.exceptions import InvalidJobSearchError, NotFoundError
 from FOIHireloom.services import CroatianCountyCatalog, JobSearchService
 
@@ -33,12 +33,14 @@ class JobSearchServiceTests(ModelTestCase):
         await self.session.flush()
         feeds = {
             name: SourceFeed(county_id=counties[code].id, ckan_resource_id=uuid4(), label=name, scope="county",
-                             feed_url=f"http://burzarada.hzz.hr/rss/{name}.xml")
+                             feed_url=f"http://burzarada.hzz.hr/rss/{name}.xml", last_checked_at=func.now(),
+                             last_success_at=func.now())
             for name, code in (("bj1", "bjelovarsko-bilogorska"), ("bj2", "bjelovarsko-bilogorska"),
                                ("zg", "grad-zagreb"))
         }
         self.session.add_all(feeds.values())
         await self.session.flush()
+        self.feed_ids = {name: feed.id for name, feed in feeds.items()}
         self.ids = {}
         for key, values, listings in (
             ("cook", dict(title="KUHAR/KUHARICA", description_text="Rad u restoranu.", category=HOSPITALITY,
@@ -65,6 +67,13 @@ class JobSearchServiceTests(ModelTestCase):
         await self.session.commit()
         self.service = JobSearchService(SqlAlchemyUnitOfWorkFactory(SessionManager(self.engine)),
                                         CroatianCountyCatalog())
+
+    async def set_feed(self, name: str, *, success_hours_ago: float | None = 0, enabled: bool = True) -> None:
+        """Move a feed's last success into the past, or clear it with None."""
+        success = None if success_hours_ago is None else func.now() - timedelta(hours=success_hours_ago)
+        await self.session.execute(update(SourceFeed).where(SourceFeed.id == self.feed_ids[name]).values(
+            last_success_at=success, enabled=enabled))
+        await self.session.commit()
 
     async def keys(self, **filters: object) -> list[str]:
         page = await self.service.search(JobSearchFiltersDTO(**filters))
@@ -168,3 +177,61 @@ class JobSearchServiceTests(ModelTestCase):
                          [("bjelovarsko-bilogorska", 2), ("grad-zagreb", 2), ("istarska", 0)])
         categories = await self.service.list_categories()
         self.assertEqual([(category.name, category.open_jobs) for category in categories], [(HOSPITALITY, 2)])
+
+    async def test_coverage_names_counties_without_fresh_data(self) -> None:
+        coverage = (await self.service.search(JobSearchFiltersDTO())).coverage
+        # Istarska has no feed at all, so its jobs cannot be in the results.
+        self.assertEqual(coverage.data_status, "unavailable")
+        self.assertEqual([(region.code, region.data_status, region.last_success_at) for region in
+                          coverage.affected_regions], [("istarska", "unavailable", None)])
+        self.assertIn("1 of 3 counties", coverage.warning)
+        self.assertIn("Istarska županija (never loaded)", coverage.warning)
+        self.assertEqual(coverage.stale_after_hours, 6)
+        zagreb = (await self.service.search(JobSearchFiltersDTO(county="grad-zagreb"))).coverage
+        self.assertEqual((zagreb.data_status, zagreb.affected_regions, zagreb.warning), ("fresh", (), None))
+        self.assertIsInstance(zagreb.data_as_of, datetime)
+
+    async def test_old_or_missing_feed_success_makes_a_county_stale_or_unavailable(self) -> None:
+        await self.set_feed("zg", success_hours_ago=7)
+        zagreb = (await self.service.search(JobSearchFiltersDTO(county="Grad Zagreb"))).coverage
+        self.assertEqual(zagreb.data_status, "stale")
+        self.assertRegex(zagreb.warning, r"^Job data for the requested county was not updated in the last 6 hours")
+        self.assertRegex(zagreb.warning, r"Grad Zagreb \(last updated \d{4}-\d\d-\d\d \d\d:\d\d UTC\)")
+        self.assertEqual(zagreb.data_as_of, zagreb.affected_regions[0].last_success_at)
+        # The results themselves are unchanged; only the warning tells them apart.
+        self.assertEqual(await self.keys(county="Grad Zagreb"), ["driver", "nurse"])
+
+        await self.set_feed("bj2", success_hours_ago=None)
+        regions = {region.code: region for region in await self.service.list_regions()}
+        self.assertEqual({code: region.data_status for code, region in regions.items()},
+                         {"bjelovarsko-bilogorska": "unavailable", "grad-zagreb": "stale", "istarska": "unavailable"})
+        self.assertIsNotNone(regions["bjelovarsko-bilogorska"].last_success_at)
+        self.assertEqual(regions["bjelovarsko-bilogorska"].open_jobs, 2)
+        warning = (await self.service.search(JobSearchFiltersDTO())).coverage.warning
+        self.assertIn("3 of 3 counties", warning)
+        self.assertIn("UTC, a feed never loaded)", warning)
+
+        # A disabled feed is not expected to update, so it no longer counts.
+        await self.set_feed("bj2", success_hours_ago=None, enabled=False)
+        bjelovar = (await self.service.search(JobSearchFiltersDTO(county="bjelovarsko-bilogorska"))).coverage
+        self.assertEqual(bjelovar.data_status, "fresh")
+
+    async def test_regions_and_listings_report_feed_freshness(self) -> None:
+        await self.set_feed("bj1", success_hours_ago=8)
+        regions = {region.code: region for region in await self.service.list_regions()}
+        self.assertEqual((regions["grad-zagreb"].data_status, regions["bjelovarsko-bilogorska"].data_status),
+                         ("fresh", "stale"))
+        self.assertIsNone(regions["istarska"].last_success_at)
+        cook = await self.service.get_job(self.ids["cook"])
+        self.assertEqual(sorted(listing.data_status for listing in cook.listings), ["fresh", "stale"])
+        self.assertTrue(all(listing.feed_last_success_at for listing in cook.listings))
+
+    async def test_jobs_without_a_title_get_a_neutral_display_title(self) -> None:
+        page = await self.service.search(JobSearchFiltersDTO(query="kuhar"))
+        self.assertEqual(page.jobs[0].display_title, "KUHAR/KUHARICA")
+        untitled = page.jobs[0].model_copy(update={"title": None, "source_job_id": "167397641"})
+        self.assertEqual(untitled.display_title, "Oglas HZZ 167397641")
+        self.assertEqual(JobSummaryDTO.model_validate(untitled.model_dump() | {"source_job_id": None}).display_title,
+                         f"Oglas HZZ bez naslova ({untitled.id})")
+        with self.assertRaises(ValueError):
+            JobSearchService(lambda: None, CroatianCountyCatalog(), timedelta(0))

@@ -57,6 +57,10 @@ class JobToolsDatabaseTests(ModelTestCase):
                 await client.call_tool("get_job", {"job_id": max(self.job_ids) + 1})
         self.assertEqual([job["id"] for job in first["jobs"] + second["jobs"]], self.job_ids[::-1])
         self.assertIsNone(second["next_cursor"])
+        # The feed has never been loaded successfully, which the result must say.
+        self.assertEqual(first["coverage"]["data_status"], "unavailable")
+        self.assertIn("Grad Zagreb (never loaded)", first["coverage"]["warning"])
         self.assertEqual((job["title"], job["description_text"]), ("ČISTAČICA 0", "Čišćenje ureda."))
         self.assertEqual(job["listings"][0]["county_code"], "grad-zagreb")
-        self.assertEqual(regions, [{"code": "grad-zagreb", "name": "Grad Zagreb", "open_jobs": 3}])
+        self.assertEqual(regions, [{"code": "grad-zagreb", "name": "Grad Zagreb", "open_jobs": 3,
+                                    "data_status": "unavailable", "last_success_at": None}])

@@ -9,6 +9,7 @@ from fastmcp.exceptions import ToolError
 from FOIHireloom.api.mcp_server import McpServer
 from FOIHireloom.dto.job_search import (
     CategoryDTO,
+    CoverageDTO,
     JobDetailsDTO,
     JobSearchFiltersDTO,
     JobSearchPageDTO,
@@ -19,10 +20,12 @@ from FOIHireloom.exceptions import InvalidJobSearchError, NotFoundError, Persist
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 
 SEEN = datetime(2026, 10, 29, 3, 31, tzinfo=UTC)
-SUMMARY = dict(id=7, title="KUHAR/KUHARICA", category="UGOSTITELJI, RADNICI U TURIZMU", location_text="BJELOVAR",
+SUMMARY = dict(id=7, source_job_id="1", title="KUHAR/KUHARICA", category="UGOSTITELJI, RADNICI U TURIZMU", location_text="BJELOVAR",
                municipality="BJELOVAR", published_on=date(2026, 10, 27), deadline_on=None, deadline_passed=None,
                canonical_url="https://burzarada.hzz.hr/RadnoMjesto_Ispis.aspx?WebSifra=1", quality_flags=(),
                last_seen_at=SEEN)
+COVERAGE = CoverageDTO(data_status="stale", data_as_of=SEEN, stale_after_hours=6, affected_regions=(),
+                       warning="Job data for the requested county was not updated in the last 6 hours.")
 
 
 class FakeJobSearchService(JobSearchServiceInterface):
@@ -33,16 +36,16 @@ class FakeJobSearchService(JobSearchServiceInterface):
     async def search(self, filters: JobSearchFiltersDTO) -> JobSearchPageDTO:
         self.filters.append(filters)
         self.raise_error()
-        return JobSearchPageDTO(jobs=(JobSummaryDTO(**SUMMARY),), next_cursor="next")
+        return JobSearchPageDTO(jobs=(JobSummaryDTO(**SUMMARY),), next_cursor="next", coverage=COVERAGE)
 
     async def get_job(self, job_id: int) -> JobDetailsDTO:
         self.raise_error()
-        return JobDetailsDTO(**SUMMARY | {"id": job_id}, source_job_id="1", description_text="Rad u kuhinji.",
+        return JobDetailsDTO(**SUMMARY | {"id": job_id}, description_text="Rad u kuhinji.",
                              availability_status="unknown", first_seen_at=SEEN, content_changed_at=SEEN)
 
     async def list_regions(self) -> tuple[RegionDTO, ...]:
         self.raise_error()
-        return (RegionDTO(code="grad-zagreb", name="Grad Zagreb", open_jobs=3),)
+        return (RegionDTO(code="grad-zagreb", name="Grad Zagreb", open_jobs=3, data_status="fresh", last_success_at=SEEN),)
 
     async def list_categories(self) -> tuple[CategoryDTO, ...]:
         self.raise_error()
@@ -90,6 +93,9 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(page["next_cursor"], "next")
         self.assertEqual(page["jobs"][0]["published_on"], "2026-10-27")
         self.assertIsNone(page["jobs"][0]["deadline_passed"])
+        self.assertEqual(page["jobs"][0]["display_title"], "KUHAR/KUHARICA")
+        self.assertEqual((page["coverage"]["data_status"], page["coverage"]["warning"]),
+                         ("stale", COVERAGE.warning))
 
     async def test_other_tools_return_service_results(self) -> None:
         async with Client(self.server) as client:
@@ -97,7 +103,8 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
             regions = (await client.call_tool("list_regions", {})).structured_content
             categories = (await client.call_tool("list_categories", {})).structured_content
         self.assertEqual((job["id"], job["description_text"], job["listings"]), (42, "Rad u kuhinji.", []))
-        self.assertEqual(regions["result"], [{"code": "grad-zagreb", "name": "Grad Zagreb", "open_jobs": 3}])
+        self.assertEqual(regions["result"], [{"code": "grad-zagreb", "name": "Grad Zagreb", "open_jobs": 3,
+                                              "data_status": "fresh", "last_success_at": "2026-10-29T03:31:00Z"}])
         self.assertEqual(categories["result"][0]["open_jobs"], 2)
 
     async def test_invalid_arguments_are_rejected_before_the_service(self) -> None:

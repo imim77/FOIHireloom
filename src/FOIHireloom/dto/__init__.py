@@ -5,6 +5,8 @@ from .hzz_feed import FeedResponseDTO
 from .job import ParsedFeedDTO, ParsedJobDTO
 from .job_search import (
     CategoryDTO,
+    CountyFeedCheckDTO,
+    CoverageDTO,
     JobCursorDTO,
     JobDetailsDTO,
     JobListingDTO,
@@ -13,6 +15,7 @@ from .job_search import (
     JobSearchPageDTO,
     JobSummaryDTO,
     RegionDTO,
+    RegionFreshnessDTO,
 )
 from .job_sync import (
     FeedCheckDTO,
@@ -37,7 +40,9 @@ __all__ = [
     "CkanPackage",
     "CkanResource",
     "CountyDTO",
+    "CountyFeedCheckDTO",
     "CountyDefinitionDTO",
+    "CoverageDTO",
     "FeedCheckDTO",
     "FeedResponseDTO",
     "FeedSyncResultDTO",
@@ -56,6 +61,7 @@ __all__ = [
     "ParsedJobDTO",
     "PlannedSourceDTO",
     "RegionDTO",
+    "RegionFreshnessDTO",
     "RegistrationPlanDTO",
     "RegistrationPreviewDTO",
     "RegistrationResultDTO",

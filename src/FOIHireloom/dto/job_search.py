@@ -1,13 +1,18 @@
 import re
 from datetime import date, datetime
+from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, computed_field, field_validator
 
 from .base import ModelConfigBaseModel
 
 MAX_PAGE_SIZE = 20
 MAX_QUERY_LENGTH = 200
 SEARCH_TERM = re.compile(r"[^\W_]+")
+
+# fresh: every feed succeeded recently; stale: a feed's last success is too
+# old; unavailable: there is no enabled feed or one has never succeeded.
+type DataStatus = Literal["fresh", "stale", "unavailable"]
 
 
 class JobSearchFiltersDTO(ModelConfigBaseModel):
@@ -62,6 +67,7 @@ class JobSummaryDTO(ModelConfigBaseModel):
     """
 
     id: int
+    source_job_id: str | None
     title: str | None
     category: str | None
     location_text: str | None
@@ -73,14 +79,54 @@ class JobSummaryDTO(ModelConfigBaseModel):
     quality_flags: tuple[str, ...]
     last_seen_at: datetime
 
+    @computed_field
+    @property
+    def display_title(self) -> str:
+        """The title, or a neutral label when the source gave none; never an invented job name."""
+        if self.title is not None:
+            return self.title
+        return f"Oglas HZZ {self.source_job_id}" if self.source_job_id else f"Oglas HZZ bez naslova ({self.id})"
+
+
+class RegionFreshnessDTO(ModelConfigBaseModel):
+    """How current the stored jobs of one county are.
+
+    last_success_at is the oldest last successful check among the county's
+    enabled feeds, or None if none has succeeded.
+    """
+
+    code: str
+    name: str
+    data_status: DataStatus
+    last_success_at: datetime | None
+
+
+class CoverageDTO(ModelConfigBaseModel):
+    """Freshness of the counties a search covered.
+
+    An empty or short result from a county that is not fresh does not show
+    that the county has no such jobs.
+    """
+
+    data_status: DataStatus
+    data_as_of: datetime | None
+    stale_after_hours: float
+    affected_regions: tuple[RegionFreshnessDTO, ...]
+    warning: str | None
+
 
 class JobSearchPageDTO(ModelConfigBaseModel):
     jobs: tuple[JobSummaryDTO, ...]
     next_cursor: str | None
+    coverage: CoverageDTO
 
 
 class JobListingDTO(ModelConfigBaseModel):
-    """Where a job is published; missing means it left that feed, not that it closed."""
+    """Where a job is published; missing means it left that feed, not that it closed.
+
+    data_status describes the feed, so presence_status is only as current as
+    feed_last_success_at.
+    """
 
     county_code: str
     county_name: str
@@ -88,6 +134,8 @@ class JobListingDTO(ModelConfigBaseModel):
     first_seen_at: datetime
     last_seen_at: datetime
     missing_since_at: datetime | None
+    feed_last_success_at: datetime | None
+    data_status: DataStatus = "unavailable"
 
 
 class JobDetailsDTO(JobSummaryDTO):
@@ -97,7 +145,6 @@ class JobDetailsDTO(JobSummaryDTO):
     or closed. Dropping out of every feed is not such evidence.
     """
 
-    source_job_id: str | None
     description_text: str | None
     availability_status: str
     first_seen_at: datetime
@@ -111,6 +158,17 @@ class RegionDTO(ModelConfigBaseModel):
     code: str
     name: str
     open_jobs: int
+    data_status: DataStatus = "unavailable"
+    last_success_at: datetime | None = None
+
+
+class CountyFeedCheckDTO(ModelConfigBaseModel):
+    """One enabled county feed's last success; feed_id is None for a county without one."""
+
+    code: str
+    name: str
+    feed_id: int | None
+    last_success_at: datetime | None
 
 
 class CategoryDTO(ModelConfigBaseModel):

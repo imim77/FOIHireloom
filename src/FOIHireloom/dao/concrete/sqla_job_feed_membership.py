@@ -44,6 +44,7 @@ class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
                 JobFeedMembership.first_seen_at,
                 JobFeedMembership.last_seen_at,
                 JobFeedMembership.missing_since_at,
+                SourceFeed.last_success_at.label("feed_last_success_at"),
             )
             .select_from(JobFeedMembership)
             .join(SourceFeed)

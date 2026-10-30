@@ -54,7 +54,7 @@ class DependencyService:
     async def job_search_service(self) -> AsyncIterator[JobSearchServiceInterface]:
         """Yield a read-only search service; keep it open for as long as requests arrive."""
         async with self._unit_of_work_factory() as uow_factory:
-            yield JobSearchServiceFactory().create(uow_factory)
+            yield JobSearchServiceFactory(self._settings).create(uow_factory)
 
     @asynccontextmanager
     async def _unit_of_work_factory(self) -> AsyncIterator[SqlAlchemyUnitOfWorkFactory]:

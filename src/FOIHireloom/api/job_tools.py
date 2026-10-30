@@ -63,8 +63,14 @@ class JobTools(ToolGroup):
             Returns jobs still listed in an HZZ county feed. Jobs whose known
             deadline has passed are left out unless include_expired is true;
             jobs without a stated deadline are included, with deadline_passed
-            null. Null fields were not stated by the source. Use get_job for the
-            description, and canonical_url to view or apply on the HZZ site.
+            null. Null fields were not stated by the source; display_title
+            labels jobs without a title. Use get_job for the description, and
+            canonical_url to view or apply on the HZZ site.
+
+            coverage says how current the searched counties are. When
+            coverage.warning is set, tell the user that results may be
+            outdated or incomplete; few or no results then do not mean HZZ
+            has no such jobs.
             """
             filters = JobSearchFiltersDTO(query=query, county=county, category=category,
                                           include_expired=include_expired, limit=limit, cursor=cursor)
@@ -81,12 +87,19 @@ class JobTools(ToolGroup):
             that may be incomplete. A listing with presence_status 'missing'
             means the job left that feed, not that it was filled or closed;
             availability_status stays 'unknown' without evidence either way.
+            A listing is only as current as its feed: data_status 'stale' or
+            'unavailable' means its presence_status may be out of date.
             """
             return await self._call(service(ctx).get_job(job_id))
 
         @server.tool(annotations=READ_ONLY)
         async def list_regions(ctx: Context) -> list[RegionDTO]:
-            """List the Croatian counties with the number of jobs search_jobs finds in each by default."""
+            """List the Croatian counties with the number of jobs search_jobs finds in each by default.
+
+            data_status is 'fresh' when the county's feeds were checked
+            recently, 'stale' when the last successful check is too old, and
+            'unavailable' when the county has no working feed.
+            """
             return list(await self._call(service(ctx).list_regions()))
 
         @server.tool(annotations=READ_ONLY)

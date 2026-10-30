@@ -15,7 +15,8 @@ INSTRUCTIONS = (
     "Search job advertisements from the Croatian Employment Service (HZZ). "
     "Jobs come from HZZ county RSS feeds, which this server imports regularly; "
     "the tools read the stored copy and never contact HZZ. Use list_regions and "
-    "list_categories for valid filter values. Send users to canonical_url to "
+    "list_categories for valid filter values. When a search result carries a "
+    "coverage warning, pass it on to the user. Send users to canonical_url to "
     "read the full advertisement or apply."
 )
 
