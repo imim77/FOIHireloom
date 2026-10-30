@@ -43,8 +43,10 @@ class JobTools(ToolGroup):
                 description="Words to find, e.g. 'kuhar', 'medicinska sestra', 'njemački' or 'Pula'. Searches "
                             "the title, the full description, the employer, the place of work and the required "
                             "education. Each word matches the start of a word, with or without Croatian "
-                            "diacritics, and all words must match. Croatian word endings vary, so search a "
-                            "shorter stem (e.g. 'njemack' also finds 'njemačkog').",
+                            "diacritics, and all words must match. Case endings and feminine -ica forms are "
+                            "removed, so 'njemački' also finds 'njemačkog' and 'kuharica' finds 'KUHAR/ICA'. "
+                            "Forms with sound changes are not, so write places in the base form ('Rijeka', not "
+                            "'Rijeci') or use county.",
             )] = None,
             county: Annotated[str | None, Field(
                 description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
