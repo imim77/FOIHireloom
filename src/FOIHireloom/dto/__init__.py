@@ -4,7 +4,7 @@ from .county import CountyDefinitionDTO, CountyDTO
 from .hzz_feed import FeedResponseDTO
 from .hzz_job_page import ParsedJobPageDTO
 from .job import ParsedFeedDTO, ParsedJobDTO
-from .job_page import JobPageTargetDTO
+from .job_page import JobPageFetchResultDTO, JobPageTargetDTO
 from .job_search import (
     CategoryDTO,
     CountyFeedCheckDTO,
@@ -53,6 +53,7 @@ __all__ = [
     "JobCursorDTO",
     "JobDetailsDTO",
     "JobListingDTO",
+    "JobPageFetchResultDTO",
     "JobPageTargetDTO",
     "JobSearchCriteriaDTO",
     "JobSearchFiltersDTO",

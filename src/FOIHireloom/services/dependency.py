@@ -9,9 +9,11 @@ from FOIHireloom.db.database import PostgresDatabase
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
 from FOIHireloom.exceptions import PersistenceError
+from FOIHireloom.factories.job_page import JobPageServiceFactory
 from FOIHireloom.factories.job_search import JobSearchServiceFactory
 from FOIHireloom.factories.job_sync import JobSyncServiceFactory
 from FOIHireloom.factories.source_feed_registration import SourceFeedRegistrationServiceFactory
+from FOIHireloom.services.interfaces.job_page import JobPageServiceInterface
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 from FOIHireloom.services.interfaces.job_sync import JobSyncServiceInterface
 from FOIHireloom.services.interfaces.source_feed_registration import SourceFeedRegistrationServiceInterface
@@ -46,6 +48,14 @@ class DependencyService:
     async def job_sync_service(self) -> AsyncIterator[JobSyncServiceInterface]:
         """Yield a sync service sharing one HTTP client, and its HZZ cookie, for the whole run."""
         factory = JobSyncServiceFactory(self._settings)
+        async with httpx.AsyncClient(headers={"User-Agent": USER_AGENT}) as http:
+            async with self._unit_of_work_factory() as uow_factory:
+                yield factory.create(http, uow_factory)
+
+    @asynccontextmanager
+    async def job_page_service(self) -> AsyncIterator[JobPageServiceInterface]:
+        """Yield a job page service sharing one HTTP client, and its HZZ cookie, for the whole run."""
+        factory = JobPageServiceFactory(self._settings)
         async with httpx.AsyncClient(headers={"User-Agent": USER_AGENT}) as http:
             async with self._unit_of_work_factory() as uow_factory:
                 yield factory.create(http, uow_factory)
