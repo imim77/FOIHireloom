@@ -15,8 +15,8 @@ const EDGES = [
   'M23.5824 188.628C23.966 188.749 24.3359 188.472 24.3359 188.063L0.180678 180.413L0.18066 181.217Z',
 ].join('')
 
-export function BarLook({ lit, opacity }: { lit: boolean; opacity: number }) {
-  const look = lit ? 'lit' : 'grey'
+export function BarLook({ ids, lit, opacity }: { ids: string; lit: boolean; opacity: number }) {
+  const look = `${ids}-${lit ? 'lit' : 'grey'}`
   return (
     <g className="look" style={{ opacity }}>
       <path d={RIGHT} fill={`url(#${look}-right)`} />
@@ -36,15 +36,15 @@ function Gradient({ id, x1, y1, x2, y2, from, to }: Record<'id' | 'x1' | 'y1' | 
   )
 }
 
-/** The face gradients every BarLook refers to; render once per page. */
-export function BarGradients() {
+/** The face gradients the BarLooks with the same ids refer to; render once per chart. */
+export function BarGradients({ ids }: { ids: string }) {
   return (
     <svg aria-hidden="true" width="0" height="0" style={{ position: 'absolute' }}>
       <defs>
-        <Gradient id="grey-right" x1="35.8613" y1="8.0502" x2="35.8613" y2="188.448" from="--surface-disable" to="--surface-subdued" />
-        <Gradient id="grey-left" x1="23.9673" y1="0" x2="0.181152" y2="0" from="--surface-disable" to="--surface-subdued" />
-        <Gradient id="lit-right" x1="23.9683" y1="0" x2="47.7538" y2="0" from="--orange-100" to="--orange-300" />
-        <Gradient id="lit-left" x1="23.9672" y1="0" x2="0.181641" y2="0" from="--orange-100" to="--orange-300" />
+        <Gradient id={`${ids}-grey-right`} x1="35.8613" y1="8.0502" x2="35.8613" y2="188.448" from="--surface-disable" to="--surface-subdued" />
+        <Gradient id={`${ids}-grey-left`} x1="23.9673" y1="0" x2="0.181152" y2="0" from="--surface-disable" to="--surface-subdued" />
+        <Gradient id={`${ids}-lit-right`} x1="23.9683" y1="0" x2="47.7538" y2="0" from="--orange-100" to="--orange-300" />
+        <Gradient id={`${ids}-lit-left`} x1="23.9672" y1="0" x2="0.181641" y2="0" from="--orange-100" to="--orange-300" />
       </defs>
     </svg>
   )

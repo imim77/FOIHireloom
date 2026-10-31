@@ -1,7 +1,6 @@
 import { Card, ExpandButton, Warning } from '../../shared/Card'
 import { formatAds, formatWorkers } from '../../shared/format'
 import { useExpanded, useMcpApp } from '../../shared/mcp'
-import { BarGradients } from './Bar3d'
 import { CountyColumns } from './CountyColumns'
 import { sample } from './sample'
 import type { JobsByCountyData } from './types'
@@ -29,11 +28,10 @@ export function JobsByCounty() {
       <Warning text={data.coverage?.warning} />
       {counties.length ? (
         <>
-          <CountyColumns key={`${mcp.revision}-${expanded}`} counties={counties} metric={metric} />
+          <CountyColumns counties={counties} metric={metric} />
           <p className="soft footer">
             {shown} · ukupno {formatAds(data.total_jobs)}, {formatWorkers(data.total_workers_needed)}
           </p>
-          <BarGradients />
         </>
       ) : (
         <p className="empty">Nema aktivnih oglasa za zadane filtre.</p>

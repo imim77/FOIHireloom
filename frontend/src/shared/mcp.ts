@@ -8,14 +8,12 @@ export interface McpApp<T> {
   app: App | null
   // The tool's structuredContent; null until the host sends it.
   data: T | null
-  // Counts the results received, so a view can key its animations to each new one.
-  revision: number
   hostContext: McpUiHostContext
 }
 
 /** Connect to the host once, follow its theme and hold the latest tool result. */
 export function useMcpApp<T>(name: string, sample: () => T): McpApp<T> {
-  const [result, setResult] = useState(() => ({ data: embedded ? null : sample(), revision: 0 }))
+  const [data, setData] = useState<T | null>(() => (embedded ? null : sample()))
   const [hostContext, setHostContext] = useState<McpUiHostContext>({})
   const [app, setApp] = useState<App | null>(null)
 
@@ -24,9 +22,7 @@ export function useMcpApp<T>(name: string, sample: () => T): McpApp<T> {
     const app = new App({ name, version: '1.0.0' }, { availableDisplayModes: ['inline', 'fullscreen'] },
       { autoResize: true })
     app.ontoolresult = ({ structuredContent }) => {
-      if (structuredContent) {
-        setResult((previous) => ({ data: structuredContent as T, revision: previous.revision + 1 }))
-      }
+      if (structuredContent) setData(structuredContent as T)
     }
     app.onhostcontextchanged = (context) => setHostContext((previous) => ({ ...previous, ...context }))
     void app.connect().then(() => {
@@ -39,7 +35,7 @@ export function useMcpApp<T>(name: string, sample: () => T): McpApp<T> {
     if (hostContext.theme) document.documentElement.dataset.theme = hostContext.theme
   }, [hostContext.theme])
 
-  return { app, ...result, hostContext }
+  return { app, data, hostContext }
 }
 
 /**
