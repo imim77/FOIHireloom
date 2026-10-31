@@ -1,7 +1,7 @@
 // One job, after the reference card: the employer's tile, name and line, the title, the job's labels and, under a
 // rule, when it was published and until when to apply, with its actions, on a tile of the Performance chart.
-// Animated with anime.js like the chart: the card comes in after the ones before it, the tile pops, then the labels
-// come in one after another and the footer last.
+// Animated with anime.js like that chart's tiles: the card rises in after the ones before it and the employer's tile
+// pops, then the labels come in one after another and the footer last.
 
 import { animate, stagger, utils } from 'animejs'
 import { useRef } from 'react'
@@ -9,7 +9,9 @@ import { fadeIn, finish, releaseStyles, useChartEntrance } from '../../shared/ch
 import { chips, deadline, published, sentenceCase, subtitle } from './job-format'
 import type { JobCard } from './types'
 
-const CARD_STAGGER = 90
+// The Performance chart's tile entrance: each tile rises 10px over 800ms after the one before it (70ms), and its dot
+// (here the employer's tile) pops from nothing 150ms in.
+const CARD_STAGGER = 70
 const TILE_AT = 150
 const CHIPS_AT = 300
 const FOOT_AT = 450
@@ -56,12 +58,12 @@ export function JobCardView({ job, today, order, actions }: {
     const one = (selector: string) => card.querySelector<HTMLElement>(selector)
     const all = (selector: string) => [...card.querySelectorAll<HTMLElement>(selector)]
     const at = order * CARD_STAGGER
-    timeline.add(card, { ...fadeIn([card], 12), duration: 600 }, at)
+    timeline.add(card, { ...fadeIn([card], 10), duration: 800, ease: 'outExpo' }, at)
     const tile = one('[data-slot="tile"]')
     if (tile) {
-      utils.set(tile, { opacity: 0, scale: 0.6 })
-      timeline.add(tile, { opacity: [0, 1], scale: [0.6, 1], duration: 700, ease: 'outBack(1.8)',
-        onComplete: releaseStyles('opacity', 'transform') }, at + TILE_AT)
+      utils.set(tile, { scale: 0 })
+      timeline.add(tile, { scale: [0, 1], duration: 600, ease: 'outBack(2.2)', onComplete: releaseStyles('transform') },
+        at + TILE_AT)
     }
     const labels = all('[data-slot="chip"]')
     if (labels.length) timeline.add(labels, { ...fadeIn(labels, 4), duration: 500, delay: stagger(40) }, at + CHIPS_AT)
