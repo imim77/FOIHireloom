@@ -2,8 +2,10 @@
    a rule, the details in three columns with their icons, and a rule between jobs. */
 .job-list { display: flex; flex-direction: column; }
 
-.job { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.job { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding-top: 16px; }
 .job:first-child { padding-top: 0; }
+/* The rules are elements, not borders, so they can draw across. */
+.rule { display: block; height: 1px; background: var(--border); transform-origin: left; }
 
 .job-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .labels { display: flex; flex: 1; flex-wrap: wrap; gap: 6px; min-width: 0; margin: 0; padding: 0; list-style: none; }
@@ -21,8 +23,8 @@
 .employer-line .where { color: var(--fg-soft); }
 
 .details {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 16px; margin: 0; padding: 12px 0 0;
-  list-style: none; border-top: 1px solid var(--border);
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 16px; margin: 0; padding: 0;
+  list-style: none;
 }
 .detail { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; line-height: 1.3; color: var(--fg-loud); }
 .detail svg { flex: none; width: 16px; height: 16px; color: var(--fg-soft); }

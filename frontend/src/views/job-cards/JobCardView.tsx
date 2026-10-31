@@ -1,9 +1,10 @@
 // One job, after the reference job row (without the company logo): labels for how long ago it was published and its
 // category, the title, the employer in capitals over a slash and its county, then under a rule the details in three
-// columns, each with its icon, and a rule under the job. Animated with anime.js like the Performance chart's tiles:
-// the job rises in after the ones before it and its labels come in one after another.
+// columns, each with its icon, and a rule under the job. Animated with anime.js like the Performance chart: the job
+// rises in after the ones before it like its tiles, its labels come in, its rules draw across like its grid lines and
+// the details come in one after another.
 
-import { animate, stagger } from 'animejs'
+import { animate, stagger, utils } from 'animejs'
 import { useRef } from 'react'
 import { fadeIn, finish, releaseStyles, useChartEntrance } from '../../shared/chart-motion'
 import { age, type DetailKind, details, sentenceCase } from './job-format'
@@ -12,6 +13,8 @@ import type { JobCard } from './types'
 // The Performance chart's tile entrance: each tile rises 10px over 800ms after the one before it (70ms).
 const CARD_STAGGER = 70
 const LABELS_AT = 150
+const RULES_AT = 200
+const DETAILS_AT = 350
 
 export interface CardActions {
   // Open the advertisement on the HZZ site.
@@ -77,10 +80,17 @@ export function JobCardView({ job, today, order, actions }: {
     const card = root.current!
     const at = order * CARD_STAGGER
     timeline.add(card, { ...fadeIn([card], 10), duration: 800, ease: 'outExpo' }, at)
-    const labels = [...card.querySelectorAll<HTMLElement>('[data-slot="label"]')]
+    const all = (selector: string) => [...card.querySelectorAll<HTMLElement>(selector)]
+    const labels = all('[data-slot="label"]')
     if (labels.length) timeline.add(labels, { ...fadeIn(labels, 4), duration: 500, delay: stagger(60) }, at + LABELS_AT)
+    const rules = all('[data-slot="rule"]')
+    utils.set(rules, { scaleX: 0 })
+    timeline.add(rules, { scaleX: [0, 1], duration: 900, ease: 'outQuad', delay: stagger(120),
+      onComplete: releaseStyles('transform') }, at + RULES_AT)
+    const items = all('[data-slot="detail"]')
+    if (items.length) timeline.add(items, { ...fadeIn(items, 4), duration: 500, delay: stagger(40) }, at + DETAILS_AT)
     return () => {
-      for (const el of [card, ...labels]) {
+      for (const el of [card, ...labels, ...rules, ...items]) {
         el.style.removeProperty('opacity')
         el.style.removeProperty('transform')
       }
@@ -104,6 +114,7 @@ export function JobCardView({ job, today, order, actions }: {
           {job.county_name && <> / <span className="where">{job.county_name}</span></>}
         </p>
       </div>
+      {items.length > 0 && <span className="rule" aria-hidden="true" data-slot="rule" />}
       {items.length > 0 && (
         <ul className="details" aria-label="Uvjeti">
           {items.map((item) => (
@@ -114,6 +125,7 @@ export function JobCardView({ job, today, order, actions }: {
           ))}
         </ul>
       )}
+      <span className="rule" aria-hidden="true" data-slot="rule" />
     </article>
   )
 }
