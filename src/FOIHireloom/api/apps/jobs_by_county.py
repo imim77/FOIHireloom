@@ -40,4 +40,5 @@ def jobs_by_county(
             for county in counties
         ),
         coverage=stats.coverage,
+        unknown_conditions=stats.unknown_conditions,
     )

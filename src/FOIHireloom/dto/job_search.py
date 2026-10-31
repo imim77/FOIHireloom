@@ -5,10 +5,14 @@ from typing import Literal
 from pydantic import Field, computed_field, field_validator
 
 from .base import ModelConfigBaseModel
+from .job_conditions import Contract, EducationLevel, EmploymentTag
 
 MAX_PAGE_SIZE = 20
 MAX_QUERY_LENGTH = 200
+# 50 years, well within the integer column.
+MAX_EXPERIENCE_MONTHS = 600
 SEARCH_TERM = re.compile(r"[^\W_]+")
+PLACE_WORDS = re.compile(r"[^\W_]+(?: [^\W_]+)*")
 
 # fresh: every feed succeeded recently; stale: a feed's last success is too
 # old; unavailable: there is no enabled feed or one has never succeeded.
@@ -17,7 +21,30 @@ type DataStatus = Literal["fresh", "stale", "unavailable"]
 type DetailsStatus = Literal["pending", "fetched", "unavailable", "failed"]
 
 
-class JobSearchFiltersDTO(ModelConfigBaseModel):
+class JobConditionFiltersDTO(ModelConfigBaseModel):
+    """Filters on a job's normalised conditions and place of work; None leaves one out.
+
+    A job whose value is unknown, because its HZZ page was not read or does
+    not state it, never matches a filter on that value. max_experience_months=0
+    finds "Nije važno" and trainee ads. education is the caller's level and
+    matches jobs that accept it. accommodation True finds jobs offering any
+    accommodation, False those offering none. A job must have every one of
+    employment_tags. place matches the place of work on the job page, without
+    the county after its comma, or the feed's municipality when the place's
+    words appear there in a row as whole words, ignoring case and Croatian
+    diacritics: "Pula" finds "PULA-POLA" and "Zagreb" "ZAGREB-DUBRAVA".
+    """
+
+    max_experience_months: int | None = Field(default=None, ge=0, le=MAX_EXPERIENCE_MONTHS)
+    contract: Contract | None = None
+    full_time: bool | None = None
+    education: EducationLevel | None = None
+    accommodation: bool | None = None
+    employment_tags: tuple[EmploymentTag, ...] | None = None
+    place: str | None = Field(default=None, max_length=MAX_QUERY_LENGTH)
+
+
+class JobSearchFiltersDTO(JobConditionFiltersDTO):
     """What a caller asks for; county is a code from list_regions() or a county name.
 
     Jobs whose known deadline has passed are left out unless include_expired
@@ -43,11 +70,12 @@ class JobCursorDTO(ModelConfigBaseModel):
     id: int = Field(ge=1, le=2**63 - 1)
 
 
-class JobFilterCriteriaDTO(ModelConfigBaseModel):
+class JobFilterCriteriaDTO(JobConditionFiltersDTO):
     """Validated filters for the job repository.
 
     terms are ASCII-folded, lowercase words or their stems; each must match a word prefix.
-    open_on leaves out jobs whose known deadline is before that day.
+    open_on leaves out jobs whose known deadline is before that day. place
+    holds the place's words folded the same way, joined by single spaces.
     """
 
     terms: tuple[str, ...] = ()
@@ -62,6 +90,14 @@ class JobFilterCriteriaDTO(ModelConfigBaseModel):
         if not all(SEARCH_TERM.fullmatch(term) for term in terms):
             raise ValueError("Search terms must be single words without punctuation.")
         return terms
+
+    @field_validator("place")
+    @classmethod
+    def place_is_words(cls, place: str | None) -> str | None:
+        # The place goes into a LIKE pattern, so wildcards must not get through.
+        if place is not None and not PLACE_WORDS.fullmatch(place):
+            raise ValueError("The place must be words separated by single spaces.")
+        return place
 
 
 class JobSearchCriteriaDTO(JobFilterCriteriaDTO):
@@ -170,18 +206,30 @@ class CoverageDTO(ModelConfigBaseModel):
 
 
 class JobSearchPageDTO(ModelConfigBaseModel):
+    """A search page.
+
+    unknown_conditions names each condition filter given, with the number of
+    jobs matching every other filter that were left out because their value
+    for it is unknown; it covers every page, not only this one.
+    """
+
     jobs: tuple[JobSummaryDTO, ...]
     next_cursor: str | None
     coverage: CoverageDTO
+    unknown_conditions: dict[str, int] = {}
 
 
 class JobCardsPageDTO(ModelConfigBaseModel):
-    """A search page of job cards; today is the day in Croatia that deadlines were compared with."""
+    """A search page of job cards; today is the day in Croatia that deadlines were compared with.
+
+    unknown_conditions is as in JobSearchPageDTO.
+    """
 
     jobs: tuple[JobCardDTO, ...]
     next_cursor: str | None
     coverage: CoverageDTO
     today: date
+    unknown_conditions: dict[str, int] = {}
 
 
 class JobCardsDTO(JobCardsPageDTO):

@@ -24,9 +24,12 @@ class JobCardsAppTests(unittest.TestCase):
         self.assertEqual((newest.title, newest.description), ("Najnoviji oglasi", "Svi oglasi na dan 30. 10. 2026."))
 
     def test_keeps_the_page_and_the_filters_for_the_next_page(self) -> None:
-        cards = job_cards(PAGE, JobSearchFiltersDTO(query="kuhar", limit=4, cursor="previous"))
-        self.assertEqual((cards.jobs, cards.next_cursor, cards.coverage, cards.today),
-                         (PAGE.jobs, "next", FRESH, date(2026, 10, 30)))
+        conditions = dict(max_experience_months=0, contract="permanent", full_time=True, education="secondary_3",
+                          accommodation=True, employment_tags=("seasonal",), place="Pula")
+        page = PAGE.model_copy(update={"unknown_conditions": {"contract": 2}})
+        cards = job_cards(page, JobSearchFiltersDTO(query="kuhar", limit=4, cursor="previous", **conditions))
+        self.assertEqual((cards.jobs, cards.next_cursor, cards.coverage, cards.today, cards.unknown_conditions),
+                         (PAGE.jobs, "next", FRESH, date(2026, 10, 30), {"contract": 2}))
         self.assertEqual((cards.jobs[0].workers_needed, cards.jobs[0].accommodation), (3, "Zajednički smještaj"))
         # The view passes next_cursor back with these filters, so the cursor that found this page is left out.
-        self.assertEqual(cards.filters, JobSearchFiltersDTO(query="kuhar", limit=4))
+        self.assertEqual(cards.filters, JobSearchFiltersDTO(query="kuhar", limit=4, **conditions))

@@ -5,6 +5,10 @@ from .base import ModelConfigBaseModel
 # permanent: "Na neodređeno"; fixed_term: "Na određeno"; other: "Drugi oblici
 # rada" and HZZ's temporary seasonal work in agriculture.
 type Contract = Literal["permanent", "fixed_term", "other"]
+type EmploymentTag = Literal["new_position", "vacancy", "replacement", "increased_workload", "seasonal",
+                             "reappointment", "trainee", "retirees", "disability"]
+# From lowest to highest; college is "viša ili prvostupanjska", university "fakultet, akademija, ...".
+type EducationLevel = Literal["primary_lower", "primary", "secondary_3", "secondary_4", "college", "university"]
 type Accommodation = Literal["none", "shared", "single", "family"]
 type TransportAllowance = Literal["full", "partial", "none"]
 

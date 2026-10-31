@@ -11,6 +11,9 @@ from FOIHireloom.dto.job_market import JobMarketStatsDTO
 from FOIHireloom.dto.job_search import CoverageDTO
 
 FRESH = CoverageDTO(data_status="fresh", data_as_of=None, stale_after_hours=6, affected_regions=(), warning=None)
+NO_BREAKDOWNS = dict.fromkeys(("categories", "employers", "contracts", "employment_tags", "working_time",
+                               "experience_bands", "education_levels", "accommodation", "schedule_tags",
+                               "transport_allowance"), ())
 
 
 def stats(jobs: int = 3000, counties: tuple = ()) -> JobMarketStatsDTO:
@@ -22,8 +25,7 @@ def stats(jobs: int = 3000, counties: tuple = ()) -> JobMarketStatsDTO:
             {"code": "istarska", "name": "Istarska županija", "jobs": 507, "workers_needed": 1185},
             {"code": "licko-senjska", "name": "Ličko-senjska županija", "jobs": 1, "workers_needed": 2},
         ),
-        categories=(), employers=(), employment_types=(), working_hours=(), education=(), experience=(),
-        accommodation=(), today=date(2026, 10, 30), coverage=FRESH,
+        **NO_BREAKDOWNS, today=date(2026, 10, 30), coverage=FRESH, unknown_conditions={"full_time": 4},
     )
 
 
@@ -34,7 +36,7 @@ class JobsByCountyAppTests(unittest.TestCase):
         self.assertEqual([(county.short_name, county.jobs, county.share) for county in chart.counties],
                          [("Grad Zagreb", 1325, 44.2), ("Istarska", 507, 16.9), ("Ličko-senjska", 1, 0.0)])
         self.assertEqual(chart.counties[1].name, "Istarska županija")
-        self.assertEqual(chart.coverage, FRESH)
+        self.assertEqual((chart.coverage, chart.unknown_conditions), (FRESH, {"full_time": 4}))
 
     def test_ranks_and_titles_the_counties_by_the_chosen_metric(self) -> None:
         by_jobs = jobs_by_county(stats(), 7, None, None)

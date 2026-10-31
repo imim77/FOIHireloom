@@ -351,14 +351,16 @@ class JobSearchServiceTests(ModelTestCase):
 
     async def test_market_stats_count_what_search_finds(self) -> None:
         await self.set_page("cook", page_employer_name="HOTEL d.o.o.", page_workers_needed=3,
-                            page_employment_type="Na neodređeno; sezonski")
+                            page_employment_type="Na neodređeno; sezonski", contract="permanent",
+                            employment_tags=["seasonal"])
         stats = await self.service.market_stats(JobMarketFiltersDTO())
         self.assertEqual(stats.jobs, len(await self.keys()))
         self.assertEqual((stats.today, stats.window_days, stats.with_details, stats.workers_needed), (self.today, 7, 1, 3))
         self.assertEqual([(county.code, county.jobs) for county in stats.counties],
                          [("bjelovarsko-bilogorska", 2), ("grad-zagreb", 2)])
-        self.assertEqual([(item.name, item.jobs) for item in stats.employment_types],
-                         [("Na neodređeno", 1), ("sezonski", 1)])
+        self.assertEqual([(item.name, item.jobs) for item in stats.contracts + stats.employment_tags],
+                         [("permanent", 1), ("seasonal", 1)])
+        self.assertEqual(stats.unknown_conditions, {})
         # Istria has no feed, so coverage reports it as a search would.
         self.assertEqual(stats.coverage, (await self.service.search(JobSearchFiltersDTO())).coverage)
         for filters in ({"query": "kuharice"}, {"category": HOSPITALITY.lower()}, {"include_expired": True},

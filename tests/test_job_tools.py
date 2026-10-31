@@ -71,7 +71,12 @@ class JobToolsDatabaseTests(ModelTestCase):
             stats = (await client.call_tool("job_market_stats", {"query": "čistačice"})).structured_content
             with self.assertRaisesRegex(ToolError, "County Atlantida not found"):
                 await client.call_tool("job_market_stats", {"county": "Atlantida"})
+            with self.assertRaisesRegex(ToolError, "The place contains no words"):
+                await client.call_tool("job_market_stats", {"place": "--"})
+            # No job page has been read, so the condition is unknown for every job.
+            full_time = (await client.call_tool("job_market_stats", {"full_time": True})).structured_content
         self.assertEqual((stats["jobs"], stats["with_details"], stats["workers_needed"]), (3, 0, 0))
         self.assertEqual(stats["counties"], [{"code": "grad-zagreb", "name": "Grad Zagreb", "jobs": 3,
                                               "workers_needed": 0}])
         self.assertEqual((stats["employers"], stats["coverage"]["data_status"]), ([], "unavailable"))
+        self.assertEqual((full_time["jobs"], full_time["unknown_conditions"]), (0, {"full_time": 3}))
