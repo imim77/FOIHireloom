@@ -48,7 +48,8 @@ export function JobCardView({ job, today, order, actions }: {
   actions: CardActions
 }) {
   const labels = chips(job)
-  const employer = job.employer_name ?? 'Poslodavac nije naveden'
+  // Employers are written in capitals, as HZZ writes most of them; the placeholder is not a name and stays as it is.
+  const employer = job.employer_name?.toLocaleUpperCase('hr-HR') ?? 'Poslodavac nije naveden'
   const root = useRef<HTMLElement>(null)
 
   useChartEntrance(root, (timeline) => {
