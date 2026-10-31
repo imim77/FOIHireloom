@@ -98,7 +98,7 @@ export function JobCardView({ job, today, order, actions }: {
   })
 
   return (
-    <article className="job" ref={root} data-slot="job" aria-label={`${title}, ${employer}`}>
+    <article className="job" ref={root} data-slot="job" data-id={job.id} aria-label={`${title}, ${employer}`}>
       <div className="job-top">
         <ul className="labels" aria-label="Oznake">
           {published && <li className="label age" data-slot="label">{published}</li>}

@@ -1,7 +1,7 @@
 import { animate } from 'animejs'
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Card, ExpandButton, Warning } from '../../shared/Card'
-import { finish, releaseStyles } from '../../shared/chart-motion'
+import { finish, releaseStyles, useReducedMotion } from '../../shared/chart-motion'
 import { formatAds } from '../../shared/format'
 import { useExpanded, useMcpApp } from '../../shared/mcp'
 import { type CardActions, JobCardView } from './JobCardView'
@@ -9,6 +9,10 @@ import { sentenceCase } from './job-format'
 import { sample } from './sample'
 import type { JobCard, JobCardsData } from './types'
 import './job-cards.css'
+
+// Expanding or collapsing moves every tile; each slides over from where it was, as the charts' bars morph.
+const MOVE = 650
+const MOVE_STAGGER = 30
 
 // Cards loaded with "Prikaži još": order is a card's place in its own batch, which delays its entrance.
 interface More {
@@ -26,6 +30,26 @@ export function JobCards() {
   const [more, setMore] = useState<More | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const list = useRef<HTMLDivElement>(null)
+  const reduced = useReducedMotion()
+  // Where each tile was after the last render, by job id, and whether the view was expanded then.
+  const placed = useRef<{ expanded: boolean; rects: Map<string, DOMRect> }>({ expanded, rects: new Map() })
+  useLayoutEffect(() => {
+    const tiles = [...list.current?.querySelectorAll<HTMLElement>('[data-slot="job"]') ?? []]
+    const rects = new Map(tiles.map((tile) => [tile.dataset.id!, tile.getBoundingClientRect()]))
+    const before = placed.current
+    placed.current = { expanded, rects }
+    if (before.expanded === expanded || reduced) return
+    tiles.forEach((tile, i) => {
+      const from = before.rects.get(tile.dataset.id!)
+      const to = rects.get(tile.dataset.id!)
+      if (!from || !to) return
+      finish(animate(tile, {
+        translateX: [from.left - to.left, 0], translateY: [from.top - to.top, 0], duration: MOVE, ease: 'outExpo',
+        delay: i * MOVE_STAGGER, onComplete: releaseStyles('transform'),
+      }))
+    })
+  })
   if (!data) return <Card sunken title="Oglasi" description="Učitavanje…" />
 
   const extra = more?.base === data ? more : null
@@ -72,7 +96,7 @@ export function JobCards() {
     )}>
       <Warning text={data.coverage?.warning} />
       {cards.length ? (
-        <div className={`job-list${expanded ? ' expanded' : ''}`}>
+        <div className={`job-list${expanded ? ' expanded' : ''}`} ref={list}>
           {cards.map(({ job, order }) => (
             <JobCardView key={job.id} job={job} today={data.today} order={order} actions={actions} />
           ))}
