@@ -169,6 +169,9 @@ tags
 tmp
 docs
 
+# Test fixtures
+tests/fixtures/
+
 # Postman collections, mocks, and simulations
 postman/
 
