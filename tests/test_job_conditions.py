@@ -1,7 +1,9 @@
 import unittest
 
+from FOIHireloom.db.models.job import CONDITION_CODES
 from FOIHireloom.dto import JobConditionsDTO, ParsedJobPageDTO, RawJobConditionsDTO
 from FOIHireloom.services import JobConditionsNormalizer
+from FOIHireloom.services.concrete import job_conditions
 
 # Every distinct experience and working hours value on fetched HZZ pages.
 EXPERIENCE_MONTHS = {
@@ -159,3 +161,15 @@ class JobConditionsNormalizerTests(unittest.TestCase):
             full_time=False, weekly_hours=20, education_levels=("secondary_3", "secondary_4"),
             accommodation="shared", schedule_tags=("two_shifts", "weekends_holidays"), transport_allowance="partial",
         ))
+
+
+class JobConditionsCodesTests(unittest.TestCase):
+    def test_the_jobs_table_accepts_exactly_the_codes_the_normalizer_writes(self) -> None:
+        vocabularies = {
+            "contract": job_conditions.CONTRACTS, "employment_tags": job_conditions.EMPLOYMENT_TAGS,
+            "education_levels": job_conditions.EDUCATION_LEVELS, "accommodation": job_conditions.ACCOMMODATION,
+            "schedule_tags": job_conditions.SCHEDULE_TAGS, "transport_allowance": job_conditions.TRANSPORT_ALLOWANCE,
+        }
+        written = {column: set(vocabulary.values()) for column, vocabulary in vocabularies.items()}
+        written["conditions_unrecognised"] = set(RawJobConditionsDTO.model_fields)
+        self.assertEqual({column: set(codes) for column, codes in CONDITION_CODES.items()}, written)

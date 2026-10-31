@@ -2,7 +2,9 @@ import re
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
-from FOIHireloom.dto.job_conditions import JobConditionsDTO, RawJobConditionsDTO
+from FOIHireloom.db.uow.base import UnitOfWork
+from FOIHireloom.dto.job_conditions import JobConditionsDTO, JobConditionsRunDTO, RawJobConditionsDTO
+from FOIHireloom.services.interfaces.job_conditions import JobConditionsServiceInterface
 
 # Keys are casefolded HZZ wording; tag and level codes keep the order given here.
 EXPERIENCE = re.compile(r"(?:(\d+) (?:godin[aeu]|g\.)(?: i |$))?(?:(\d+) mjesec[ai]?)?")
@@ -134,3 +136,30 @@ class JobConditionsNormalizer:
         """Distinct codes in the order the vocabulary lists them."""
         found = set(codes)
         return tuple(code for code in dict.fromkeys(vocabulary.values()) if code in found)
+
+
+class JobConditionsService(JobConditionsServiceInterface):
+    """Store every fetched page's conditions as the current normaliser reads them.
+
+    Needed for pages fetched before conditions were normalised, and again
+    whenever the normaliser's vocabulary changes.
+    """
+
+    def __init__(self, uow_factory: Callable[[], UnitOfWork], normalizer: JobConditionsNormalizer) -> None:
+        self._uow_factory = uow_factory
+        self._normalizer = normalizer
+
+    async def normalize_all(self) -> JobConditionsRunDTO:
+        unrecognised = dict.fromkeys(RawJobConditionsDTO.model_fields, 0)
+        changed: dict[int, JobConditionsDTO] = {}
+        async with self._uow_factory() as work:
+            jobs = await work.jobs.list_condition_inputs()
+            for job in jobs:
+                conditions = self._normalizer.normalize(job.raw)
+                for name in conditions.unrecognised:
+                    unrecognised[name] += 1
+                if conditions != job.stored:
+                    changed[job.job_id] = conditions
+            await work.jobs.set_conditions(changed)
+            await work.commit()
+        return JobConditionsRunDTO(checked=len(jobs), updated=len(changed), unrecognised=unrecognised)

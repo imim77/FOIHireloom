@@ -10,11 +10,13 @@ from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
 from FOIHireloom.exceptions import PersistenceError
 from FOIHireloom.factories.category_snapshot import CategorySnapshotServiceFactory
+from FOIHireloom.factories.job_conditions import JobConditionsServiceFactory
 from FOIHireloom.factories.job_page import JobPageServiceFactory
 from FOIHireloom.factories.job_search import JobSearchServiceFactory
 from FOIHireloom.factories.job_sync import JobSyncServiceFactory
 from FOIHireloom.factories.source_feed_registration import SourceFeedRegistrationServiceFactory
 from FOIHireloom.services.interfaces.category_snapshot import CategorySnapshotServiceInterface
+from FOIHireloom.services.interfaces.job_conditions import JobConditionsServiceInterface
 from FOIHireloom.services.interfaces.job_page import JobPageServiceInterface
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 from FOIHireloom.services.interfaces.job_sync import JobSyncServiceInterface
@@ -73,6 +75,12 @@ class DependencyService:
         """Yield a read-only category snapshot service."""
         async with self._unit_of_work_factory() as uow_factory:
             yield CategorySnapshotServiceFactory().create(uow_factory)
+
+    @asynccontextmanager
+    async def job_conditions_service(self) -> AsyncIterator[JobConditionsServiceInterface]:
+        """Yield a service that normalises the stored job conditions again."""
+        async with self._unit_of_work_factory() as uow_factory:
+            yield JobConditionsServiceFactory().create(uow_factory)
 
     @asynccontextmanager
     async def _unit_of_work_factory(self) -> AsyncIterator[SqlAlchemyUnitOfWorkFactory]:

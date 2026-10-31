@@ -7,6 +7,7 @@ from FOIHireloom.db.models import Job
 from FOIHireloom.dto.category_snapshot import CategoryInputDTO
 from FOIHireloom.dto.hzz_job_page import ParsedJobPageDTO
 from FOIHireloom.dto.job import ParsedJobDTO
+from FOIHireloom.dto.job_conditions import JobConditionsDTO, JobConditionsInputDTO
 from FOIHireloom.dto.job_market import JobMarketAggregatesDTO, JobMarketCriteriaDTO
 from FOIHireloom.dto.job_page import JobPageTargetDTO
 from FOIHireloom.dto.job_search import CategoryDTO, JobSearchCriteriaDTO
@@ -125,9 +126,23 @@ class JobRepository(ABC):
         """Count the listed jobs whose detail page is due, as list_page_candidates defines it."""
 
     @abstractmethod
-    async def record_page(self, job_id: int, page: ParsedJobPageDTO, source_hash: str, checked_at: datetime) -> None:
-        """Store a fetched detail page for the feed content with source_hash."""
+    async def record_page(
+        self, job_id: int, page: ParsedJobPageDTO, conditions: JobConditionsDTO, source_hash: str, checked_at: datetime,
+    ) -> None:
+        """Store a fetched detail page and its normalised conditions for the feed content with source_hash."""
 
     @abstractmethod
     async def record_page_problem(self, job_id: int, status: str, error: str, checked_at: datetime) -> None:
-        """Mark a detail page check 'unavailable' or 'failed'; earlier fetched values stay."""
+        """Mark a detail page check 'unavailable' or 'failed'; earlier fetched and normalised values stay."""
+
+    @abstractmethod
+    async def list_condition_inputs(self) -> list[JobConditionsInputDTO]:
+        """Return the raw and stored conditions of every job with a fetched page, ordered by ID.
+
+        The jobs stay locked until the caller's transaction ends, so a page
+        stored meanwhile is not overwritten with conditions of its older values.
+        """
+
+    @abstractmethod
+    async def set_conditions(self, conditions: Mapping[int, JobConditionsDTO]) -> None:
+        """Replace the stored normalised conditions by job ID; the page's raw values are left alone."""

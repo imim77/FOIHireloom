@@ -7,6 +7,7 @@ from .concrete import (
     HzzFeedParser,
     HzzJobPageParser,
     JobConditionsNormalizer,
+    JobConditionsService,
     JobPageService,
     JobSearchService,
     JobSyncService,
@@ -15,6 +16,7 @@ from .concrete import (
 )
 from .interfaces import (
     CategorySnapshotServiceInterface,
+    JobConditionsServiceInterface,
     JobPageServiceInterface,
     JobSearchServiceInterface,
     JobSyncServiceInterface,
@@ -29,6 +31,8 @@ __all__ = [
     "HzzFeedParser",
     "HzzJobPageParser",
     "JobConditionsNormalizer",
+    "JobConditionsService",
+    "JobConditionsServiceInterface",
     "JobPageService",
     "JobPageServiceInterface",
     "JobSearchService",

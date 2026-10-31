@@ -46,3 +46,24 @@ class JobConditionsDTO(ModelConfigBaseModel):
     schedule_tags: tuple[str, ...] | None = None
     transport_allowance: TransportAllowance | None = None
     unrecognised: tuple[str, ...] = ()
+
+
+class JobConditionsInputDTO(ModelConfigBaseModel):
+    """A job's conditions as its fetched page states them, and the normalised ones stored for it."""
+
+    job_id: int
+    raw: RawJobConditionsDTO
+    stored: JobConditionsDTO
+
+
+class JobConditionsRunDTO(ModelConfigBaseModel):
+    """One pass over the jobs with a fetched page.
+
+    updated counts the jobs whose stored conditions changed; unrecognised
+    counts the jobs per RawJobConditionsDTO field whose value was not
+    recognised.
+    """
+
+    checked: int
+    updated: int
+    unrecognised: dict[str, int]

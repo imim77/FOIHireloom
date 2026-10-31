@@ -298,3 +298,44 @@ class AlembicMigrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([tuple(row) for row in categories], [("1", "STRUČNJACI U PROMETU"), ("2", None), ("3", None)])
         await self.migrate(command.upgrade, "head")
         await self.migrate(command.check)
+
+    async def test_conditions_migration_adds_unknown_conditions_that_need_a_fetched_page(self) -> None:
+        await self.migrate(command.upgrade, "c4e8a2f6b1d3")
+        async with self.engine.begin() as connection:
+            await connection.execute(text(
+                "INSERT INTO jobs (provider, source_job_id, canonical_url, content_hash, page_status, page_checked_at, "
+                "page_fetched_at, page_source_hash, page_employment_type) VALUES ('hzz', '1', 'https://example.com/1', "
+                "'hash', 'fetched', now(), now(), 'hash', 'Na neodređeno'), "
+                "('hzz', '2', 'https://example.com/2', 'hash', 'pending', NULL, NULL, NULL, NULL)"
+            ))
+        await self.migrate(command.upgrade, "head")
+        async with self.engine.connect() as connection:
+            rows = (await connection.execute(text(
+                "SELECT source_job_id, page_employment_type, contract, employment_tags, conditions_unrecognised "
+                "FROM jobs ORDER BY source_job_id"
+            ))).all()
+        self.assertEqual([tuple(row) for row in rows], [("1", "Na neodređeno", None, None, []), ("2", None, None, None, [])])
+        for statement in (
+            "UPDATE jobs SET contract = 'seasonal' WHERE source_job_id = '1'",
+            "UPDATE jobs SET schedule_tags = ARRAY['evening'] WHERE source_job_id = '1'",
+            "UPDATE jobs SET experience_months = 6, trainee = true WHERE source_job_id = '1'",
+            "UPDATE jobs SET contract = 'permanent' WHERE source_job_id = '2'",
+        ):
+            with self.subTest(statement=statement), self.assertRaises(IntegrityError):
+                async with self.engine.begin() as connection:
+                    await connection.execute(text(statement))
+        async with self.engine.begin() as connection:
+            await connection.execute(text(
+                "UPDATE jobs SET contract = 'permanent', employment_tags = '{}' WHERE source_job_id = '1'"
+            ))
+
+        await self.migrate(command.downgrade, "c4e8a2f6b1d3")
+        async with self.engine.connect() as connection:
+            columns = await connection.run_sync(lambda conn: {
+                column["name"] for column in inspect(conn).get_columns("jobs")
+            })
+            jobs = await connection.scalar(text("SELECT count(*) FROM jobs"))
+        self.assertTrue({"contract", "employment_tags", "conditions_unrecognised"}.isdisjoint(columns))
+        self.assertEqual(jobs, 2)
+        await self.migrate(command.upgrade, "head")
+        await self.migrate(command.check)

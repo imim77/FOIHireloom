@@ -110,3 +110,37 @@ class JobModelTests(ModelTestCase):
         ):
             with self.subTest(values=values):
                 await self.assert_rejected(self.job(**values))
+
+    async def test_normalised_conditions_use_known_codes_and_need_a_fetched_page(self) -> None:
+        now = datetime.now(timezone.utc)
+        fetched = {"page_status": "fetched", "page_checked_at": now, "page_fetched_at": now, "page_source_hash": "h"}
+        self.session.add(self.job(
+            **fetched, experience_months=0, trainee=True, contract="fixed_term", employment_tags=["seasonal", "trainee"],
+            full_time=False, weekly_hours=20, education_levels=["primary", "secondary_3"], accommodation="none",
+            schedule_tags=["night"], transport_allowance="partial", conditions_unrecognised=["work_schedule"],
+        ))
+        self.session.add(self.job(**fetched, experience_months=18, trainee=False, employment_tags=[]))
+        await self.session.flush()
+        for values in (
+            {"contract": "permanent"},
+            {"conditions_unrecognised": ["experience"]},
+            {"page_status": "unavailable", "page_checked_at": now, "education_levels": ["university"]},
+        ):
+            with self.subTest(values=values):
+                await self.assert_rejected(self.job(**values))
+        for values in (
+            {"contract": "seasonal"},
+            {"employment_tags": ["vacancy", "volunteer"]},
+            {"education_levels": ["doctorate"]},
+            {"accommodation": "hostel"},
+            {"schedule_tags": ["evening"]},
+            {"transport_allowance": "yes"},
+            {"conditions_unrecognised": ["title"]},
+            {"experience_months": -1, "trainee": False},
+            {"experience_months": 6, "trainee": True},
+            {"experience_months": 6},
+            {"trainee": False},
+            {"weekly_hours": 0},
+        ):
+            with self.subTest(values=values):
+                await self.assert_rejected(self.job(**fetched, **values))

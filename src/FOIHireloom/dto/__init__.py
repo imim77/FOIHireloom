@@ -5,7 +5,7 @@ from .county import CountyDefinitionDTO, CountyDTO
 from .hzz_feed import FeedResponseDTO
 from .hzz_job_page import ParsedJobPageDTO
 from .job import ParsedFeedDTO, ParsedJobDTO
-from .job_conditions import JobConditionsDTO, RawJobConditionsDTO
+from .job_conditions import JobConditionsDTO, JobConditionsInputDTO, JobConditionsRunDTO, RawJobConditionsDTO
 from .job_market import (
     CountyMarketCountDTO,
     CountyShareDTO,
@@ -75,6 +75,8 @@ __all__ = [
     "FeedSyncResultDTO",
     "FilledCategoryDTO",
     "JobConditionsDTO",
+    "JobConditionsInputDTO",
+    "JobConditionsRunDTO",
     "JobCountyDTO",
     "JobCursorDTO",
     "JobDetailsDTO",

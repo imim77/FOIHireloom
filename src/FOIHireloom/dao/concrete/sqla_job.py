@@ -9,6 +9,7 @@ from FOIHireloom.db.models.job import SEARCH_TITLE_WEIGHT
 from FOIHireloom.dto.category_snapshot import CategoryInputDTO
 from FOIHireloom.dto.hzz_job_page import ParsedJobPageDTO
 from FOIHireloom.dto.job import ParsedJobDTO
+from FOIHireloom.dto.job_conditions import JobConditionsDTO, JobConditionsInputDTO, RawJobConditionsDTO
 from FOIHireloom.dto.job_market import (
     MARKET_WINDOW_DAYS,
     CountyMarketCountDTO,
@@ -20,6 +21,13 @@ from FOIHireloom.dto.job_page import JobPageTargetDTO
 from FOIHireloom.dto.job_search import CategoryDTO, JobFilterCriteriaDTO, JobSearchCriteriaDTO
 from FOIHireloom.dto.job_sync import CategoryEvidenceDTO, FilledCategoryDTO, JobSnapshotDTO
 from FOIHireloom.dao.interfaces.job import JobRepository, JobSearchHit
+
+# Columns by JobConditionsDTO field, and the page columns by RawJobConditionsDTO field.
+STORED_CONDITIONS = {
+    name: getattr(Job, "conditions_unrecognised" if name == "unrecognised" else name)
+    for name in JobConditionsDTO.model_fields
+}
+PAGE_CONDITIONS = {name: getattr(Job, f"page_{name}") for name in RawJobConditionsDTO.model_fields}
 
 
 class SqlAlchemyJobRepository(JobRepository):
@@ -265,11 +273,13 @@ class SqlAlchemyJobRepository(JobRepository):
         statement = select(func.count()).select_from(Job).where(listed_condition(), page_due_condition(retry_before))
         return await self._session.scalar(statement)
 
-    async def record_page(self, job_id: int, page: ParsedJobPageDTO, source_hash: str, checked_at: datetime) -> None:
+    async def record_page(
+        self, job_id: int, page: ParsedJobPageDTO, conditions: JobConditionsDTO, source_hash: str, checked_at: datetime,
+    ) -> None:
         await self._session.execute(update(Job).where(Job.id == job_id).values(
             page_status="fetched", page_checked_at=checked_at, page_fetched_at=checked_at,
             page_source_hash=source_hash, page_error=None,
-            **{f"page_{name}": value for name, value in page.model_dump().items()},
+            **{f"page_{name}": value for name, value in page.model_dump().items()}, **self._conditions(conditions),
         ))
 
     async def record_page_problem(self, job_id: int, status: str, error: str, checked_at: datetime) -> None:
@@ -278,6 +288,33 @@ class SqlAlchemyJobRepository(JobRepository):
         await self._session.execute(update(Job).where(Job.id == job_id).values(
             page_status=status, page_checked_at=checked_at, page_error=error,
         ))
+
+    async def list_condition_inputs(self) -> list[JobConditionsInputDTO]:
+        statement = (
+            select(Job.id, *PAGE_CONDITIONS.values(), *STORED_CONDITIONS.values())
+            .where(Job.page_fetched_at.is_not(None))
+            .order_by(Job.id)
+            .with_for_update()
+        )
+        result = await self._session.execute(statement)
+        return [
+            JobConditionsInputDTO(
+                job_id=row[Job.id],
+                raw=RawJobConditionsDTO(**{name: row[column] for name, column in PAGE_CONDITIONS.items()}),
+                stored=JobConditionsDTO(**{name: row[column] for name, column in STORED_CONDITIONS.items()}),
+            )
+            for row in result.mappings()
+        ]
+
+    async def set_conditions(self, conditions: Mapping[int, JobConditionsDTO]) -> None:
+        rows = [{"id": job_id, **self._conditions(values)} for job_id, values in conditions.items()]
+        if rows:
+            await self._session.execute(update(Job), rows)
+
+    @staticmethod
+    def _conditions(conditions: JobConditionsDTO) -> dict[str, object]:
+        """Column values for normalised conditions, with tuples as lists for the array columns."""
+        return {STORED_CONDITIONS[name].key: value for name, value in conditions.model_dump(mode="json").items()}
 
     @staticmethod
     def _content(job: ParsedJobDTO) -> dict[str, object]:
