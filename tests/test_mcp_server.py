@@ -61,7 +61,8 @@ class FakeJobSearchService(JobSearchServiceInterface):
         self.raise_error()
         return JobCardsPageDTO(jobs=(JobCardDTO(**SUMMARY, workers_needed=2, employment_type="Na neodređeno"),),
                                next_cursor="next", coverage=COVERAGE, today=SEEN.date(),
-                               unknown_conditions={"full_time": 1} if filters.full_time is not None else {})
+                               unknown_conditions={"full_time": 1} if filters.full_time is not None else {},
+                               unknown_total=int(filters.full_time is not None))
 
     async def market_stats(self, filters: JobMarketFiltersDTO) -> JobMarketStatsDTO:
         self.market_filters.append(filters)
@@ -198,7 +199,7 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
                                                 JobSearchFiltersDTO(**conditions, limit=6, cursor="next")])
         self.assertEqual(self.service.market_filters, [JobMarketFiltersDTO(**conditions)] * 2)
         self.assertEqual({name: cards["filters"][name] for name in conditions}, conditions)
-        self.assertEqual(cards["unknown_conditions"], {"full_time": 1})
+        self.assertEqual((cards["unknown_conditions"], cards["unknown_total"]), ({"full_time": 1}, 1))
 
     async def test_job_market_stats_passes_filters_and_returns_coverage(self) -> None:
         async with Client(self.server) as client:

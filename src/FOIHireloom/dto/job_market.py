@@ -97,13 +97,14 @@ class JobMarketStatsDTO(JobMarketAggregatesDTO):
     """Market statistics as of today (Europe/Zagreb) with the freshness of the counties they cover.
 
     When coverage is not fresh, the counts may be outdated or incomplete.
-    unknown_conditions is as in JobSearchPageDTO.
+    unknown_conditions and unknown_total are as in JobSearchPageDTO.
     """
 
     today: date
     window_days: int = MARKET_WINDOW_DAYS
     coverage: CoverageDTO
     unknown_conditions: dict[str, int] = {}
+    unknown_total: int = 0
 
 
 class CountyShareDTO(ModelConfigBaseModel):
@@ -122,7 +123,7 @@ class JobsByCountyDTO(ModelConfigBaseModel):
 
     Counties are ranked by metric, highest first; the chart draws that value
     as columns, shows the first top counties and lets the user expand it to all.
-    unknown_conditions is as in JobSearchPageDTO.
+    unknown_conditions and unknown_total are as in JobSearchPageDTO.
     """
 
     metric: CountyMetric
@@ -135,3 +136,4 @@ class JobsByCountyDTO(ModelConfigBaseModel):
     counties: tuple[CountyShareDTO, ...]
     coverage: CoverageDTO
     unknown_conditions: dict[str, int] = {}
+    unknown_total: int = 0

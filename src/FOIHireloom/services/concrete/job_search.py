@@ -27,6 +27,7 @@ from FOIHireloom.dto.job_search import (
     JobSummaryDTO,
     RegionDTO,
     RegionFreshnessDTO,
+    UnknownConditionsDTO,
 )
 from FOIHireloom.exceptions import InvalidJobSearchError, NotFoundError
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
@@ -66,18 +67,19 @@ class JobSearchService(JobSearchServiceInterface):
 
     async def search(self, filters: JobSearchFiltersDTO) -> JobSearchPageDTO:
         jobs, next_cursor, coverage, _, unknown = await self._search(filters, self._summary)
-        return JobSearchPageDTO(jobs=jobs, next_cursor=next_cursor, coverage=coverage, unknown_conditions=unknown)
+        return JobSearchPageDTO(jobs=jobs, next_cursor=next_cursor, coverage=coverage,
+                                unknown_conditions=unknown.by_filter, unknown_total=unknown.total)
 
     async def search_cards(self, filters: JobSearchFiltersDTO) -> JobCardsPageDTO:
         jobs, next_cursor, coverage, today, unknown = await self._search(filters, self._card)
         return JobCardsPageDTO(jobs=jobs, next_cursor=next_cursor, coverage=coverage, today=today,
-                               unknown_conditions=unknown)
+                               unknown_conditions=unknown.by_filter, unknown_total=unknown.total)
 
     async def _search[T: JobSummaryDTO](
         self, filters: JobSearchFiltersDTO, result: Callable[[Job, date, JobCountyDTO | None, bool | None], T],
-    ) -> tuple[tuple[T, ...], str | None, CoverageDTO, date, dict[str, int]]:
+    ) -> tuple[tuple[T, ...], str | None, CoverageDTO, date, UnknownConditionsDTO]:
         """One page of jobs, each made by result, with the next page's cursor, the searched counties' coverage,
-        today and the jobs left out as unknown per condition filter.
+        today and the jobs left out only for unknown values.
         """
         terms = self._terms(filters.query)
         conditions = self._conditions(filters)
@@ -132,7 +134,7 @@ class JobSearchService(JobSearchServiceInterface):
         if county_code is not None:
             regions = [region for region in regions if region.code == county_code]
         return JobMarketStatsDTO(**aggregates.model_dump(), today=today, coverage=self._coverage(regions),
-                                 unknown_conditions=unknown)
+                                 unknown_conditions=unknown.by_filter, unknown_total=unknown.total)
 
     async def get_job(self, job_id: int) -> JobDetailsDTO:
         async with self._uow_factory() as work:

@@ -14,7 +14,7 @@ from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
 from FOIHireloom.dto.job_conditions import EducationLevel, EmploymentTag
 from FOIHireloom.dto.job_market import JobMarketCriteriaDTO, JobMarketFiltersDTO
-from FOIHireloom.dto.job_search import JobSearchCriteriaDTO, JobSearchFiltersDTO
+from FOIHireloom.dto.job_search import JobSearchCriteriaDTO, JobSearchFiltersDTO, UnknownConditionsDTO
 from FOIHireloom.exceptions import InvalidJobSearchError
 from FOIHireloom.services import CroatianCountyCatalog, JobSearchService
 
@@ -149,22 +149,25 @@ class JobConditionFilterTests(ModelTestCase):
             with self.subTest(place=place), self.assertRaises(ValidationError):
                 self.criteria(place=place)
 
-    async def test_unknown_counts_name_the_jobs_each_filter_left_out(self) -> None:
-        criteria = self.criteria(county_id=self.county_ids["varazdinska"], max_experience_months=0,
-                                 contract="permanent", full_time=True)
-        # The expired job is not counted, and the unread one is unknown for every filter, so for none alone.
-        self.assertEqual(await self.repository.count_unknown_conditions(criteria),
-                         {"max_experience_months": 1, "contract": 1, "full_time": 0})
+    async def test_unknown_counts_name_the_jobs_left_out_only_for_unknown_values(self) -> None:
         cases = (
-            ({"place": "varazdin"}, {"place": 1}),
-            ({"education": "university", "accommodation": True}, {"education": 1, "accommodation": 0}),
-            ({"employment_tags": ("new_position",), "full_time": True}, {"full_time": 0, "employment_tags": 1}),
-            ({"place": "varazdin", "county_id": self.county_ids["istarska"]}, {"place": 0}),
-            ({}, {}),
+            # The plan's example: the unread job is unknown for all three filters, so it counts under each and
+            # once in total; no_contract and unstated are unknown for one. The expired job is not counted.
+            ({"county_id": self.county_ids["varazdinska"], "max_experience_months": 0, "contract": "permanent",
+              "full_time": True}, {"max_experience_months": 2, "contract": 2, "full_time": 1}, 3),
+            # three_years and year need too much experience, so their unknown contract does not count.
+            ({"max_experience_months": 0, "contract": "permanent"}, {"max_experience_months": 2, "contract": 2}, 3),
+            ({"place": "varazdin"}, {"place": 1}, 1),
+            ({"education": "university", "accommodation": True}, {"education": 4, "accommodation": 3}, 4),
+            # no_contract has no tags, which is known, so it counts nowhere.
+            ({"employment_tags": ("new_position",), "full_time": True}, {"full_time": 2, "employment_tags": 3}, 3),
+            ({"place": "varazdin", "county_id": self.county_ids["istarska"]}, {"place": 0}, 0),
+            ({}, {}, 0),
         )
-        for values, expected in cases:
+        for values, by_filter, total in cases:
             with self.subTest(criteria=values):
-                self.assertEqual(await self.repository.count_unknown_conditions(self.criteria(**values)), expected)
+                self.assertEqual(await self.repository.count_unknown_conditions(self.criteria(**values)),
+                                 UnknownConditionsDTO(by_filter=by_filter, total=total))
 
     async def test_breakdowns_count_known_normalised_values(self) -> None:
         stats = await self.repository.market_aggregates(JobMarketCriteriaDTO(open_on=self.today, today=self.today,
@@ -195,9 +198,11 @@ class JobConditionFilterTests(ModelTestCase):
         stats = await self.service.market_stats(JobMarketFiltersDTO(**EXAMPLE))
         self.assertEqual([job.source_job_id for job in search.jobs], ["trainee"])
         self.assertEqual(stats.jobs, 1)
-        expected = {"max_experience_months": 1, "contract": 1, "full_time": 0}
-        self.assertEqual((search.unknown_conditions, stats.unknown_conditions), (expected, expected))
-        self.assertEqual((await self.service.search(JobSearchFiltersDTO(county="varazdinska"))).unknown_conditions, {})
+        for result in (search, stats):
+            self.assertEqual((result.unknown_conditions, result.unknown_total),
+                             ({"max_experience_months": 2, "contract": 2, "full_time": 1}, 3))
+        unfiltered = await self.service.search(JobSearchFiltersDTO(county="varazdinska"))
+        self.assertEqual((unfiltered.unknown_conditions, unfiltered.unknown_total), ({}, 0))
 
     async def test_place_ignores_case_and_diacritics_and_needs_a_word(self) -> None:
         for place in ("Varaždin", "Varazdin", "VARAŽDIN", " varaždin "):
@@ -228,7 +233,8 @@ class JobConditionFilterTests(ModelTestCase):
                 seen, cursor = [], None
                 while True:
                     page = await self.service.search(JobSearchFiltersDTO(**filters, limit=2, cursor=cursor))
-                    self.assertEqual(page.unknown_conditions, everything.unknown_conditions)
+                    self.assertEqual((page.unknown_conditions, page.unknown_total),
+                                     (everything.unknown_conditions, everything.unknown_total))
                     seen.extend(job.id for job in page.jobs)
                     if (cursor := page.next_cursor) is None:
                         break
@@ -237,5 +243,6 @@ class JobConditionFilterTests(ModelTestCase):
                 stats = await self.service.market_stats(JobMarketFiltersDTO(**filters))
                 self.assertEqual([job.id for job in cards.jobs], seen)
                 self.assertEqual(stats.jobs, len(seen))
-                self.assertEqual((cards.unknown_conditions, stats.unknown_conditions),
-                                 (everything.unknown_conditions, everything.unknown_conditions))
+                for result in (cards, stats):
+                    self.assertEqual((result.unknown_conditions, result.unknown_total),
+                                     (everything.unknown_conditions, everything.unknown_total))

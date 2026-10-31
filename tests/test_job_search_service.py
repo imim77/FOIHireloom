@@ -360,7 +360,7 @@ class JobSearchServiceTests(ModelTestCase):
                          [("bjelovarsko-bilogorska", 2), ("grad-zagreb", 2)])
         self.assertEqual([(item.name, item.jobs) for item in stats.contracts + stats.employment_tags],
                          [("permanent", 1), ("seasonal", 1)])
-        self.assertEqual(stats.unknown_conditions, {})
+        self.assertEqual((stats.unknown_conditions, stats.unknown_total), ({}, 0))
         # Istria has no feed, so coverage reports it as a search would.
         self.assertEqual(stats.coverage, (await self.service.search(JobSearchFiltersDTO())).coverage)
         for filters in ({"query": "kuharice"}, {"category": HOSPITALITY.lower()}, {"include_expired": True},

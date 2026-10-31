@@ -26,6 +26,7 @@ def stats(jobs: int = 3000, counties: tuple = ()) -> JobMarketStatsDTO:
             {"code": "licko-senjska", "name": "Ličko-senjska županija", "jobs": 1, "workers_needed": 2},
         ),
         **NO_BREAKDOWNS, today=date(2026, 10, 30), coverage=FRESH, unknown_conditions={"full_time": 4},
+        unknown_total=4,
     )
 
 
@@ -36,7 +37,7 @@ class JobsByCountyAppTests(unittest.TestCase):
         self.assertEqual([(county.short_name, county.jobs, county.share) for county in chart.counties],
                          [("Grad Zagreb", 1325, 44.2), ("Istarska", 507, 16.9), ("Ličko-senjska", 1, 0.0)])
         self.assertEqual(chart.counties[1].name, "Istarska županija")
-        self.assertEqual((chart.coverage, chart.unknown_conditions), (FRESH, {"full_time": 4}))
+        self.assertEqual((chart.coverage, chart.unknown_conditions, chart.unknown_total), (FRESH, {"full_time": 4}, 4))
 
     def test_ranks_and_titles_the_counties_by_the_chosen_metric(self) -> None:
         by_jobs = jobs_by_county(stats(), 7, None, None)

@@ -205,24 +205,38 @@ class CoverageDTO(ModelConfigBaseModel):
     warning: str | None
 
 
+class UnknownConditionsDTO(ModelConfigBaseModel):
+    """Jobs the condition filters left out only because a value is unknown.
+
+    Each such job matches every other criterion, and every condition filter
+    either matches it or its value is unknown, so it could match if the
+    unknown values were favourable. by_filter counts them per condition
+    filter whose value is unknown, so a job unknown for two filters counts
+    under both; total counts each job once and is 0 without condition filters.
+    """
+
+    by_filter: dict[str, int] = {}
+    total: int = 0
+
+
 class JobSearchPageDTO(ModelConfigBaseModel):
     """A search page.
 
-    unknown_conditions names each condition filter given, with the number of
-    jobs matching every other filter that were left out because their value
-    for it is unknown; it covers every page, not only this one.
+    unknown_total and unknown_conditions are UnknownConditionsDTO's total
+    and by_filter; they cover every page, not only this one.
     """
 
     jobs: tuple[JobSummaryDTO, ...]
     next_cursor: str | None
     coverage: CoverageDTO
     unknown_conditions: dict[str, int] = {}
+    unknown_total: int = 0
 
 
 class JobCardsPageDTO(ModelConfigBaseModel):
     """A search page of job cards; today is the day in Croatia that deadlines were compared with.
 
-    unknown_conditions is as in JobSearchPageDTO.
+    unknown_conditions and unknown_total are as in JobSearchPageDTO.
     """
 
     jobs: tuple[JobCardDTO, ...]
@@ -230,6 +244,7 @@ class JobCardsPageDTO(ModelConfigBaseModel):
     coverage: CoverageDTO
     today: date
     unknown_conditions: dict[str, int] = {}
+    unknown_total: int = 0
 
 
 class JobCardsDTO(JobCardsPageDTO):

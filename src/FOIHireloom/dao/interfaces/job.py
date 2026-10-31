@@ -10,7 +10,7 @@ from FOIHireloom.dto.job import ParsedJobDTO
 from FOIHireloom.dto.job_conditions import JobConditionsDTO, JobConditionsInputDTO
 from FOIHireloom.dto.job_market import JobMarketAggregatesDTO, JobMarketCriteriaDTO
 from FOIHireloom.dto.job_page import JobPageTargetDTO
-from FOIHireloom.dto.job_search import CategoryDTO, JobFilterCriteriaDTO, JobSearchCriteriaDTO
+from FOIHireloom.dto.job_search import CategoryDTO, JobFilterCriteriaDTO, JobSearchCriteriaDTO, UnknownConditionsDTO
 from FOIHireloom.dto.job_sync import CategoryEvidenceDTO, FilledCategoryDTO, JobSnapshotDTO
 
 
@@ -48,9 +48,12 @@ class JobRepository(ABC):
         """
 
     @abstractmethod
-    async def count_unknown_conditions(self, criteria: JobFilterCriteriaDTO) -> dict[str, int]:
-        """Count, per condition filter that criteria sets, the listed jobs matching every other
-        criterion whose value for that filter is unknown, so the filter left them out.
+    async def count_unknown_conditions(self, criteria: JobFilterCriteriaDTO) -> UnknownConditionsDTO:
+        """Count the listed jobs the condition filters of criteria left out only for unknown values.
+
+        Such a job matches every other criterion, and each condition filter
+        either matches it or its value is unknown. by_filter counts them per
+        filter whose value is unknown; total counts each job once.
         """
 
     @abstractmethod

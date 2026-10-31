@@ -79,4 +79,5 @@ class JobToolsDatabaseTests(ModelTestCase):
         self.assertEqual(stats["counties"], [{"code": "grad-zagreb", "name": "Grad Zagreb", "jobs": 3,
                                               "workers_needed": 0}])
         self.assertEqual((stats["employers"], stats["coverage"]["data_status"]), ([], "unavailable"))
-        self.assertEqual((full_time["jobs"], full_time["unknown_conditions"]), (0, {"full_time": 3}))
+        self.assertEqual((full_time["jobs"], full_time["unknown_conditions"], full_time["unknown_total"]),
+                         (0, {"full_time": 3}, 3))

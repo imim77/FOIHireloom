@@ -23,6 +23,7 @@ from FOIHireloom.dto.job_search import (
     JobConditionFiltersDTO,
     JobFilterCriteriaDTO,
     JobSearchCriteriaDTO,
+    UnknownConditionsDTO,
 )
 from FOIHireloom.dto.job_sync import CategoryEvidenceDTO, FilledCategoryDTO, JobSnapshotDTO
 from FOIHireloom.dao.interfaces.job import JobRepository, JobSearchHit
@@ -90,18 +91,21 @@ class SqlAlchemyJobRepository(JobRepository):
         statement = statement.order_by(*order).limit(criteria.limit)
         return [JobSearchHit(job, title_match) for job, title_match in await self._session.execute(statement)]
 
-    async def count_unknown_conditions(self, criteria: JobFilterCriteriaDTO) -> dict[str, int]:
+    async def count_unknown_conditions(self, criteria: JobFilterCriteriaDTO) -> UnknownConditionsDTO:
         conditions = condition_filters(criteria)
         if not conditions:
-            return {}
-        # Each count takes every other condition filter, and this one's value unknown.
+            return UnknownConditionsDTO()
+        # A job could match a filter when it matches it or its value is unknown.
+        possible = {name: or_(condition, UNKNOWN_CONDITIONS[name]) for name, condition in conditions.items()}
         counts = [
-            func.count().filter(UNKNOWN_CONDITIONS[name], *(other for key, other in conditions.items() if key != name))
+            func.count().filter(UNKNOWN_CONDITIONS[name], *(other for key, other in possible.items() if key != name))
             for name in conditions
         ]
+        total = func.count().filter(*possible.values(), or_(*(UNKNOWN_CONDITIONS[name] for name in conditions)))
+        # Every criterion but the condition filters, as search applies it.
         others = filter_conditions(criteria.model_copy(update=dict.fromkeys(conditions)))
-        row = (await self._session.execute(select(*counts).select_from(Job).where(*others))).one()
-        return dict(zip(conditions, row))
+        *by_filter, total = (await self._session.execute(select(*counts, total).select_from(Job).where(*others))).one()
+        return UnknownConditionsDTO(by_filter=dict(zip(conditions, by_filter)), total=total)
 
     async def market_aggregates(self, criteria: JobMarketCriteriaDTO) -> JobMarketAggregatesDTO:
         found = (

@@ -20,8 +20,9 @@ class JobSearchServiceInterface(ABC):
 
         Query words match word prefixes with or without Croatian diacritics,
         and every word must match. Pass next_cursor back, with the same
-        filters, to get the next page. unknown_conditions counts the jobs that
-        each condition filter left out because their value is unknown.
+        filters, to get the next page. unknown_total and unknown_conditions
+        count the jobs the condition filters left out only because a value is
+        unknown, in all and per filter, as UnknownConditionsDTO describes.
         Raise NotFoundError for an unknown county and InvalidJobSearchError
         for a query or place without words or a malformed cursor.
         """
@@ -34,7 +35,7 @@ class JobSearchServiceInterface(ABC):
     async def market_stats(self, filters: JobMarketFiltersDTO) -> JobMarketStatsDTO:
         """Count the jobs search() would find for the same filters, by county, category, employer and conditions.
 
-        unknown_conditions is as in search(). Raise NotFoundError for an
+        unknown_total and unknown_conditions are as in search(). Raise NotFoundError for an
         unknown county and InvalidJobSearchError for a query or place without words.
         """
 

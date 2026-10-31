@@ -141,9 +141,13 @@ class JobTools(ToolGroup):
             use the values read from the job's HZZ page, and place also the
             feed's municipality. A job whose value is unknown, because its
             page was not read or does not state it, never matches.
-            unknown_conditions gives, per condition filter used, how many jobs
-            matching every other filter were left out that way; when one is
-            not 0, tell the user, and never say those jobs meet the condition.
+            unknown_total is the number of jobs left out only for unknown
+            values: they meet or might meet every condition filter.
+            unknown_conditions gives, per condition filter, how many of them
+            have an unknown value for it; a job can count under several.
+            Whenever unknown_total is not 0, tell the user how many jobs might
+            also match and which filters had unknown values, and never say
+            those jobs meet the conditions.
 
             coverage says how current the searched counties are. When
             coverage.warning is set, tell the user that results may be
@@ -197,7 +201,8 @@ class JobTools(ToolGroup):
             The user can load more cards there. Every host also gets the
             data: the jobs as in search_jobs plus those job page values, which
             are null until the job's HZZ page has been read. Condition
-            filters and unknown_conditions work as in search_jobs. When
+            filters, unknown_total and unknown_conditions work as in
+            search_jobs; report unknown_total whenever it is not 0. When
             coverage.warning is set, tell the user the results may be
             outdated or incomplete.
             """
@@ -265,8 +270,9 @@ class JobTools(ToolGroup):
             levels and schedule tags, so those counts may add up to more than
             jobs. published_recently and closing_soon count jobs published in
             the last window_days days, or closing within the next window_days
-            days, counted from today. Condition filters and
-            unknown_conditions work as in search_jobs.
+            days, counted from today. Condition filters, unknown_total and
+            unknown_conditions work as in search_jobs; report unknown_total
+            whenever it is not 0, as jobs that might also match.
 
             coverage says how current the counted counties are. When
             coverage.warning is set, tell the user the numbers may be
@@ -316,9 +322,10 @@ class JobTools(ToolGroup):
             hover and select, with a button that opens every county full
             screen. Every host also gets the data: each county with matching
             jobs, ranked by metric, with jobs, workers_needed and share
-            (percent of total_jobs). Condition filters and
-            unknown_conditions work as in search_jobs. When coverage.warning
-            is set, tell the user the numbers may be outdated or incomplete.
+            (percent of total_jobs). Condition filters, unknown_total and
+            unknown_conditions work as in search_jobs; report unknown_total
+            whenever it is not 0. When coverage.warning is set, tell the user
+            the numbers may be outdated or incomplete.
             """
             filters = JobMarketFiltersDTO(
                 query=query, category=category, max_experience_months=max_experience_months, contract=contract,
