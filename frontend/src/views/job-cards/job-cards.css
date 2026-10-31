@@ -25,16 +25,6 @@
 .when { flex: 1; min-width: 0; margin: 0; font-size: 13px; color: var(--fg-soft); }
 .when b { font-weight: 600; color: var(--fg-loud); }
 
-.ring { position: relative; flex: none; display: grid; place-items: center; width: 76px; height: 40px; }
-.ring svg { position: absolute; inset: 0; overflow: visible; }
-.ring path { fill: none; stroke-width: 3; stroke-linecap: round; }
-.ring-track { stroke: var(--surface-subdued); }
-.ring.open .ring-fill { stroke: var(--green-500); }
-.ring.soon .ring-fill { stroke: var(--orange-500); }
-.ring.urgent .ring-fill { stroke: var(--red-500); }
-.ring-text { position: relative; display: flex; align-items: baseline; gap: 2px; font-variant-numeric: tabular-nums; }
-.ring-text b { font-size: 16px; font-weight: 700; }
-.ring-text small { font-size: 10px; font-weight: 600; color: var(--fg-soft); }
 
 .action {
   display: grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 10px;

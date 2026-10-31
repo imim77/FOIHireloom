@@ -131,9 +131,9 @@ class JobTools(ToolGroup):
 
             Use it when the user wants to see or browse jobs, not just read
             about them. Hosts that support MCP Apps draw a card per job: the
-            employer, the title, the days left to apply, the place, the
-            employment type, working hours, education, experience, workers
-            sought and accommodation, with a link to the HZZ advertisement.
+            employer, the title, the place, the employment type, working
+            hours, education, experience, workers sought, accommodation and
+            the application deadline, with a link to the HZZ advertisement.
             The user can load more cards there. Every host also gets the
             data: the jobs as in search_jobs plus those job page values, which
             are null until the job's HZZ page has been read. When

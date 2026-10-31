@@ -1,28 +1,18 @@
-// One job, after the reference card: the employer's tile, name and line, the days left to apply, the title, the
-// job's labels and, under a rule, when it was published and until when to apply, with its actions. Animated with
-// anime.js like the county chart: the card rises in after the ones before it, the tile pops, the ring fills while its
-// days count up, then the labels come in one after another and the footer last.
+// One job, after the reference card: the employer's tile, name and line, the title, the job's labels and, under a
+// rule, when it was published and until when to apply, with its actions. Animated with anime.js like the county
+// chart: the card rises in after the ones before it, the tile pops, then the labels come in one after another and
+// the footer last.
 
 import { animate, stagger, utils } from 'animejs'
 import { useRef } from 'react'
 import { fadeIn, finish, releaseStyles, useChartEntrance } from '../../shared/chart-motion'
-import { type Deadline, DeadlineRing } from './DeadlineRing'
-import { chips, daysBetween, deadline, initials, published, sentenceCase, subtitle } from './job-format'
+import { chips, deadline, initials, published, sentenceCase, subtitle } from './job-format'
 import type { JobCard } from './types'
 
 const CARD_STAGGER = 90
 const TILE_AT = 150
-const RING_AT = 250
 const CHIPS_AT = 300
 const FOOT_AT = 450
-const FILL = 1100
-
-function deadlineOf(job: JobCard, today: string): Deadline | null {
-  if (!job.deadline_on || job.deadline_passed) return null
-  const daysLeft = Math.max(0, daysBetween(today, job.deadline_on))
-  const window = job.published_on ? daysBetween(job.published_on, job.deadline_on) : Math.max(daysLeft, 30)
-  return { daysLeft, open: window > 0 ? Math.min(1, daysLeft / window) : 0 }
-}
 
 export interface CardActions {
   // Open the advertisement on the HZZ site.
@@ -57,7 +47,6 @@ export function JobCardView({ job, today, order, actions }: {
   order: number
   actions: CardActions
 }) {
-  const ring = deadlineOf(job, today)
   const labels = chips(job)
   const employer = job.employer_name ?? 'Poslodavac nije naveden'
   const root = useRef<HTMLElement>(null)
@@ -74,24 +63,11 @@ export function JobCardView({ job, today, order, actions }: {
       timeline.add(tile, { opacity: [0, 1], scale: [0.6, 1], duration: 700, ease: 'outBack(1.8)',
         onComplete: releaseStyles('opacity', 'transform') }, at + TILE_AT)
     }
-    const fill = one('[data-slot="ring-fill"]')
-    const days = one('[data-slot="ring-days"]')
-    const draw = (t: number) => {
-      if (!ring) return
-      fill?.setAttribute('stroke-dasharray', `${ring.open * 100 * t} 100`)
-      if (days) days.textContent = String(Math.round(ring.daysLeft * t))
-    }
-    if (ring) {
-      const filled = { t: 0 }
-      draw(0)
-      timeline.add(filled, { t: [0, 1], duration: FILL, ease: 'outExpo', onUpdate: () => draw(filled.t) }, at + RING_AT)
-    }
     const labels = all('[data-slot="chip"]')
     if (labels.length) timeline.add(labels, { ...fadeIn(labels, 4), duration: 500, delay: stagger(40) }, at + CHIPS_AT)
     const foot = all('[data-slot="foot"]')
     timeline.add(foot, { ...fadeIn(foot), duration: 500 }, at + FOOT_AT)
     return () => {
-      draw(1)
       for (const el of [card, tile, ...labels, ...foot]) {
         el?.style.removeProperty('opacity')
         el?.style.removeProperty('transform')
@@ -107,7 +83,6 @@ export function JobCardView({ job, today, order, actions }: {
           <p className="employer truncate" title={employer}>{employer}</p>
           <p className="soft-line truncate">{subtitle(job)}</p>
         </div>
-        {ring && <DeadlineRing deadline={ring} />}
       </div>
       <h2 className="job-title">{sentenceCase(job.display_title)}</h2>
       {labels.length > 0 && (
