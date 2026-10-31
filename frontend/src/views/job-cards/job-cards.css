@@ -1,10 +1,12 @@
-/* A job after the reference job row, on the Performance chart's white panel: labels, the title, the employer line,
-   a rule, the details in three columns with their icons, and a rule between jobs. */
-.job-list { display: flex; flex-direction: column; }
+/* Each job is a tile of the Performance chart (white, 16px round, a soft drop shadow and a 1px ring), laid out after
+   the reference job row: labels, the title, the employer line, a rule and the details in three columns with icons. */
+.job-list { display: flex; flex-direction: column; gap: 12px; }
 
-.job { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding-top: 16px; }
-.job:first-child { padding-top: 0; }
-/* The rules are elements, not borders, so they can draw across. */
+.job {
+  display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 16px; border-radius: 16px;
+  background: var(--card); box-shadow: 0 1px 2px rgb(40 40 40 / 0.08), 0 0 0 1px var(--border);
+}
+/* The rule is an element, not a border, so it can draw across. */
 .rule { display: block; height: 1px; background: var(--border); transform-origin: left; }
 
 .job-top { display: flex; align-items: center; gap: 8px; min-width: 0; }

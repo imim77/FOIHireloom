@@ -1,8 +1,8 @@
-// One job, after the reference job row (without the company logo): labels for how long ago it was published and its
-// category, the title, the employer in capitals over a slash and its county, then under a rule the details in three
-// columns, each with its icon, and a rule under the job. Animated with anime.js like the Performance chart: the job
-// rises in after the ones before it like its tiles, its labels come in, its rules draw across like its grid lines and
-// the details come in one after another.
+// One job on a tile of the Performance chart, laid out after the reference job row (without the company logo): labels
+// for how long ago it was published and its category, the title, the employer in capitals over a slash and its
+// county, then under a rule the details in three columns, each with its icon. Animated with anime.js like the
+// Performance chart: the tile rises in after the ones before it, its labels come in, its rule draws across like the
+// chart's grid lines and the details come in one after another.
 
 import { animate, stagger, utils } from 'animejs'
 import { useRef } from 'react'
@@ -85,8 +85,8 @@ export function JobCardView({ job, today, order, actions }: {
     if (labels.length) timeline.add(labels, { ...fadeIn(labels, 4), duration: 500, delay: stagger(60) }, at + LABELS_AT)
     const rules = all('[data-slot="rule"]')
     utils.set(rules, { scaleX: 0 })
-    timeline.add(rules, { scaleX: [0, 1], duration: 900, ease: 'outQuad', delay: stagger(120),
-      onComplete: releaseStyles('transform') }, at + RULES_AT)
+    timeline.add(rules, { scaleX: [0, 1], duration: 900, ease: 'outQuad', onComplete: releaseStyles('transform') },
+      at + RULES_AT)
     const items = all('[data-slot="detail"]')
     if (items.length) timeline.add(items, { ...fadeIn(items, 4), duration: 500, delay: stagger(40) }, at + DETAILS_AT)
     return () => {
@@ -125,7 +125,6 @@ export function JobCardView({ job, today, order, actions }: {
           ))}
         </ul>
       )}
-      <span className="rule" aria-hidden="true" data-slot="rule" />
     </article>
   )
 }
