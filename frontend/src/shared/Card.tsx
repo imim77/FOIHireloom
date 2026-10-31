@@ -6,11 +6,13 @@ interface CardProps {
   // Buttons at the end of the header, e.g. <ExpandButton>.
   actions?: ReactNode
   children?: ReactNode
+  // The Performance chart's card: a grey card around a white panel that holds the content (tiles go in it).
+  sunken?: boolean
 }
 
-export function Card({ title, description, actions, children }: CardProps) {
-  return (
-    <div className="card" role="group" aria-label={title}>
+export function Card({ title, description, actions, children, sunken = false }: CardProps) {
+  const content = (
+    <>
       <div className="header">
         <div className="titles">
           <p className="title truncate">{title}</p>
@@ -21,6 +23,11 @@ export function Card({ title, description, actions, children }: CardProps) {
       <ErrorBoundary>
         <div className="body">{children}</div>
       </ErrorBoundary>
+    </>
+  )
+  return (
+    <div className={`card${sunken ? ' sunken' : ''}`} role="group" aria-label={title}>
+      {sunken ? <div className="panel">{content}</div> : content}
     </div>
   )
 }

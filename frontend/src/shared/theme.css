@@ -5,6 +5,7 @@
   --fg-soft: #71717a;
   --border: #ececef;
   --surface-subdued: #eceef2;
+  --surface-sunken: #f1f2f4;
   --surface-disable: #c4c8d0;
   --surface-muted: #27272a;
   --fg-on-muted: #ffffff;
@@ -22,6 +23,7 @@
   --fg-soft: #a1a1aa;
   --border: #2e2e33;
   --surface-subdued: #3f3f46;
+  --surface-sunken: #0f0f11;
   --surface-disable: #71717a;
   --surface-muted: #f4f4f5;
   --fg-on-muted: #18181b;
@@ -38,6 +40,9 @@ body { margin: 0; background: transparent; font-family: Inter, ui-sans-serif, sy
   display: flex; flex-direction: column; gap: 24px; padding: 20px;
   background: var(--card); color: var(--fg-loud); border: 1px solid var(--border); border-radius: 20px;
 }
+/* The Performance chart's card: grey, with the content on a white panel inside. */
+.card.sunken { gap: 8px; padding: 8px; border-radius: 28px; background: var(--surface-sunken); }
+.panel { display: flex; flex-direction: column; gap: 20px; padding: 12px; border-radius: 20px; background: var(--card); }
 .header { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .titles { display: flex; flex: 1; flex-direction: column; gap: 6px; min-width: 0; }
 .title { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.25; }
