@@ -70,9 +70,8 @@ class SqlAlchemyJobRepository(JobRepository):
         found = (
             select(
                 Job.id, Job.category, Job.category_source, Job.published_on, effective_deadline().label("deadline"),
-                Job.page_fetched_at, Job.page_workers_needed.label("workers"), Job.page_employer_name,
-                Job.page_employment_type,
-                Job.page_working_hours, Job.page_education, Job.page_experience, Job.page_accommodation,
+                Job.page_fetched_at, Job.page_workers_needed.label("workers"), Job.page_education, Job.page_experience,
+                Job.page_employer_name, Job.page_employment_type, Job.page_working_hours, Job.page_accommodation,
             )
             .where(*filter_conditions(criteria))
             .cte("found")

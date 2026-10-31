@@ -77,7 +77,8 @@ class JobSummaryDTO(ModelConfigBaseModel):
     Once the job's HZZ detail page has been read, title, deadline_on,
     work_place and employer_name come from it; deadline_on is then its
     "Natječaj vrijedi do" date. Otherwise they come from the feed, whose
-    description suffix HZZ cuts off in about half of the jobs.
+    description suffix HZZ often cuts off. category is stated in that
+    description or filled in from an HZZ occupation feed verified on its jobs.
     deadline_passed is None when the deadline is unknown. county_name comes
     from the county feed that publishes the job and is known for every job in
     a feed. title_match tells whether every query word matched the title;

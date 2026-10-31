@@ -37,6 +37,12 @@ JOB_SEARCH_SERVICE = "job_search_service"
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False)
 
+CATEGORY_DESCRIPTION = (
+    "Exact category name from list_categories; letter case is ignored. A job's category is stated in its "
+    "description or filled in from an HZZ occupation feed verified on its jobs. Jobs without one do not match, "
+    "so also use query when every job of an occupation matters."
+)
+
 
 class JobTools(ToolGroup):
     """MCP tools over stored HZZ job advertisements.
@@ -63,10 +69,7 @@ class JobTools(ToolGroup):
             county: Annotated[str | None, Field(
                 description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
             )] = None,
-            category: Annotated[str | None, Field(
-                description="Exact category name from list_categories; letter case is ignored. Only about half "
-                            "of the jobs state a category, so prefer query to find an occupation.",
-            )] = None,
+            category: Annotated[str | None, Field(description=CATEGORY_DESCRIPTION)] = None,
             include_expired: Annotated[bool, Field(
                 description="Also return jobs whose application deadline has passed.",
             )] = False,
@@ -112,10 +115,7 @@ class JobTools(ToolGroup):
             county: Annotated[str | None, Field(
                 description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
             )] = None,
-            category: Annotated[str | None, Field(
-                description="Exact category name from list_categories; letter case is ignored. Only about half "
-                            "of the jobs state a category, so prefer query to find an occupation.",
-            )] = None,
+            category: Annotated[str | None, Field(description=CATEGORY_DESCRIPTION)] = None,
             include_expired: Annotated[bool, Field(
                 description="Also show jobs whose application deadline has passed.",
             )] = False,
@@ -154,10 +154,7 @@ class JobTools(ToolGroup):
             county: Annotated[str | None, Field(
                 description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
             )] = None,
-            category: Annotated[str | None, Field(
-                description="Exact category name from list_categories; letter case is ignored. Only about half "
-                            "of the jobs state a category, so prefer query to find an occupation.",
-            )] = None,
+            category: Annotated[str | None, Field(description=CATEGORY_DESCRIPTION)] = None,
             include_expired: Annotated[bool, Field(
                 description="Also count jobs whose application deadline has passed.",
             )] = False,
@@ -204,10 +201,7 @@ class JobTools(ToolGroup):
                 max_length=MAX_QUERY_LENGTH,
                 description="Words chosen as for search_jobs, e.g. 'kuhar' or 'njemački'; leave out for all jobs.",
             )] = None,
-            category: Annotated[str | None, Field(
-                description="Exact category name from list_categories; letter case is ignored. Only about half "
-                            "of the jobs state a category, so prefer query to find an occupation.",
-            )] = None,
+            category: Annotated[str | None, Field(description=CATEGORY_DESCRIPTION)] = None,
             include_expired: Annotated[bool, Field(
                 description="Also count jobs whose application deadline has passed.",
             )] = False,
@@ -272,8 +266,10 @@ class JobTools(ToolGroup):
         async def list_categories(ctx: Context) -> list[CategoryDTO]:
             """List job categories with the number of jobs search_jobs finds in each by default, most common first.
 
-            Only about half of the jobs state a category, so the counts do
-            not add up to all jobs; search by query to find an occupation.
+            A job's category is stated in its description or filled in from an
+            HZZ occupation feed verified on its jobs. Jobs without one are not
+            counted, so the counts may not add up to all jobs; also search by
+            query when every job of an occupation matters.
             """
             return list(await self._call(service(ctx).list_categories()))
 
