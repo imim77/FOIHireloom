@@ -20,6 +20,8 @@ from FOIHireloom.dto.job_market import JobMarketFiltersDTO, JobMarketStatsDTO
 from FOIHireloom.dto.job_search import (
     CategoryDTO,
     CoverageDTO,
+    JobCardDTO,
+    JobCardsPageDTO,
     JobDetailsDTO,
     JobSearchFiltersDTO,
     JobSearchPageDTO,
@@ -50,6 +52,12 @@ class FakeJobSearchService(JobSearchServiceInterface):
         self.filters.append(filters)
         self.raise_error()
         return JobSearchPageDTO(jobs=(JobSummaryDTO(**SUMMARY),), next_cursor="next", coverage=COVERAGE)
+
+    async def search_cards(self, filters: JobSearchFiltersDTO) -> JobCardsPageDTO:
+        self.filters.append(filters)
+        self.raise_error()
+        return JobCardsPageDTO(jobs=(JobCardDTO(**SUMMARY, workers_needed=2, employment_type="Na neodređeno"),),
+                               next_cursor="next", coverage=COVERAGE)
 
     async def market_stats(self, filters: JobMarketFiltersDTO) -> JobMarketStatsDTO:
         self.market_filters.append(filters)

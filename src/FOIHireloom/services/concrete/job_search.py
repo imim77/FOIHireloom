@@ -15,6 +15,8 @@ from FOIHireloom.dto.job_search import (
     CountyFeedCheckDTO,
     CoverageDTO,
     DataStatus,
+    JobCardDTO,
+    JobCardsPageDTO,
     JobCountyDTO,
     JobCursorDTO,
     JobDetailsDTO,
@@ -62,6 +64,17 @@ class JobSearchService(JobSearchServiceInterface):
         self._stale_after = stale_after
 
     async def search(self, filters: JobSearchFiltersDTO) -> JobSearchPageDTO:
+        jobs, next_cursor, coverage = await self._search(filters, self._summary)
+        return JobSearchPageDTO(jobs=jobs, next_cursor=next_cursor, coverage=coverage)
+
+    async def search_cards(self, filters: JobSearchFiltersDTO) -> JobCardsPageDTO:
+        jobs, next_cursor, coverage = await self._search(filters, self._card)
+        return JobCardsPageDTO(jobs=jobs, next_cursor=next_cursor, coverage=coverage)
+
+    async def _search[T: JobSummaryDTO](
+        self, filters: JobSearchFiltersDTO, result: Callable[[Job, date, JobCountyDTO | None, bool | None], T],
+    ) -> tuple[tuple[T, ...], str | None, CoverageDTO]:
+        """One page of jobs, each made by result, with the next page's cursor and the searched counties' coverage."""
         terms = self._terms(filters.query)
         after = self._decode_cursor(filters.cursor) if filters.cursor else None
         # A cursor orders by title match exactly when the search has a query.
@@ -82,13 +95,13 @@ class JobSearchService(JobSearchServiceInterface):
             )
             found = await work.jobs.search(criteria)
             counties = self._first_county(await work.job_feed_memberships.list_counties([hit.job.id for hit in found]))
-            jobs = [self._summary(hit.job, today, counties.get(hit.job.id), hit.title_match) for hit in found]
+            jobs = [result(hit.job, today, counties.get(hit.job.id), hit.title_match) for hit in found]
             regions = self._freshness(await work.counties.list_feed_checks(), now)
         if county_code is not None:
             regions = [region for region in regions if region.code == county_code]
         page = jobs[:filters.limit]
         next_cursor = self._encode_cursor(page[-1]) if len(jobs) > filters.limit else None
-        return JobSearchPageDTO(jobs=tuple(page), next_cursor=next_cursor, coverage=self._coverage(regions))
+        return tuple(page), next_cursor, self._coverage(regions)
 
     async def market_stats(self, filters: JobMarketFiltersDTO) -> JobMarketStatsDTO:
         terms = self._terms(filters.query)
@@ -238,10 +251,23 @@ class JobSearchService(JobSearchServiceInterface):
         definition = self._counties.match(county)
         return definition.code if definition is not None else county.casefold()
 
-    def _summary(self, job: Job, today: date, county: JobCountyDTO | None, title_match: bool | None) -> JobSummaryDTO:
-        return JobSummaryDTO.model_validate(job).model_copy(
+    def _summary[T: JobSummaryDTO](
+        self, job: Job, today: date, county: JobCountyDTO | None, title_match: bool | None,
+        dto: type[T] = JobSummaryDTO,
+    ) -> T:
+        return dto.model_validate(job).model_copy(
             update={**self._page_fields(job, today), **self._county_fields(county), "title_match": title_match}
         )
+
+    def _card(self, job: Job, today: date, county: JobCountyDTO | None, title_match: bool | None) -> JobCardDTO:
+        return self._summary(job, today, county, title_match, JobCardDTO).model_copy(update={
+            "workers_needed": job.page_workers_needed,
+            "employment_type": job.page_employment_type,
+            "working_hours": job.page_working_hours,
+            "education": job.page_education,
+            "experience": job.page_experience,
+            "accommodation": job.page_accommodation,
+        })
 
     @staticmethod
     def _page_fields(job: Job, today: date) -> dict[str, object]:

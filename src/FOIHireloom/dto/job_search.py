@@ -130,6 +130,17 @@ class JobSummaryDTO(ModelConfigBaseModel):
         return "Mjesto rada nije navedeno"
 
 
+class JobCardDTO(JobSummaryDTO):
+    """A search result with the job page values a job card shows; None until the page is read or when it omits them."""
+
+    workers_needed: int | None = None
+    employment_type: str | None = None
+    working_hours: str | None = None
+    education: str | None = None
+    experience: str | None = None
+    accommodation: str | None = None
+
+
 class RegionFreshnessDTO(ModelConfigBaseModel):
     """How current the stored jobs of one county are.
 
@@ -159,6 +170,12 @@ class CoverageDTO(ModelConfigBaseModel):
 
 class JobSearchPageDTO(ModelConfigBaseModel):
     jobs: tuple[JobSummaryDTO, ...]
+    next_cursor: str | None
+    coverage: CoverageDTO
+
+
+class JobCardsPageDTO(ModelConfigBaseModel):
+    jobs: tuple[JobCardDTO, ...]
     next_cursor: str | None
     coverage: CoverageDTO
 
