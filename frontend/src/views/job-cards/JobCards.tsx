@@ -25,7 +25,7 @@ export function JobCards() {
       <Warning text={data.coverage?.warning} />
       {data.jobs.length ? (
         <div className="job-list">
-          {data.jobs.map((job) => <JobCardView key={job.id} job={job} today={data.today} />)}
+          {data.jobs.map((job, i) => <JobCardView key={job.id} job={job} today={data.today} order={i} />)}
         </div>
       ) : (
         <p className="empty">Nema aktivnih oglasa za zadane filtre.</p>

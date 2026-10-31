@@ -4,7 +4,9 @@
 .job {
   display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 20px;
   background: var(--card); border: 1px solid var(--border); border-radius: 20px;
+  transition: border-color 200ms, box-shadow 200ms;
 }
+.job:hover { border-color: var(--surface-disable); box-shadow: 0 6px 20px -12px rgb(0 0 0 / 0.25); }
 .job-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .tile {
   display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 10px;
@@ -33,3 +35,4 @@
 .ring-text { position: relative; display: flex; align-items: baseline; gap: 2px; font-variant-numeric: tabular-nums; }
 .ring-text b { font-size: 16px; font-weight: 700; }
 .ring-text small { font-size: 10px; font-weight: 600; color: var(--fg-soft); }
+@media (prefers-reduced-motion: reduce) { .job { transition: none; } }
