@@ -6,6 +6,8 @@
   --border: #ececef;
   --surface-subdued: #eceef2;
   --surface-sunken: #f1f2f4;
+  --green-tint: #e6f6ec;
+  --green-on-tint: #1d6b3e;
   --surface-disable: #c4c8d0;
   --surface-muted: #27272a;
   --fg-on-muted: #ffffff;
@@ -24,6 +26,8 @@
   --border: #2e2e33;
   --surface-subdued: #3f3f46;
   --surface-sunken: #0f0f11;
+  --green-tint: #173322;
+  --green-on-tint: #86e0a8;
   --surface-disable: #71717a;
   --surface-muted: #f4f4f5;
   --fg-on-muted: #18181b;

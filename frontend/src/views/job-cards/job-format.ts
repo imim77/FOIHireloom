@@ -23,12 +23,13 @@ export const daysBetween = (from: string, to: string) => Math.round((day(to) - d
 /** "15. 11." */
 export const shortDate = (iso: string) => `${+iso.slice(8, 10)}. ${+iso.slice(5, 7)}.`
 
-export function published(job: JobCard, today: string): string {
-  if (!job.published_on) return 'Datum objave nije naveden'
+/** How long ago the job was published, for the card's first label: "Danas", "Jučer", "Prije 5 dana". */
+export function age(job: JobCard, today: string): string | null {
+  if (!job.published_on) return null
   const days = daysBetween(job.published_on, today)
-  if (days <= 0) return 'Objavljeno danas'
-  if (days === 1) return 'Objavljeno jučer'
-  return `Objavljeno prije ${days} ${plural(days, 'dan', 'dana', 'dana')}`
+  if (days <= 0) return 'Danas'
+  if (days === 1) return 'Jučer'
+  return `Prije ${days} ${plural(days, 'dan', 'dana', 'dana')}`
 }
 
 export function deadline(job: JobCard): string {
@@ -43,32 +44,29 @@ export function town(job: JobCard): string | null {
   return place === place.toUpperCase() ? titleCase(place) : place
 }
 
-/** The line under the employer: category and county, as they are known. */
-export function subtitle(job: JobCard): string {
-  return [job.category && sentenceCase(job.category), job.county_name].filter(Boolean).join(' · ')
-    || 'Hrvatski zavod za zapošljavanje'
-}
+// What a detail is about, which picks its icon.
+export type DetailKind = 'place' | 'hours' | 'deadline' | 'type' | 'education' | 'experience' | 'workers' | 'accommodation'
 
-export type ChipTone = 'plain' | 'workers' | 'perk'
-
-export interface Chip {
+export interface Detail {
+  kind: DetailKind
   text: string
-  tone: ChipTone
 }
 
-/** The card's labels, most telling first; the highlighted ones say how many are sought and what comes with the job. */
-export function chips(job: JobCard): Chip[] {
+/** The card's details, in the reference's three columns: where and when first, then what the job asks and offers. */
+export function details(job: JobCard): Detail[] {
   const first = (value: string | null) => value?.split(';')[0].trim() || null
   const experience = job.experience === 'Nije važno' ? 'Bez traženog iskustva'
     : job.experience ? `Iskustvo ${job.experience}` : null
   const accommodation = job.accommodation && job.accommodation !== 'Nema smještaja' ? job.accommodation : null
-  return [
-    { text: town(job), tone: 'plain' as const },
-    { text: first(job.employment_type), tone: 'plain' as const },
-    { text: job.working_hours, tone: 'plain' as const },
-    { text: first(job.education), tone: 'plain' as const },
-    { text: experience, tone: 'plain' as const },
-    { text: job.workers_needed && job.workers_needed > 1 ? formatWorkers(job.workers_needed) : null, tone: 'workers' as const },
-    { text: accommodation, tone: 'perk' as const },
-  ].filter((chip): chip is Chip => Boolean(chip.text))
+  const all: [DetailKind, string | null][] = [
+    ['place', town(job)],
+    ['hours', job.working_hours],
+    ['deadline', deadline(job)],
+    ['type', first(job.employment_type)],
+    ['education', first(job.education)],
+    ['experience', experience],
+    ['workers', job.workers_needed && job.workers_needed > 1 ? formatWorkers(job.workers_needed) : null],
+    ['accommodation', accommodation],
+  ]
+  return all.filter((detail): detail is [DetailKind, string] => Boolean(detail[1])).map(([kind, text]) => ({ kind, text }))
 }
