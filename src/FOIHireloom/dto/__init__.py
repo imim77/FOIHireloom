@@ -32,8 +32,10 @@ from .job_search import (
     RegionFreshnessDTO,
 )
 from .job_sync import (
+    CategoryEvidenceDTO,
     FeedCheckDTO,
     FeedSyncResultDTO,
+    FilledCategoryDTO,
     JobSnapshotDTO,
     JobSyncResultDTO,
     MembershipSnapshotDTO,
@@ -52,6 +54,7 @@ from .source_feed import (
 
 __all__ = [
     "CategoryDTO",
+    "CategoryEvidenceDTO",
     "CkanPackage",
     "CkanResource",
     "CountyDTO",
@@ -64,6 +67,7 @@ __all__ = [
     "FeedCheckDTO",
     "FeedResponseDTO",
     "FeedSyncResultDTO",
+    "FilledCategoryDTO",
     "JobCountyDTO",
     "JobCursorDTO",
     "JobDetailsDTO",

@@ -1,11 +1,13 @@
 from datetime import date
 from uuid import uuid4
 
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
 from model_test_case import ModelTestCase
 
-from FOIHireloom.db.models import Employer, Job
+from FOIHireloom.db.models import Employer, Job, JobFeedMembership, SourceFeed
+from FOIHireloom.dto.job_sync import FilledCategoryDTO
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.dao.concrete.sqla_job import SqlAlchemyJobRepository
 from FOIHireloom.dao.interfaces.job import JobRepository
@@ -192,3 +194,41 @@ class JobRepositoryTests(ModelTestCase):
             self.assertIsNotNone(saved)
             self.assertEqual(saved.title, "Ažurirani naslov")
             self.assertEqual(saved.quality_flags, ["missing_deadline"])
+
+    async def test_category_evidence_and_fills_skip_description_categories(self) -> None:
+        feeds = [
+            SourceFeed(ckan_resource_id=uuid4(), label="Zanimanje", scope="occupation",
+                       feed_url=f"https://example.com/{uuid4()}.xml", **mapping)
+            for mapping in (
+                {"mapped_category": "STRUČNJACI U PROMETU", "mapping_status": "confirmed", "mapping_matching_examples": 3,
+                 "mapping_contradicting_examples": 0, "mapping_verified_at": func.now()},
+                {"mapped_category": "TEKSTILCI I KOŽARI", "mapping_status": "too_few_examples",
+                 "mapping_matching_examples": 1, "mapping_contradicting_examples": 0, "mapping_verified_at": func.now()},
+            )
+        ]
+        explicit = self.job(category="DIREKTORI, RAVNATELJI, ČELNICI", category_source="description")
+        unknown, outside = self.job(), self.job()
+        self.session.add_all([*feeds, explicit, unknown, outside])
+        await self.session.flush()
+        self.session.add_all([
+            JobFeedMembership(job_id=job.id, feed_id=feed.id, presence_status=status,
+                              missing_since_at=func.now() if status == "missing" else None)
+            for job, feed, status in ((explicit, feeds[1], "present"), (unknown, feeds[1], "missing"),
+                                      (unknown, feeds[0], "present"), (outside, feeds[0], "present"))
+        ])
+        await self.session.flush()
+
+        evidence = await self.repository.list_category_evidence(feeds[1].id)
+        self.assertEqual([(item.job_id, item.category, item.mappings) for item in evidence],
+                         [(unknown.id, None, ((feeds[0].id, "STRUČNJACI U PROMETU"),))])
+        filled = FilledCategoryDTO(category="STRUČNJACI U PROMETU", feed_id=feeds[0].id)
+        await self.repository.set_feed_categories({unknown.id: filled, explicit.id: filled})
+        await self.session.refresh(unknown)
+        await self.session.refresh(explicit)
+        self.assertEqual((unknown.category, unknown.category_source, unknown.category_feed_id),
+                         ("STRUČNJACI U PROMETU", "feed", feeds[0].id))
+        self.assertEqual((explicit.category, explicit.category_source), ("DIREKTORI, RAVNATELJI, ČELNICI", "description"))
+        self.assertEqual((await self.repository.list_category_evidence(feeds[0].id))[0].category, "STRUČNJACI U PROMETU")
+        await self.repository.set_feed_categories({unknown.id: None})
+        await self.session.refresh(unknown)
+        self.assertEqual((unknown.category, unknown.category_source, unknown.category_feed_id), (None, None, None))

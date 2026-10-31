@@ -9,7 +9,7 @@ from FOIHireloom.dto.job import ParsedJobDTO
 from FOIHireloom.dto.job_market import JobMarketAggregatesDTO, JobMarketCriteriaDTO
 from FOIHireloom.dto.job_page import JobPageTargetDTO
 from FOIHireloom.dto.job_search import CategoryDTO, JobSearchCriteriaDTO
-from FOIHireloom.dto.job_sync import JobSnapshotDTO
+from FOIHireloom.dto.job_sync import CategoryEvidenceDTO, FilledCategoryDTO, JobSnapshotDTO
 
 
 class JobSearchHit(NamedTuple):
@@ -88,6 +88,21 @@ class JobRepository(ABC):
     @abstractmethod
     async def mark_seen(self, job_ids: Collection[int], seen_at: datetime) -> None:
         """Record that these jobs were still published at seen_at."""
+
+    @abstractmethod
+    async def list_category_evidence(self, feed_id: int) -> list[CategoryEvidenceDTO]:
+        """Return evidence for every job this feed lists or has listed that has
+        no category from its own description, ordered by job ID.
+
+        Each job's mappings come from all its occupation feeds, not only this one.
+        """
+
+    @abstractmethod
+    async def set_feed_categories(self, categories: Mapping[int, FilledCategoryDTO | None]) -> None:
+        """Store filled-in categories by job ID; None clears one.
+
+        Jobs whose category comes from their description are left alone.
+        """
 
     @abstractmethod
     async def list_page_candidates(self, retry_before: datetime, limit: int) -> list[JobPageTargetDTO]:

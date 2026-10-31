@@ -1,7 +1,7 @@
 from collections.abc import Collection, Mapping, Sequence
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import CTE, ColumnElement, and_, func, not_, or_, select, update
+from sqlalchemy import CTE, ColumnElement, and_, bindparam, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
@@ -17,7 +17,7 @@ from FOIHireloom.dto.job_market import (
 )
 from FOIHireloom.dto.job_page import JobPageTargetDTO
 from FOIHireloom.dto.job_search import CategoryDTO, JobFilterCriteriaDTO, JobSearchCriteriaDTO
-from FOIHireloom.dto.job_sync import JobSnapshotDTO
+from FOIHireloom.dto.job_sync import CategoryEvidenceDTO, FilledCategoryDTO, JobSnapshotDTO
 from FOIHireloom.dao.interfaces.job import JobRepository, JobSearchHit
 
 
@@ -184,6 +184,47 @@ class SqlAlchemyJobRepository(JobRepository):
         if job_ids:
             await self._session.execute(
                 update(Job).where(Job.id.in_(job_ids)).values(last_seen_at=seen_at)
+            )
+
+    async def list_category_evidence(self, feed_id: int) -> list[CategoryEvidenceDTO]:
+        in_feed = select(JobFeedMembership.job_id).where(JobFeedMembership.feed_id == feed_id)
+        confirmed = (
+            select(JobFeedMembership.job_id, SourceFeed.id.label("feed_id"), SourceFeed.mapped_category)
+            .join(SourceFeed)
+            .where(SourceFeed.scope == "occupation", SourceFeed.mapping_status == "confirmed")
+            .subquery()
+        )
+        statement = (
+            select(Job.id, Job.category, Job.category_feed_id, confirmed.c.feed_id, confirmed.c.mapped_category)
+            .outerjoin(confirmed, confirmed.c.job_id == Job.id)
+            .where(Job.id.in_(in_feed), Job.category_source.is_distinct_from("description"))
+            .order_by(Job.id, confirmed.c.feed_id)
+        )
+        evidence: dict[int, CategoryEvidenceDTO] = {}
+        for job_id, category, category_feed_id, mapped_feed_id, mapped_category in await self._session.execute(statement):
+            known = evidence.get(job_id) or CategoryEvidenceDTO(
+                job_id=job_id, category=category, category_feed_id=category_feed_id, mappings=(),
+            )
+            if mapped_feed_id is not None:
+                known = known.model_copy(update={"mappings": (*known.mappings, (mapped_feed_id, mapped_category))})
+            evidence[job_id] = known
+        return list(evidence.values())
+
+    async def set_feed_categories(self, categories: Mapping[int, FilledCategoryDTO | None]) -> None:
+        rows = [
+            {"job_id": job_id, "new_category": filled.category if filled else None,
+             "new_source": "feed" if filled else None, "new_feed_id": filled.feed_id if filled else None}
+            for job_id, filled in categories.items()
+        ]
+        if rows:
+            # A Core update, so the extra WHERE works for every row of the batch.
+            jobs = Job.__table__
+            await self._session.execute(
+                update(jobs)
+                .where(jobs.c.id == bindparam("job_id"), jobs.c.category_source.is_distinct_from("description"))
+                .values(category=bindparam("new_category"), category_source=bindparam("new_source"),
+                        category_feed_id=bindparam("new_feed_id")),
+                rows,
             )
 
     async def list_page_candidates(self, retry_before: datetime, limit: int) -> list[JobPageTargetDTO]:
