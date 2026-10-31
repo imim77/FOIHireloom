@@ -27,7 +27,7 @@ const ASK_ICON = ['M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z', 'M8.5
 /** A footer action: its icon pops when pressed. */
 function Action({ label, icon, onClick }: { label: string; icon: string[]; onClick: () => void }) {
   return (
-    <button className="action" type="button" title={label} aria-label={label} onClick={(event) => {
+    <button className="icon-button" type="button" title={label} aria-label={label} onClick={(event) => {
       finish(animate(event.currentTarget.firstElementChild!, { scale: [0.7, 1], duration: 500, ease: 'outBack(2.4)',
         onComplete: releaseStyles('transform') }))
       onClick()
@@ -81,7 +81,7 @@ export function JobCardView({ job, today, order, actions }: {
         <span className="tile" aria-hidden="true" data-slot="tile" />
         <div className="titles">
           <p className="employer truncate" title={employer}>{employer}</p>
-          <p className="soft-line truncate">{subtitle(job)}</p>
+          <p className="soft truncate">{subtitle(job)}</p>
         </div>
       </div>
       <h2 className="job-title">{sentenceCase(job.display_title)}</h2>

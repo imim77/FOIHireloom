@@ -1,7 +1,8 @@
 import { animate } from 'animejs'
 import { useState } from 'react'
-import { Warning } from '../../shared/Card'
+import { Card, Warning } from '../../shared/Card'
 import { finish, releaseStyles } from '../../shared/chart-motion'
+import { formatAds } from '../../shared/format'
 import { useMcpApp } from '../../shared/mcp'
 import { type CardActions, JobCardView } from './JobCardView'
 import { sentenceCase } from './job-format'
@@ -24,13 +25,7 @@ export function JobCards() {
   const [more, setMore] = useState<More | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  if (!data) {
-    return (
-      <section className="job-cards">
-        <header className="titles"><p className="title">Oglasi</p><p className="soft">Učitavanje…</p></header>
-      </section>
-    )
-  }
+  if (!data) return <Card title="Oglasi" description="Učitavanje…" />
 
   const extra = more?.base === data ? more : null
   const cards = [...data.jobs.map((job, order) => ({ job, order })), ...(extra?.jobs ?? [])]
@@ -70,11 +65,7 @@ export function JobCards() {
   }
 
   return (
-    <section className="job-cards" aria-label={data.title}>
-      <header className="titles">
-        <p className="title truncate">{data.title}</p>
-        <p className="soft truncate">{data.description}</p>
-      </header>
+    <Card title={data.title} description={data.description}>
       <Warning text={data.coverage?.warning} />
       {cards.length ? (
         <div className="job-list">
@@ -86,11 +77,16 @@ export function JobCards() {
         <p className="empty">Nema aktivnih oglasa za zadane filtre.</p>
       )}
       <Warning text={error} />
-      {cursor && tools && (
-        <button className="more" type="button" disabled={loading} onClick={(event) => loadMore(event.currentTarget)}>
-          {loading ? 'Učitavanje…' : 'Prikaži još oglasa'}
-        </button>
+      {cards.length > 0 && (
+        <div className="cards-foot">
+          <p className="soft">Prikazano {formatAds(cards.length)}</p>
+          {cursor && tools && (
+            <button className="more" type="button" disabled={loading} onClick={(event) => loadMore(event.currentTarget)}>
+              {loading ? 'Učitavanje…' : 'Prikaži još oglasa'}
+            </button>
+          )}
+        </div>
       )}
-    </section>
+    </Card>
   )
 }
