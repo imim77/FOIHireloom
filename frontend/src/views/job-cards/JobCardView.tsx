@@ -1,18 +1,16 @@
-// One job, after the reference card: the employer's tile, name and line, the title, the job's labels and, under a
-// rule, when it was published and until when to apply, with its actions, on a tile of the Performance chart.
-// Animated with anime.js like that chart's tiles: the card rises in after the ones before it and the employer's tile
-// pops, then the labels come in one after another and the footer last.
+// One job, after the reference card: the employer's name and line, the title, the job's labels and, under a rule,
+// when it was published and until when to apply, with its actions, on a tile of the Performance chart. Animated with
+// anime.js like that chart's tiles: the card rises in after the ones before it, then the labels come in one after
+// another and the footer last.
 
-import { animate, stagger, utils } from 'animejs'
+import { animate, stagger } from 'animejs'
 import { useRef } from 'react'
 import { fadeIn, finish, releaseStyles, useChartEntrance } from '../../shared/chart-motion'
 import { chips, deadline, published, sentenceCase, subtitle } from './job-format'
 import type { JobCard } from './types'
 
-// The Performance chart's tile entrance: each tile rises 10px over 800ms after the one before it (70ms), and its dot
-// (here the employer's tile) pops from nothing 150ms in.
+// The Performance chart's tile entrance: each tile rises 10px over 800ms after the one before it (70ms).
 const CARD_STAGGER = 70
-const TILE_AT = 150
 const CHIPS_AT = 300
 const FOOT_AT = 450
 
@@ -55,23 +53,16 @@ export function JobCardView({ job, today, order, actions }: {
 
   useChartEntrance(root, (timeline) => {
     const card = root.current!
-    const one = (selector: string) => card.querySelector<HTMLElement>(selector)
     const all = (selector: string) => [...card.querySelectorAll<HTMLElement>(selector)]
     const at = order * CARD_STAGGER
     timeline.add(card, { ...fadeIn([card], 10), duration: 800, ease: 'outExpo' }, at)
-    const tile = one('[data-slot="tile"]')
-    if (tile) {
-      utils.set(tile, { scale: 0 })
-      timeline.add(tile, { scale: [0, 1], duration: 600, ease: 'outBack(2.2)', onComplete: releaseStyles('transform') },
-        at + TILE_AT)
-    }
     const labels = all('[data-slot="chip"]')
     if (labels.length) timeline.add(labels, { ...fadeIn(labels, 4), duration: 500, delay: stagger(40) }, at + CHIPS_AT)
     const foot = all('[data-slot="foot"]')
     timeline.add(foot, { ...fadeIn(foot), duration: 500 }, at + FOOT_AT)
     return () => {
-      for (const el of [card, tile, ...labels, ...foot]) {
-        el?.style.removeProperty('opacity')
+      for (const el of [card, ...labels, ...foot]) {
+        el.style.removeProperty('opacity')
         el?.style.removeProperty('transform')
       }
     }
@@ -79,12 +70,9 @@ export function JobCardView({ job, today, order, actions }: {
 
   return (
     <article className="job" ref={root} data-slot="job" aria-label={`${sentenceCase(job.display_title)}, ${employer}`}>
-      <div className="job-head">
-        <span className="tile" aria-hidden="true" data-slot="tile" />
-        <div className="titles">
-          <p className="employer truncate" title={employer}>{employer}</p>
-          <p className="soft truncate">{subtitle(job)}</p>
-        </div>
+      <div className="titles">
+        <p className="employer truncate" title={employer}>{employer}</p>
+        <p className="soft truncate">{subtitle(job)}</p>
       </div>
       <h2 className="job-title">{sentenceCase(job.display_title)}</h2>
       {labels.length > 0 && (
