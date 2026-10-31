@@ -13,6 +13,7 @@ from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from pydantic import ValidationError
 
+from FOIHireloom.api.apps.views import JOBS_BY_COUNTY
 from FOIHireloom.api.mcp_server import McpServer
 from FOIHireloom.config.settings import Settings
 from FOIHireloom.dto.job_market import JobMarketFiltersDTO, JobMarketStatsDTO
@@ -129,7 +130,7 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
                                               "data_status": "fresh", "last_success_at": "2026-10-29T03:31:00Z"}])
         self.assertEqual(categories["result"][0]["open_jobs"], 2)
 
-    async def test_jobs_by_county_is_an_mcp_app_whose_page_may_load_the_sdk(self) -> None:
+    async def test_jobs_by_county_is_an_mcp_app_served_from_the_built_page(self) -> None:
         async with Client(self.server) as client:
             tool = next(tool for tool in await client.list_tools() if tool.name == "show_jobs_by_county")
             uri = tool.meta["ui"]["resourceUri"]
@@ -139,8 +140,7 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
             by_workers = (await client.call_tool("show_jobs_by_county", {"metric": "workers_needed"})).structured_content
         self.assertRegex(uri, r"^ui://foihireloom/jobs-by-county-[0-9a-f]{12}\.html$")
         self.assertEqual(resources[uri].mimeType, "text/html;profile=mcp-app")
-        self.assertEqual(chart_page.meta["ui"]["csp"]["resourceDomains"], ["https://unpkg.com"])
-        self.assertIn("<html", chart_page.text)
+        self.assertEqual(chart_page.text, JOBS_BY_COUNTY.page())
         self.assertEqual(self.service.market_filters, [JobMarketFiltersDTO(query="kuhar"), JobMarketFiltersDTO()])
         self.assertEqual((chart["title"], chart["top"], chart["counties"], chart["coverage"]["warning"]),
                          ("Broj oglasa po županijama", 3, [], COVERAGE.warning))

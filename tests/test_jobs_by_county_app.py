@@ -2,7 +2,8 @@ import hashlib
 import unittest
 from datetime import date
 
-from FOIHireloom.api.apps.jobs_by_county import RESOURCE_URI, jobs_by_county, page
+from FOIHireloom.api.apps.jobs_by_county import jobs_by_county
+from FOIHireloom.api.apps.views import JOBS_BY_COUNTY, AppView
 from FOIHireloom.dto.job_market import JobMarketStatsDTO
 from FOIHireloom.dto.job_search import CoverageDTO
 
@@ -55,17 +56,23 @@ class JobsByCountyAppTests(unittest.TestCase):
         chart = jobs_by_county(stats(jobs=0).model_copy(update={"counties": ()}), 8, "pilot", None)
         self.assertEqual((chart.total_jobs, chart.counties), (0, ()))
 
-    def test_page_loads_the_pinned_sdk_and_draws_3d_columns(self) -> None:
-        html = page()
-        self.assertIn("https://unpkg.com/@modelcontextprotocol/ext-apps@2.0.3/app-with-deps", html)
-        for expected in ("app.ontoolresult", "app.onhostcontextchanged", "structuredContent", 'data-theme="dark"',
-                         "prefers-reduced-motion", 'id="lit-right"', "M23.9672 0.0161L47.7527 8.05164",
-                         'new Intl.NumberFormat("hr-HR"', "short_name", "workers_needed", "coverage?.warning",
-                         'requestDisplayMode({ mode })', 'availableDisplayModes: ["inline", "fullscreen"]',
-                         "all.slice(0, data.top)", "mask-image", 'id: "selected-workers"', "county[metric]",
-                         "`${formatJobs(value)} traženih radnika`"):
+    def test_built_page_inlines_the_sdk_and_draws_3d_columns(self) -> None:
+        html = JOBS_BY_COUNTY.page()
+        self.assertTrue(html.startswith("<!doctype html>"))
+        # Built by frontend/ into one file: nothing loads from the web.
+        for absent in ("unpkg", 'src="http', "<link"):
+            with self.subTest(absent=absent):
+                self.assertNotIn(absent, html)
+        for expected in ("ui/initialize", "ui/notifications/tool-result", "ui/request-display-mode",
+                         "data-theme=dark", "prefers-reduced-motion", "M23.9672 0.0161L47.7527 8.05164", "hr-HR",
+                         "traženih radnika", "Nema aktivnih oglasa za zadane filtre.", "Graf se nije mogao prikazati"):
             with self.subTest(expected=expected):
                 self.assertIn(expected, html)
 
     def test_resource_uri_changes_with_the_page(self) -> None:
-        self.assertIn(hashlib.sha256(page().encode()).hexdigest()[:12], RESOURCE_URI)
+        self.assertEqual(JOBS_BY_COUNTY.uri,
+                         f"ui://foihireloom/jobs-by-county-{hashlib.sha256(JOBS_BY_COUNTY.page().encode()).hexdigest()[:12]}.html")
+
+    def test_a_page_that_was_not_built_says_how_to_build_it(self) -> None:
+        with self.assertRaisesRegex(FileNotFoundError, "npm run build"):
+            AppView("missing", "").page()

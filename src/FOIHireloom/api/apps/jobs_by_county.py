@@ -1,17 +1,12 @@
-"""The jobs-by-county chart: a ui:// page that draws counties as 3D columns, by jobs or by workers sought.
+"""Data for the jobs-by-county chart, which draws counties as 3D columns, by jobs or by workers sought.
 
 The tool returns JobsByCountyDTO as structured content; the host loads the
-page in a sandboxed iframe and passes it that result over the MCP Apps
-bridge. Text-only hosts still get the same data.
+views.JOBS_BY_COUNTY page in a sandboxed iframe and passes it that result
+over the MCP Apps bridge. Text-only hosts still get the same data.
 """
-
-import hashlib
-from importlib.resources import files
 
 from FOIHireloom.dto.job_market import CountyMetric, CountyShareDTO, JobMarketStatsDTO, JobsByCountyDTO
 
-# The page loads the MCP Apps SDK from this origin, so its CSP must allow it.
-SDK_ORIGIN = "https://unpkg.com"
 DEFAULT_TOP = 7
 # There are 21 counties.
 MAX_TOP = 21
@@ -19,14 +14,6 @@ TITLES: dict[CountyMetric, str] = {
     "jobs": "Broj oglasa po županijama",
     "workers_needed": "Broj traženih radnika po županijama",
 }
-
-
-def page() -> str:
-    return files(__package__).joinpath("jobs_by_county.html").read_text(encoding="utf-8")
-
-
-# Hosts cache a page by its URI (Claude did not reread a changed page), so the URI names the page's version.
-RESOURCE_URI = f"ui://foihireloom/jobs-by-county-{hashlib.sha256(page().encode()).hexdigest()[:12]}.html"
 
 
 def jobs_by_county(

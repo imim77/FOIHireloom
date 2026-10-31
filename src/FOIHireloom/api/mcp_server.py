@@ -12,6 +12,7 @@ from FOIHireloom.config.settings import Settings
 from FOIHireloom.services.dependency import DependencyService
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 
+from .app_views import AppViews
 from .job_tools import JOB_SEARCH_SERVICE, JobTools
 
 INSTRUCTIONS = (
@@ -48,7 +49,7 @@ class McpServer:
         # Unexpected errors reach the client without details; tools raise ToolError for the rest.
         self.server = FastMCP("FOIHireloom", instructions=INSTRUCTIONS, lifespan=self._lifespan,
                               mask_error_details=True)
-        for group in (JobTools(),):
+        for group in (JobTools(), AppViews()):
             group.register(self.server)
         self.server.custom_route("/health", methods=["GET"], include_in_schema=False)(self._health)
 

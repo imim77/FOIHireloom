@@ -2,7 +2,7 @@ from collections.abc import Awaitable
 from typing import Annotated
 
 from fastmcp import Context, FastMCP
-from fastmcp.apps import AppConfig, ResourceCSP
+from fastmcp.apps import AppConfig
 from fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
@@ -28,6 +28,7 @@ from FOIHireloom.exceptions import InvalidJobSearchError, NotFoundError, Persist
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 
 from .apps import jobs_by_county
+from .apps.views import JOBS_BY_COUNTY
 from .tool_provider import ToolGroup
 
 # Key of the search service in the server's lifespan context.
@@ -150,7 +151,7 @@ class JobTools(ToolGroup):
                                           include_expired=include_expired, top=top)
             return await self._call(service(ctx).market_stats(filters))
 
-        @server.tool(app=AppConfig(resource_uri=jobs_by_county.RESOURCE_URI), annotations=READ_ONLY)
+        @server.tool(app=AppConfig(resource_uri=JOBS_BY_COUNTY.uri), annotations=READ_ONLY)
         async def show_jobs_by_county(
             ctx: Context,
             query: Annotated[str | None, Field(
@@ -189,15 +190,6 @@ class JobTools(ToolGroup):
             filters = JobMarketFiltersDTO(query=query, category=category, include_expired=include_expired)
             stats = await self._call(service(ctx).market_stats(filters))
             return jobs_by_county.jobs_by_county(stats, top, query, category, metric)
-
-        @server.resource(
-            jobs_by_county.RESOURCE_URI,
-            name="jobs_by_county_chart",
-            description="Chart page for show_jobs_by_county.",
-            app=AppConfig(csp=ResourceCSP(resource_domains=[jobs_by_county.SDK_ORIGIN])),
-        )
-        def jobs_by_county_chart() -> str:
-            return jobs_by_county.page()
 
         @server.tool(annotations=READ_ONLY)
         async def get_job(
