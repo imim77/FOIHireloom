@@ -54,9 +54,11 @@ class CountyMarketCountDTO(MarketCountDTO):
 class JobMarketAggregatesDTO(ModelConfigBaseModel):
     """Counts over the jobs matching JobMarketCriteriaDTO.
 
-    categories cover only the with_category jobs: the category comes from the
-    feed's description suffix, which HZZ cuts off in about half of the jobs.
-    Fields read from the job page (workers_needed, employers, employment_types,
+    categories cover only the with_category jobs, the sum of
+    category_from_description (stated in the job's own description) and
+    category_from_feed (filled in from an HZZ occupation feed whose category
+    was verified on its jobs); the other jobs have no known category. Fields
+    read from the job page (workers_needed, employers, employment_types,
     working_hours, education, experience, accommodation) cover only the
     with_details jobs whose page was read. A job can list several employment
     types and education levels, so those counts may add up to more than jobs.
@@ -68,6 +70,8 @@ class JobMarketAggregatesDTO(ModelConfigBaseModel):
     jobs: int
     with_details: int
     with_category: int
+    category_from_description: int
+    category_from_feed: int
     workers_needed: int
     published_recently: int
     closing_soon: int

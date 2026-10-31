@@ -175,8 +175,11 @@ class JobTools(ToolGroup):
             workers_needed per value, most common first.
 
             counties cover every matching job. categories cover only the
-            with_category jobs, about half, because HZZ often leaves the
-            category out; do not read a missing category as a different one.
+            with_category jobs: category_from_description of them state it in
+            their own description, category_from_feed got it from an HZZ
+            occupation feed verified on its jobs. The rest have an unknown
+            category, not a different one; tell the user the actual coverage
+            (with_category of jobs) whenever you use categories.
             employers, employment_types, working_hours, education, experience
             and accommodation come from the job pages and cover only
             with_details jobs; values a job does not state are left out. A job can list

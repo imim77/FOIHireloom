@@ -26,7 +26,10 @@ class JobMarketRepositoryTests(ModelTestCase):
                              feed_url=f"http://burzarada.hzz.hr/rss/{name}.xml")
             for name, code in (("is1", "istarska"), ("is2", "istarska"), ("zg", "grad-zagreb"))
         }
-        self.session.add_all(feeds.values())
+        # Health jobs can be filled in from an occupation feed.
+        health = SourceFeed(ckan_resource_id=uuid4(), label="Zdravstvo", scope="occupation",
+                            feed_url="http://burzarada.hzz.hr/rss/health.xml")
+        self.session.add_all([*feeds.values(), health])
         await self.session.flush()
         page = {"page_status": "fetched", "page_checked_at": func.now(), "page_fetched_at": func.now()}
         for key, values, listings in (
@@ -42,7 +45,8 @@ class JobMarketRepositoryTests(ModelTestCase):
                             page_working_hours="20 sati tjedno", page_education="Srednja škola 3 godine",
                             page_experience="Nije važno", page_accommodation="Nema smještaja", **page),
              {"is1": "present"}),
-            ("nurse", dict(title="MEDICINSKA SESTRA", category=HEALTH, published_on=self.today,
+            ("nurse", dict(title="MEDICINSKA SESTRA", category=HEALTH, category_source="feed",
+                           category_feed_id=health.id, published_on=self.today,
                            deadline_on=self.today + timedelta(days=1)), {"zg": "present"}),
             ("expired", dict(title="LIJEČNIK", category=HEALTH, published_on=self.today - timedelta(days=30),
                              page_valid_until=self.today - timedelta(days=1), page_workers_needed=5,
@@ -50,9 +54,10 @@ class JobMarketRepositoryTests(ModelTestCase):
             ("gone", dict(title="KUHAR", category=HOSPITALITY, page_workers_needed=9, page_employer_name="HOTEL d.o.o.",
                           **page), {"is1": "missing"}),
         ):
+            if "category" in values:
+                values = {"category_source": "description"} | values
             job = Job(provider="hzz", source_job_id=key, canonical_url=f"https://example.com/{key}",
-                      content_hash=key, page_source_hash=key if "page_status" in values else None, **values,
-                      category_source="description" if "category" in values else None)
+                      content_hash=key, page_source_hash=key if "page_status" in values else None, **values)
             self.session.add(job)
             await self.session.flush()
             for feed, status in listings.items():
@@ -72,6 +77,8 @@ class JobMarketRepositoryTests(ModelTestCase):
     async def test_counts_open_listed_jobs_by_field(self) -> None:
         stats = await self.aggregates()
         self.assertEqual((stats.jobs, stats.with_details, stats.with_category, stats.workers_needed), (3, 2, 3, 5))
+        # The nurse's category was filled in from the occupation feed.
+        self.assertEqual((stats.category_from_description, stats.category_from_feed), (2, 1))
         # The cook and the nurse were published within a week and close within a week.
         self.assertEqual((stats.published_recently, stats.closing_soon), (2, 2))
         # The cook is listed by two Istrian feeds but counts once.
@@ -98,10 +105,12 @@ class JobMarketRepositoryTests(ModelTestCase):
         self.assertEqual((nothing.jobs, nothing.workers_needed, nothing.counties, nothing.employers), (0, 0, (), ()))
 
     async def test_categories_cover_only_jobs_that_state_one(self) -> None:
-        await self.session.execute(update(Job).where(Job.source_job_id == "nurse").values(category=None, category_source=None))
+        await self.session.execute(update(Job).where(Job.source_job_id == "nurse").values(
+            category=None, category_source=None, category_feed_id=None))
         await self.session.commit()
         stats = await self.aggregates()
-        self.assertEqual((stats.jobs, stats.with_category), (3, 2))
+        self.assertEqual((stats.jobs, stats.with_category, stats.category_from_description, stats.category_from_feed),
+                         (3, 2, 2, 0))
         self.assertEqual(self.counts(stats.categories), [(HOSPITALITY, 2, 5)])
 
     async def test_top_limits_only_long_breakdowns(self) -> None:

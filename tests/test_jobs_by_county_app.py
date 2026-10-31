@@ -15,7 +15,8 @@ FRESH = CoverageDTO(data_status="fresh", data_as_of=None, stale_after_hours=6, a
 
 def stats(jobs: int = 3000, counties: tuple = ()) -> JobMarketStatsDTO:
     return JobMarketStatsDTO(
-        jobs=jobs, with_details=jobs, with_category=0, workers_needed=4500, published_recently=0, closing_soon=0,
+        jobs=jobs, with_details=jobs, with_category=0, category_from_description=0, category_from_feed=0,
+        workers_needed=4500, published_recently=0, closing_soon=0,
         counties=counties or (
             {"code": "grad-zagreb", "name": "Grad Zagreb", "jobs": 1325, "workers_needed": 3093},
             {"code": "istarska", "name": "Istarska županija", "jobs": 507, "workers_needed": 1185},
