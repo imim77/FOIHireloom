@@ -171,3 +171,6 @@ docs
 
 # Postman collections, mocks, and simulations
 postman/
+
+# Claude Code local settings
+.claude/
