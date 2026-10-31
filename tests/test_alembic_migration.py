@@ -264,3 +264,37 @@ class AlembicMigrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((columns, feeds), (0, 1))
         await self.migrate(command.upgrade, "head")
         await self.migrate(command.check)
+
+    async def test_category_source_migration_marks_parsed_categories_and_downgrade_drops_filled_ones(self) -> None:
+        await self.migrate(command.upgrade, "b7d2e5a1c3f9")
+        insert_job = text(
+            "INSERT INTO jobs (provider, source_job_id, canonical_url, content_hash, category) "
+            "VALUES ('hzz', :id, 'https://example.com/' || :id, 'hash', :category)"
+        )
+        async with self.engine.begin() as connection:
+            for job_id, category in (("1", "STRUČNJACI U PROMETU"), ("2", None), ("3", None)):
+                await connection.execute(insert_job, {"id": job_id, "category": category})
+        await self.migrate(command.upgrade, "head")
+        sources = text("SELECT source_job_id, category, category_source FROM jobs ORDER BY source_job_id")
+        async with self.engine.begin() as connection:
+            rows = (await connection.execute(sources)).all()
+            self.assertEqual([tuple(row) for row in rows], [
+                ("1", "STRUČNJACI U PROMETU", "description"), ("2", None, None), ("3", None, None),
+            ])
+            feed_id = await connection.scalar(text(
+                "INSERT INTO source_feeds (ckan_resource_id, label, feed_url, scope) "
+                "VALUES (gen_random_uuid(), 'Zanimanje', 'https://example.com/kat.xml', 'occupation') RETURNING id"
+            ))
+            await connection.execute(text(
+                "UPDATE jobs SET category = 'TEKSTILCI I KOŽARI', category_source = 'feed', category_feed_id = :feed "
+                "WHERE source_job_id = '3'"
+            ), {"feed": feed_id})
+
+        await self.migrate(command.downgrade, "b7d2e5a1c3f9")
+        async with self.engine.connect() as connection:
+            categories = (await connection.execute(text(
+                "SELECT source_job_id, category FROM jobs ORDER BY source_job_id"
+            ))).all()
+        self.assertEqual([tuple(row) for row in categories], [("1", "STRUČNJACI U PROMETU"), ("2", None), ("3", None)])
+        await self.migrate(command.upgrade, "head")
+        await self.migrate(command.check)

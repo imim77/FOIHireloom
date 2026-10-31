@@ -67,6 +67,12 @@ class Job(Base):
         ),
         CheckConstraint("first_seen_at <= last_seen_at", name="observation_times_ordered"),
         CheckConstraint(
+            "(category IS NULL) = (category_source IS NULL) "
+            "AND (coalesce(category_source, '') = 'feed') = (category_feed_id IS NOT NULL) "
+            "AND coalesce(category_source, 'description') IN ('description', 'feed')",
+            name="category_source_recorded",
+        ),
+        CheckConstraint(
             "content_changed_at BETWEEN first_seen_at AND last_seen_at",
             name="content_change_within_observation",
         ),
@@ -94,6 +100,13 @@ class Job(Base):
     published_on: Mapped[date | None] = mapped_column(Date, index=True)
     deadline_on: Mapped[date | None] = mapped_column(Date, index=True)
     category: Mapped[str | None] = mapped_column(Text, index=True)
+    # 'description' when the job's own description names the category, 'feed'
+    # when it was filled in from category_feed_id's confirmed mapping. A
+    # description category always replaces a filled-in one.
+    category_source: Mapped[str | None] = mapped_column(Text)
+    category_feed_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("source_feeds.id", ondelete="RESTRICT"), index=True
+    )
     location_text: Mapped[str | None] = mapped_column(Text)
     municipality: Mapped[str | None] = mapped_column(Text)
     availability_status: Mapped[str] = mapped_column(

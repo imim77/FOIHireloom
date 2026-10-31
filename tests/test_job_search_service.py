@@ -56,7 +56,8 @@ class JobSearchServiceTests(ModelTestCase):
                            quality_flags=["description_truncated"]), {"zg": "present"}),
         ):
             job = Job(provider="hzz", source_job_id=key, canonical_url=f"https://example.com/{key}",
-                      content_hash=key, **values)
+                      content_hash=key, **values,
+                      category_source="description" if "category" in values else None)
             self.session.add(job)
             await self.session.flush()
             self.ids[key] = job.id

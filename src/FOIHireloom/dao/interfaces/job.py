@@ -70,14 +70,19 @@ class JobRepository(ABC):
 
     @abstractmethod
     async def create_many(self, provider: str, jobs: Sequence[ParsedJobDTO], seen_at: datetime) -> dict[str, int]:
-        """Insert first-seen jobs and flush; return database IDs by source job ID."""
+        """Insert first-seen jobs and flush; return database IDs by source job ID.
+
+        A category is recorded as coming from the job's description.
+        """
 
     @abstractmethod
     async def update_content(self, jobs: Mapping[int, ParsedJobDTO], seen_at: datetime) -> None:
         """Replace the published content of these jobs, keyed by database ID.
 
         Marks them seen and changed at seen_at; availability and employer
-        links are left alone.
+        links are left alone. A category in the new content replaces the
+        stored one, including one filled in from a feed; content without a
+        category keeps the stored category and its source.
         """
 
     @abstractmethod

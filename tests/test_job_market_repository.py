@@ -51,7 +51,8 @@ class JobMarketRepositoryTests(ModelTestCase):
                           **page), {"is1": "missing"}),
         ):
             job = Job(provider="hzz", source_job_id=key, canonical_url=f"https://example.com/{key}",
-                      content_hash=key, page_source_hash=key if "page_status" in values else None, **values)
+                      content_hash=key, page_source_hash=key if "page_status" in values else None, **values,
+                      category_source="description" if "category" in values else None)
             self.session.add(job)
             await self.session.flush()
             for feed, status in listings.items():
@@ -97,7 +98,7 @@ class JobMarketRepositoryTests(ModelTestCase):
         self.assertEqual((nothing.jobs, nothing.workers_needed, nothing.counties, nothing.employers), (0, 0, (), ()))
 
     async def test_categories_cover_only_jobs_that_state_one(self) -> None:
-        await self.session.execute(update(Job).where(Job.source_job_id == "nurse").values(category=None))
+        await self.session.execute(update(Job).where(Job.source_job_id == "nurse").values(category=None, category_source=None))
         await self.session.commit()
         stats = await self.aggregates()
         self.assertEqual((stats.jobs, stats.with_category), (3, 2))

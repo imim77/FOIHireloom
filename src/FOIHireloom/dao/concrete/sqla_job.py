@@ -170,12 +170,15 @@ class SqlAlchemyJobRepository(JobRepository):
         return {entity.source_job_id: entity.id for entity in entities}
 
     async def update_content(self, jobs: Mapping[int, ParsedJobDTO], seen_at: datetime) -> None:
-        if jobs:
-            await self._session.execute(update(Job), [
-                {"id": job_id, **self._content(job), "last_seen_at": seen_at,
-                 "content_changed_at": seen_at}
-                for job_id, job in jobs.items()
-            ])
+        # Rows that keep their category have fewer columns, so each kind is
+        # sent as its own batch.
+        for has_category in (True, False):
+            rows = [
+                {"id": job_id, **self._content(job), "last_seen_at": seen_at, "content_changed_at": seen_at}
+                for job_id, job in jobs.items() if bool(job.category) == has_category
+            ]
+            if rows:
+                await self._session.execute(update(Job), rows)
 
     async def mark_seen(self, job_ids: Collection[int], seen_at: datetime) -> None:
         if job_ids:
@@ -213,7 +216,11 @@ class SqlAlchemyJobRepository(JobRepository):
 
     @staticmethod
     def _content(job: ParsedJobDTO) -> dict[str, object]:
-        return job.model_dump() | {"quality_flags": list(job.quality_flags)}
+        """Column values for a parsed job; without a category, the stored one is kept."""
+        content = job.model_dump(exclude={"category"}) | {"quality_flags": list(job.quality_flags)}
+        if job.category:
+            content |= {"category": job.category, "category_source": "description", "category_feed_id": None}
+        return content
 
 
 def listed_condition(county_id: int | None = None) -> ColumnElement[bool]:

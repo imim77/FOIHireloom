@@ -336,3 +336,33 @@ class JobSyncTests(ModelTestCase):
                                  category_verifier=FeedCategoryVerifier(1))
         result = await service.sync_feed(self.feeds[3])
         self.assertEqual(result.category_mapping.status, "confirmed")
+
+    async def test_description_category_wins_and_empty_reimport_keeps_the_category(self) -> None:
+        await self.add_occupation_feed()
+        self.items[1], self.items[3] = [ad("1"), ad("2", category=None), ad("3")], []
+        await self.service.sync_all()
+        jobs = await self.jobs()
+        self.assertEqual((jobs["1"].category, jobs["1"].category_source, jobs["1"].category_feed_id),
+                         (CATERING, "description", None))
+        self.assertEqual((jobs["2"].category, jobs["2"].category_source), (None, None))
+        async with self.sessions.session() as writer:
+            filled = await writer.get(Job, jobs["3"].id)
+            filled.category, filled.category_source, filled.category_feed_id = "TEKSTILCI I KOŽARI", "feed", self.feeds[3]
+            await writer.commit()
+
+        self.items[1] = [ad("1", title="KONOBAR", category=None), ad("2", category="STRUČNJACI U PROMETU"),
+                         ad("3", title="KONOBAR", category=None)]
+        self.etag[1] = '"v2"'
+        result = await self.service.sync_feed(self.feeds[1])
+        self.assertEqual(result.items_updated, 3)
+        jobs = await self.jobs()
+        self.assertEqual((jobs["1"].title, jobs["1"].category, jobs["1"].category_source), ("KONOBAR", CATERING, "description"))
+        self.assertEqual((jobs["2"].category, jobs["2"].category_source), ("STRUČNJACI U PROMETU", "description"))
+        self.assertEqual((jobs["3"].category, jobs["3"].category_source, jobs["3"].category_feed_id),
+                         ("TEKSTILCI I KOŽARI", "feed", self.feeds[3]))
+
+        self.items[1][2] = ad("3")
+        self.etag[1] = '"v3"'
+        await self.service.sync_feed(self.feeds[1])
+        job = (await self.jobs())["3"]
+        self.assertEqual((job.category, job.category_source, job.category_feed_id), (CATERING, "description", None))

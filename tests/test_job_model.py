@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 from model_test_case import ModelTestCase
 
-from FOIHireloom.db.models import Employer, Job
+from FOIHireloom.db.models import Employer, Job, SourceFeed
 
 
 class JobModelTests(ModelTestCase):
@@ -85,3 +85,28 @@ class JobModelTests(ModelTestCase):
             async with self.session.begin_nested():
                 await self.session.delete(employer)
                 await self.session.flush()
+
+    async def test_category_records_its_source_and_filled_in_ones_their_feed(self) -> None:
+        feed = SourceFeed(ckan_resource_id=uuid4(), label="Zanimanje", scope="occupation",
+                          feed_url="https://example.com/kat.xml")
+        self.session.add(feed)
+        await self.session.flush()
+        for values in (
+            {},
+            {"category": "STRUČNJACI U PROMETU", "category_source": "description"},
+            {"category": "STRUČNJACI U PROMETU", "category_source": "feed", "category_feed_id": feed.id},
+        ):
+            with self.subTest(values=values):
+                self.session.add(self.job(**values))
+                await self.session.flush()
+        for values in (
+            {"category": "STRUČNJACI U PROMETU"},
+            {"category_source": "description"},
+            {"category": "STRUČNJACI U PROMETU", "category_source": "feed"},
+            {"category": "STRUČNJACI U PROMETU", "category_source": "description", "category_feed_id": feed.id},
+            {"category": "STRUČNJACI U PROMETU", "category_source": "opis"},
+            {"category_feed_id": feed.id},
+            {"category": "STRUČNJACI U PROMETU", "category_source": "feed", "category_feed_id": feed.id + 1},
+        ):
+            with self.subTest(values=values):
+                await self.assert_rejected(self.job(**values))
