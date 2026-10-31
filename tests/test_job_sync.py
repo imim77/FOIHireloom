@@ -223,3 +223,56 @@ class JobSyncTests(ModelTestCase):
         for ratio in (-0.1, 1.1, float("nan")):
             with self.subTest(ratio=ratio), self.assertRaises(ValueError):
                 JobSyncService(HzzFeedClient(self.http), HzzFeedParser(), SqlAlchemyUnitOfWorkFactory(self.sessions), ratio)
+
+    async def add_occupation_feed(self) -> None:
+        feed = SourceFeed(ckan_resource_id=uuid4(), label="Zanimanje", scope="occupation",
+                          feed_url="http://burzarada.hzz.hr/rss/rsszup3.xml")
+        self.session.add(feed)
+        await self.session.commit()
+        self.feeds[3] = feed.id
+        self.status[3], self.etag[3] = 200, '"k1"'
+
+    async def test_occupation_feed_links_known_jobs_without_creating_or_changing_them(self) -> None:
+        await self.add_occupation_feed()
+        self.items[3] = [ad("1"), ad("10", title="KONOBAR/KONOBARICA"), ad("99")]
+        result = await self.service.sync_all()
+        occupation = result.feeds[-1]
+        self.assertEqual(occupation.feed_id, self.feeds[3])
+        self.assertEqual(
+            (occupation.status, occupation.items_seen, occupation.items_added, occupation.items_updated,
+             occupation.items_unchanged, occupation.items_unlinked),
+            ("succeeded", 3, 0, 0, 2, 1),
+        )
+        jobs = await self.jobs()
+        self.assertEqual(sorted(jobs), ["1", "10", "2", "3"])
+        self.assertEqual(jobs["10"].title, "KUHAR/KUHARICA")
+        self.assertEqual(await self.memberships(3), {"1": "present", "10": "present"})
+        run = (await self.runs(3))[-1]
+        self.assertEqual((run.items_seen, run.items_added, run.items_updated), (3, 0, 0))
+        feed = await self.feed(3)
+        self.assertEqual(feed.last_content_change_at, feed.last_success_at)
+
+        for etag in ('"k1"', '"k2"'):
+            with self.subTest(etag=etag):
+                self.etag[3] = etag
+                result = await self.service.sync_feed(self.feeds[3])
+                self.assertEqual(result.status, "not_modified" if etag == '"k1"' else "succeeded")
+                after = await self.jobs()
+                for key in ("1", "10"):
+                    self.assertEqual(after[key].last_seen_at, jobs[key].last_seen_at)
+                    self.assertEqual(after[key].content_changed_at, jobs[key].content_changed_at)
+
+    async def test_occupation_feed_links_a_job_once_a_county_feed_imports_it(self) -> None:
+        await self.add_occupation_feed()
+        self.items[3] = [ad("1"), ad("99")]
+        await self.service.sync_all()
+        self.assertEqual(await self.memberships(3), {"1": "present"})
+
+        self.items[1].append(ad("99"))
+        self.items[3] = [ad("99")]
+        self.etag[1], self.etag[3] = '"v2"', '"k2"'
+        result = await self.service.sync_all()
+        self.assertEqual((result.feeds[-1].items_unlinked, result.feeds[-1].items_missing), (0, 1))
+        self.assertEqual(await self.memberships(3), {"1": "missing", "99": "present"})
+        async with self.sessions.session() as reader:
+            self.assertEqual(await reader.scalar(select(func.count(Job.id)).where(Job.source_job_id == "99")), 1)

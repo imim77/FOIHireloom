@@ -38,6 +38,8 @@ class SyncRunOutcomeDTO(ModelConfigBaseModel):
 
 
 class FeedSyncResultDTO(ModelConfigBaseModel):
+    """items_unlinked counts an occupation feed's jobs that no county feed has imported."""
+
     feed_id: int
     label: str
     status: str
@@ -49,6 +51,7 @@ class FeedSyncResultDTO(ModelConfigBaseModel):
     items_missing: int = 0
     items_returned: int = 0
     items_invalid: int = 0
+    items_unlinked: int = 0
     error: str | None = None
 
 
