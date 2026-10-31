@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import SourceFeed
+from FOIHireloom.db.models.source_feed import SYNCED_SCOPES
 from FOIHireloom.dto.job_sync import FeedCheckDTO
 from FOIHireloom.dto.source_feed import SourceFeedCreateDTO, SourceFeedDTO, SourceFeedUpdateDTO
 from FOIHireloom.exceptions import NotFoundError
@@ -17,7 +18,7 @@ class SqlAlchemySourceFeedRepository(SourceFeedRepository):
 
     async def get_by_id(self, feed_id: int) -> SourceFeed | None:
         statement = select(SourceFeed).where(
-            SourceFeed.scope == "county",
+            SourceFeed.scope.in_(SYNCED_SCOPES),
             SourceFeed.id == feed_id,
         )
         result = await self._session.execute(statement)
@@ -25,7 +26,7 @@ class SqlAlchemySourceFeedRepository(SourceFeedRepository):
 
     async def get_by_ckan_resource_id(self, resource_id: UUID) -> SourceFeed | None:
         statement = select(SourceFeed).where(
-            SourceFeed.scope == "county",
+            SourceFeed.scope.in_(SYNCED_SCOPES),
             SourceFeed.ckan_resource_id == resource_id,
         )
         result = await self._session.execute(statement)
@@ -33,7 +34,7 @@ class SqlAlchemySourceFeedRepository(SourceFeedRepository):
 
     async def get_by_feed_url(self, feed_url: str) -> SourceFeed | None:
         statement = select(SourceFeed).where(
-            SourceFeed.scope == "county", SourceFeed.feed_url == feed_url
+            SourceFeed.scope.in_(SYNCED_SCOPES), SourceFeed.feed_url == feed_url
         )
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
@@ -41,20 +42,20 @@ class SqlAlchemySourceFeedRepository(SourceFeedRepository):
     async def list_enabled(self) -> list[SourceFeed]:
         statement = (
             select(SourceFeed)
-            .where(SourceFeed.scope == "county", SourceFeed.enabled.is_(True))
-            .order_by(SourceFeed.id)
+            .where(SourceFeed.scope.in_(SYNCED_SCOPES), SourceFeed.enabled.is_(True))
+            .order_by(SourceFeed.scope != "county", SourceFeed.id)
         )
         result = await self._session.scalars(statement)
         return list(result.all())
 
     async def add(self, feed: SourceFeed) -> None:
-        if feed.scope != "county":
-            raise ValueError("Only Croatian county source feeds can be added.")
+        if feed.scope not in SYNCED_SCOPES:
+            raise ValueError("Only Croatian county and occupation source feeds can be added.")
         self._session.add(feed)
         await self._session.flush()
 
     async def create(self, feed: SourceFeedCreateDTO) -> SourceFeedDTO:
-        entity = SourceFeed(**feed.model_dump(), scope="county")
+        entity = SourceFeed(**feed.model_dump())
         await self.add(entity)
         return SourceFeedDTO.model_validate(entity)
 
@@ -62,6 +63,8 @@ class SqlAlchemySourceFeedRepository(SourceFeedRepository):
         feed = await self.get_by_id(feed_id)
         if feed is None:
             raise NotFoundError("source feed", str(feed_id))
+        if feed.scope != changes.scope:
+            raise ValueError("A source feed cannot change its scope.")
         feed.county_id, feed.ckan_resource_id = changes.county_id, changes.ckan_resource_id
         feed.label, feed.feed_url = changes.label, changes.feed_url
         if changes.reset_http_validators:

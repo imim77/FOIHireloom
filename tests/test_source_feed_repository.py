@@ -219,3 +219,33 @@ class SourceFeedRepositoryTests(ModelTestCase):
         for feed_id in (legacy.id, legacy.id + 1):
             with self.subTest(feed_id=feed_id), self.assertRaises(NotFoundError):
                 await self.repository.update(feed_id, SourceFeedUpdateDTO(**self.changes()))
+
+    def occupation_feed(self, **overrides: object) -> SourceFeed:
+        return self.feed(**({"scope": "occupation", "county_id": None, "label": "Zanimanje"} | overrides))
+
+    async def test_occupation_feeds_are_found_and_listed_after_county_feeds(self) -> None:
+        occupation, county, disabled = self.occupation_feed(), self.feed(), self.occupation_feed(enabled=False)
+        for feed in [occupation, county, disabled]:
+            await self.repository.add(feed)
+        await self.session.commit()
+        async with self.sessions.session() as reader:
+            repository = SqlAlchemySourceFeedRepository(reader)
+            self.assertEqual((await repository.get_by_id(occupation.id)).scope, "occupation")
+            self.assertIsNotNone(await repository.get_by_feed_url(occupation.feed_url))
+            self.assertIsNotNone(await repository.get_by_ckan_resource_id(disabled.ckan_resource_id))
+            self.assertEqual([feed.id for feed in await repository.list_enabled()], [county.id, occupation.id])
+
+    async def test_create_adds_occupation_feed_and_update_keeps_its_scope(self) -> None:
+        created = await self.repository.create(SourceFeedCreateDTO(**self.changes(scope="occupation", county_id=None)))
+        self.assertEqual((created.scope, created.county_id), ("occupation", None))
+        updated = await self.repository.update(created.id, SourceFeedUpdateDTO(
+            **self.changes(scope="occupation", county_id=None, label="Novi naziv"),
+        ))
+        self.assertEqual((updated.scope, updated.label), ("occupation", "Novi naziv"))
+        with self.assertRaisesRegex(ValueError, "scope"):
+            await self.repository.update(created.id, SourceFeedUpdateDTO(**self.changes()))
+
+    def test_create_dto_requires_a_county_only_for_county_feeds(self) -> None:
+        for overrides in ({"county_id": None}, {"scope": "occupation"}, {"scope": "eu", "county_id": None}):
+            with self.subTest(overrides=overrides), self.assertRaises(ValueError):
+                SourceFeedCreateDTO(**self.changes(**overrides))

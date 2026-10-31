@@ -5,6 +5,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import County, JobFeedMembership, SourceFeed
+from FOIHireloom.db.models.source_feed import SYNCED_SCOPES
 from FOIHireloom.dao.interfaces.job_feed_membership import JobFeedMembershipRepository
 from FOIHireloom.dto.job_search import JobCountyDTO, JobListingDTO
 from FOIHireloom.dto.job_sync import MembershipSnapshotDTO
@@ -20,7 +21,7 @@ class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
         statement = select(JobFeedMembership).join(SourceFeed).where(
             JobFeedMembership.job_id == job_id,
             JobFeedMembership.feed_id == feed_id,
-            SourceFeed.scope == "county",
+            SourceFeed.scope.in_(SYNCED_SCOPES),
         )
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
@@ -29,7 +30,7 @@ class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
         statement = (
             select(JobFeedMembership)
             .join(SourceFeed)
-            .where(JobFeedMembership.feed_id == feed_id, SourceFeed.scope == "county")
+            .where(JobFeedMembership.feed_id == feed_id, SourceFeed.scope.in_(SYNCED_SCOPES))
             .order_by(JobFeedMembership.job_id)
         )
         result = await self._session.scalars(statement)
@@ -75,7 +76,7 @@ class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
         return [JobCountyDTO.model_validate(row) for row in result.all()]
 
     async def add(self, membership: JobFeedMembership) -> None:
-        await self._require_county_feed(membership.feed_id)
+        await self._require_synced_feed(membership.feed_id)
         self._session.add(membership)
         await self._session.flush()
 
@@ -83,7 +84,7 @@ class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
         statement = (
             select(JobFeedMembership.job_id, JobFeedMembership.presence_status)
             .join(SourceFeed)
-            .where(JobFeedMembership.feed_id == feed_id, SourceFeed.scope == "county")
+            .where(JobFeedMembership.feed_id == feed_id, SourceFeed.scope.in_(SYNCED_SCOPES))
             .order_by(JobFeedMembership.job_id)
         )
         result = await self._session.execute(statement)
@@ -92,7 +93,7 @@ class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
     async def create_many(self, feed_id: int, job_ids: Collection[int], seen_at: datetime) -> None:
         if not job_ids:
             return
-        await self._require_county_feed(feed_id)
+        await self._require_synced_feed(feed_id)
         self._session.add_all([
             JobFeedMembership(job_id=job_id, feed_id=feed_id, first_seen_at=seen_at, last_seen_at=seen_at)
             for job_id in job_ids
@@ -125,10 +126,10 @@ class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
         )
         return sorted(result.scalars().all())
 
-    async def _require_county_feed(self, feed_id: int) -> None:
+    async def _require_synced_feed(self, feed_id: int) -> None:
         found = await self._session.scalar(select(SourceFeed.id).where(
             SourceFeed.id == feed_id,
-            SourceFeed.scope == "county",
+            SourceFeed.scope.in_(SYNCED_SCOPES),
         ))
         if found is None:
-            raise ValueError("Memberships require an existing Croatian county source feed.")
+            raise ValueError("Memberships require an existing Croatian county or occupation source feed.")

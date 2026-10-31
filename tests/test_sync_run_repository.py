@@ -185,3 +185,15 @@ class SyncRunRepositoryTests(ModelTestCase):
         await self.session.commit()
         async with self.sessions.session() as reader:
             self.assertEqual(await reader.scalar(select(func.count(SyncRun.id))), 2)
+
+    async def test_occupation_feeds_keep_sync_history(self) -> None:
+        feed = SourceFeed(
+            ckan_resource_id=uuid4(), label="Zanimanje",
+            feed_url=f"https://example.com/{uuid4()}.xml", scope="occupation",
+        )
+        self.session.add(feed)
+        await self.session.flush()
+        run_id = await self.repository.start(feed.id)
+        await self.session.commit()
+        async with self.sessions.session() as reader:
+            self.assertEqual((await SqlAlchemySyncRunRepository(reader).get_latest_for_feed(feed.id)).id, run_id)

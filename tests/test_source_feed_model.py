@@ -59,3 +59,13 @@ class SourceFeedModelTests(ModelTestCase):
         await self.assert_rejected(
             self.feed(last_success_at=now, last_checked_at=now - timedelta(seconds=1))
         )
+
+    async def test_occupation_feed_has_no_county(self) -> None:
+        feed = self.feed(scope="occupation", label="Zanimanje")
+        self.session.add(feed)
+        await self.session.flush()
+        self.assertIsNone(feed.county_id)
+        county = County(code="zagreb", name="Grad Zagreb")
+        self.session.add(county)
+        await self.session.flush()
+        await self.assert_rejected(self.feed(scope="occupation", county_id=county.id))

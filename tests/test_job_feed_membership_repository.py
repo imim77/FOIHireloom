@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from sqlalchemy import func, select
@@ -215,3 +215,20 @@ class JobFeedMembershipRepositoryTests(ModelTestCase):
         await self.session.commit()
         async with self.sessions.session() as reader:
             self.assertEqual(await reader.scalar(select(func.count()).select_from(JobFeedMembership)), 2)
+
+    async def test_occupation_memberships_are_kept_but_give_no_county(self) -> None:
+        occupation_feed = self.new_feed(scope="occupation", county_id=None)
+        self.session.add(occupation_feed)
+        await self.session.flush()
+        await self.repository.create_many(occupation_feed.id, [self.job_id], datetime.now(timezone.utc))
+        await self.repository.add(self.membership())
+        await self.session.commit()
+        async with self.sessions.session() as reader:
+            repository = SqlAlchemyJobFeedMembershipRepository(reader)
+            self.assertIsNotNone(await repository.get_by_job_and_feed(self.job_id, occupation_feed.id))
+            self.assertEqual(
+                [(m.job_id, m.presence_status) for m in await repository.list_snapshots_for_feed(occupation_feed.id)],
+                [(self.job_id, "present")],
+            )
+            self.assertEqual([listing.county_code for listing in await repository.list_listings(self.job_id)], ["zagreb"])
+            self.assertEqual([county.county_code for county in await repository.list_counties([self.job_id])], ["zagreb"])

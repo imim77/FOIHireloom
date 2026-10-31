@@ -23,6 +23,11 @@ if TYPE_CHECKING:
     from .job_feed_membership import JobFeedMembership
     from .sync_run import SyncRun
 
+# County feeds place a job in a county; occupation feeds only add an HZZ
+# occupation group to jobs already known from county feeds. Legacy EU rows
+# are kept but never synced.
+SYNCED_SCOPES = ("county", "occupation")
+
 
 class SourceFeed(Base):
     __tablename__ = "source_feeds"
@@ -31,7 +36,7 @@ class SourceFeed(Base):
         CheckConstraint("length(btrim(feed_url)) > 0", name="url_not_blank"),
         CheckConstraint(
             "(scope = 'county' AND county_id IS NOT NULL) OR "
-            "(scope = 'eu' AND county_id IS NULL)",
+            "(scope IN ('occupation', 'eu') AND county_id IS NULL)",
             name="scope_matches_county",
         ),
         CheckConstraint(

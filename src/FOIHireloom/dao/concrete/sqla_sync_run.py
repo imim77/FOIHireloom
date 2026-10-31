@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import SourceFeed, SyncRun
+from FOIHireloom.db.models.source_feed import SYNCED_SCOPES
 from FOIHireloom.dao.interfaces.sync_run import SyncRunRepository
 from FOIHireloom.dto.job_sync import SyncRunOutcomeDTO
 from FOIHireloom.exceptions import NotFoundError
@@ -16,7 +17,7 @@ class SqlAlchemySyncRunRepository(SyncRunRepository):
     async def get_by_id(self, run_id: int) -> SyncRun | None:
         statement = select(SyncRun).join(SourceFeed).where(
             SyncRun.id == run_id,
-            SourceFeed.scope == "county",
+            SourceFeed.scope.in_(SYNCED_SCOPES),
         )
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
@@ -25,7 +26,7 @@ class SqlAlchemySyncRunRepository(SyncRunRepository):
         statement = (
             select(SyncRun)
             .join(SourceFeed)
-            .where(SyncRun.feed_id == feed_id, SourceFeed.scope == "county")
+            .where(SyncRun.feed_id == feed_id, SourceFeed.scope.in_(SYNCED_SCOPES))
             .order_by(SyncRun.started_at.desc(), SyncRun.id.desc())
             .limit(1)
         )
@@ -35,10 +36,10 @@ class SqlAlchemySyncRunRepository(SyncRunRepository):
     async def add(self, sync_run: SyncRun) -> None:
         feed_id = await self._session.scalar(select(SourceFeed.id).where(
             SourceFeed.id == sync_run.feed_id,
-            SourceFeed.scope == "county",
+            SourceFeed.scope.in_(SYNCED_SCOPES),
         ))
         if feed_id is None:
-            raise ValueError("Sync attempts require an existing Croatian county source feed.")
+            raise ValueError("Sync attempts require an existing Croatian county or occupation source feed.")
         self._session.add(sync_run)
         await self._session.flush()
 
@@ -60,7 +61,7 @@ class SqlAlchemySyncRunRepository(SyncRunRepository):
         statement = (
             select(SyncRun.items_seen)
             .join(SourceFeed)
-            .where(SyncRun.feed_id == feed_id, SyncRun.status == "succeeded", SourceFeed.scope == "county")
+            .where(SyncRun.feed_id == feed_id, SyncRun.status == "succeeded", SourceFeed.scope.in_(SYNCED_SCOPES))
             .order_by(SyncRun.started_at.desc(), SyncRun.id.desc())
             .limit(1)
         )
