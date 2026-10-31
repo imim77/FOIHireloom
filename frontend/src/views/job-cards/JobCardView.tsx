@@ -1,7 +1,7 @@
 // One job, after the reference card: the employer's tile, name and line, the title, the job's labels and, under a
-// rule, when it was published and until when to apply, with its actions, on a 3D column like the county chart's.
-// Animated with anime.js like the chart: the card comes in after the ones before it as its column rises from its
-// foot, the tile pops, then the labels come in one after another and the footer last.
+// rule, when it was published and until when to apply, with its actions, on a tile of the Performance chart.
+// Animated with anime.js like the chart: the card comes in after the ones before it, the tile pops, then the labels
+// come in one after another and the footer last.
 
 import { animate, stagger, utils } from 'animejs'
 import { useRef } from 'react'
@@ -11,8 +11,6 @@ import type { JobCard } from './types'
 
 const CARD_STAGGER = 90
 const TILE_AT = 150
-// The column rises from its foot like the chart's bars.
-const GROW = 1100
 const CHIPS_AT = 300
 const FOOT_AT = 450
 
@@ -42,17 +40,6 @@ function Action({ label, icon, onClick }: { label: string; icon: string[]; onCli
   )
 }
 
-/** One look of the card's column: two faces and a lid, as a column of the county chart draws them. */
-function ColumnLook({ lit }: { lit: boolean }) {
-  return (
-    <span className={`look ${lit ? 'lit' : 'grey'}`}>
-      <i className="face left" />
-      <i className="face right" />
-      <i className="lid" />
-    </span>
-  )
-}
-
 /** order is the card's place among the cards that came in together, which delays its entrance. */
 export function JobCardView({ job, today, order, actions }: {
   job: JobCard
@@ -70,11 +57,6 @@ export function JobCardView({ job, today, order, actions }: {
     const all = (selector: string) => [...card.querySelectorAll<HTMLElement>(selector)]
     const at = order * CARD_STAGGER
     timeline.add(card, { ...fadeIn([card], 12), duration: 600 }, at)
-    const column = one('[data-slot="column"]')
-    if (column) {
-      utils.set(column, { scaleY: 0 })
-      timeline.add(column, { scaleY: [0, 1], duration: GROW, ease: 'outExpo', onComplete: releaseStyles('transform') }, at)
-    }
     const tile = one('[data-slot="tile"]')
     if (tile) {
       utils.set(tile, { opacity: 0, scale: 0.6 })
@@ -86,7 +68,7 @@ export function JobCardView({ job, today, order, actions }: {
     const foot = all('[data-slot="foot"]')
     timeline.add(foot, { ...fadeIn(foot), duration: 500 }, at + FOOT_AT)
     return () => {
-      for (const el of [card, column, tile, ...labels, ...foot]) {
+      for (const el of [card, tile, ...labels, ...foot]) {
         el?.style.removeProperty('opacity')
         el?.style.removeProperty('transform')
       }
@@ -95,12 +77,6 @@ export function JobCardView({ job, today, order, actions }: {
 
   return (
     <article className="job" ref={root} data-slot="job" aria-label={`${sentenceCase(job.display_title)}, ${employer}`}>
-      {/* The background: a 3D column, grey like the chart's other counties and orange like its selected one when
-          the card is hovered or focused. */}
-      <span className="column" aria-hidden="true" data-slot="column">
-        <ColumnLook lit={false} />
-        <ColumnLook lit />
-      </span>
       <div className="job-head">
         <span className="tile" aria-hidden="true" data-slot="tile" />
         <div className="titles">

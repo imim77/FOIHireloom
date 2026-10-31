@@ -1,39 +1,11 @@
-/* The chart's look: the cards sit in its card, with its type scale (16/600 titles, 12px text), grey labels, orange
-   for what stands out, the dark pill and its 36px bordered buttons. */
+/* The chart's type scale (16/600 titles, 12px text), grey labels, orange for what stands out, the dark pill and its
+   36px bordered buttons, on the Performance chart's tiles. */
 .job-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; }
 
+/* A job is a tile of the Performance chart: white, 16px round, a soft drop shadow and a 1px ring. */
 .job {
-  position: relative; isolation: isolate; display: flex; flex-direction: column; gap: 12px; min-width: 0;
-  padding: 28px 16px 16px;
-}
-
-/* The card's background is a column of the county chart (Bar3d): a lid --lid deep at its sides and twice that in the
-   middle, a left face lighter along the middle edge, a right face lighter at the top, 1px gaps for the white edges,
-   fading out over its last 28% like the chart's bars. Grey at 32% at rest, orange when hovered or focused. */
-.column {
-  --lid: 8px;
-  position: absolute; inset: 0; z-index: -1; pointer-events: none; transform-origin: bottom;
-  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
-}
-.column .look { position: absolute; inset: 0; transition: opacity 300ms; }
-.column .grey { --from: var(--surface-disable); --to: var(--surface-subdued); --lid-fill: var(--surface-subdued); opacity: 0.32; }
-.column .lit { --from: var(--orange-100); --to: var(--orange-300); --lid-fill: var(--orange-100); opacity: 0; }
-.job:hover .column .grey, .job:focus-within .column .grey { opacity: 0; }
-.job:hover .column .lit, .job:focus-within .column .lit { opacity: 1; }
-.column i { position: absolute; inset: 0; }
-.column .lid {
-  background: var(--lid-fill);
-  clip-path: polygon(50% 0, 100% var(--lid), 50% calc(2 * var(--lid)), 0 var(--lid));
-}
-.column .left {
-  background: linear-gradient(to left, var(--from) 50%, var(--to) 100%);
-  clip-path: polygon(0 calc(var(--lid) + 1px), calc(50% - 0.5px) calc(2 * var(--lid) + 1px), calc(50% - 0.5px) 100%, 0 100%);
-}
-.column .grey .right { background: linear-gradient(to bottom, var(--from), var(--to)); }
-.column .lit .right { background: linear-gradient(to right, var(--from) 50%, var(--to) 100%); }
-.column .right {
-  clip-path: polygon(calc(50% + 0.5px) calc(2 * var(--lid) + 1px), 100% calc(var(--lid) + 1px), 100% 100%, calc(50% + 0.5px) 100%);
+  display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 16px; border-radius: 16px;
+  background: var(--card); box-shadow: 0 1px 2px rgb(40 40 40 / 0.08), 0 0 0 1px var(--border);
 }
 .job-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .tile { flex: none; width: 36px; height: 36px; border-radius: 10px; background: #000; }
@@ -63,4 +35,3 @@
 .more:focus-visible { outline: none; box-shadow: var(--focus); }
 .more:disabled { color: var(--fg-soft); cursor: progress; }
 
-@media (prefers-reduced-motion: reduce) { .column .look { transition: none; } }

@@ -25,7 +25,7 @@ export function JobCards() {
   const [more, setMore] = useState<More | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  if (!data) return <Card title="Oglasi" description="Učitavanje…" />
+  if (!data) return <Card sunken title="Oglasi" description="Učitavanje…" />
 
   const extra = more?.base === data ? more : null
   const cards = [...data.jobs.map((job, order) => ({ job, order })), ...(extra?.jobs ?? [])]
@@ -65,7 +65,7 @@ export function JobCards() {
   }
 
   return (
-    <Card title={data.title} description={data.description}>
+    <Card sunken title={data.title} description={data.description}>
       <Warning text={data.coverage?.warning} />
       {cards.length ? (
         <div className="job-list">
