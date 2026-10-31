@@ -6,7 +6,7 @@
 import { animate, stagger, utils } from 'animejs'
 import { useRef } from 'react'
 import { fadeIn, finish, releaseStyles, useChartEntrance } from '../../shared/chart-motion'
-import { chips, deadline, initials, published, sentenceCase, subtitle } from './job-format'
+import { chips, deadline, published, sentenceCase, subtitle } from './job-format'
 import type { JobCard } from './types'
 
 const CARD_STAGGER = 90
@@ -78,7 +78,7 @@ export function JobCardView({ job, today, order, actions }: {
   return (
     <article className="job" ref={root} data-slot="job" aria-label={`${sentenceCase(job.display_title)}, ${employer}`}>
       <div className="job-head">
-        <span className="tile" aria-hidden="true" data-slot="tile">{initials(job.employer_name)}</span>
+        <span className="tile" aria-hidden="true" data-slot="tile" />
         <div className="titles">
           <p className="employer truncate" title={employer}>{employer}</p>
           <p className="soft-line truncate">{subtitle(job)}</p>

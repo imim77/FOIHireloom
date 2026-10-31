@@ -16,12 +16,6 @@ export function titleCase(text: string): string {
     (_, before: string, letter: string) => before + letter.toLocaleUpperCase('hr-HR'))
 }
 
-/** Up to two initials of the employer for its tile: "OSNOVNA ŠKOLA JAKOVLJE" → "OŠ". */
-export function initials(employer: string | null): string {
-  const words = (employer ?? '').split(/\s+/).filter((word) => /^\p{L}/u.test(word))
-  return words.slice(0, 2).map((word) => word.charAt(0).toLocaleUpperCase('hr-HR')).join('') || 'HZZ'
-}
-
 const day = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10))
 /** Whole days from one ISO date to another. */
 export const daysBetween = (from: string, to: string) => Math.round((day(to) - day(from)) / 86_400_000)
