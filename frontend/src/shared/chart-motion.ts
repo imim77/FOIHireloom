@@ -1,7 +1,7 @@
 // Motion helpers for the charts, after the original library's hooks/use-chart-motion: anime.js animations that
 // still reach their end state in a hidden frame, an entrance timeline, counting numbers and the reduced-motion setting.
 
-import { animate, createTimeline, type JSAnimation, type Timeline } from 'animejs'
+import { animate, createTimeline, type JSAnimation, type Timeline, utils } from 'animejs'
 import { type RefObject, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 
 const REDUCE = '(prefers-reduced-motion: reduce)'
@@ -35,6 +35,15 @@ export function releaseStyles(...properties: string[]) {
       }
     }
   }
+}
+
+/**
+ * For an entrance timeline: hide targets at once (not one frame later, when the timeline first renders) and return
+ * the animation that fades them in, rising by rise pixels.
+ */
+export function fadeIn(targets: HTMLElement[], rise = 0) {
+  utils.set(targets, { opacity: 0, translateY: rise })
+  return { opacity: [0, 1], translateY: [rise, 0], ease: 'outQuad', onComplete: releaseStyles('opacity', 'transform') }
 }
 
 /**

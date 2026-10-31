@@ -7,7 +7,7 @@
 
 import { animate, type JSAnimation, stagger, utils } from 'animejs'
 import { type KeyboardEvent, useId, useLayoutEffect, useRef, useState } from 'react'
-import { finish, releaseStyles, useChartEntrance, useCountUp, useReducedMotion } from '../../shared/chart-motion'
+import { fadeIn, finish, releaseStyles, useChartEntrance, useCountUp, useReducedMotion } from '../../shared/chart-motion'
 import { formatAds, formatInteger, formatShare, formatWorkers } from '../../shared/format'
 import { useChartWidth } from '../../shared/use-chart-size'
 import { BAR_VIEW, BarGradients, BarLook } from './Bar3d'
@@ -107,23 +107,18 @@ export function CountyColumns({ counties, metric }: { counties: County[]; metric
     const countUp = () => showWorkers(latest.current.workers * up.t)
     countingWorkers.current = true
     countUp()
-    // Each target starts hidden at once, not one frame later when the timeline first renders.
-    const fade = (targets: HTMLElement[], rise = 0) => {
-      utils.set(targets, { opacity: 0, translateY: rise })
-      return { opacity: [0, 1], translateY: [rise, 0], ease: 'outQuad', onComplete: releaseStyles('opacity', 'transform') }
-    }
     const selection = all('[data-slot="selection"] > *')
     const counts = all('[data-slot="value"]')
     const names = all('[data-slot="axis-label"] > span')
     const pillAt = BARS_AT + Math.max(0, active) * BAR_STAGGER + GROW * 0.45
     timeline
-      .add(selection, { ...fade(selection, 6), duration: 600, delay: stagger(80) }, 100)
+      .add(selection, { ...fadeIn(selection, 6), duration: 600, delay: stagger(80) }, 100)
       .add(up, {
         t: [0, 1], duration: 1400, ease: 'outExpo', onUpdate: countUp,
         onComplete: () => { countingWorkers.current = false },
       }, 150)
-      .add(counts, { ...fade(counts), duration: 400, delay: stagger(BAR_STAGGER) }, BARS_AT)
-      .add(names, { ...fade(names, 4), duration: 600, delay: stagger(50) }, 350)
+      .add(counts, { ...fadeIn(counts), duration: 400, delay: stagger(BAR_STAGGER) }, BARS_AT)
+      .add(names, { ...fadeIn(names, 4), duration: 600, delay: stagger(50) }, 350)
     growth.forEach((state, i) => timeline.add(state, { t: [0, 1], duration: GROW, ease: 'outExpo', onUpdate: grow },
       BARS_AT + i * BAR_STAGGER))
     if (pill.current) {
