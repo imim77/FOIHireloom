@@ -3,9 +3,9 @@
 // anime.js like the county chart: the card rises in after the ones before it, the tile pops, the ring fills while its
 // days count up, then the labels come in one after another and the footer last.
 
-import { stagger, utils } from 'animejs'
+import { animate, stagger, utils } from 'animejs'
 import { useRef } from 'react'
-import { fadeIn, releaseStyles, useChartEntrance } from '../../shared/chart-motion'
+import { fadeIn, finish, releaseStyles, useChartEntrance } from '../../shared/chart-motion'
 import { type Deadline, DeadlineRing } from './DeadlineRing'
 import { chips, daysBetween, deadline, initials, published, sentenceCase, subtitle } from './job-format'
 import type { JobCard } from './types'
@@ -24,8 +24,39 @@ function deadlineOf(job: JobCard, today: string): Deadline | null {
   return { daysLeft, open: window > 0 ? Math.min(1, daysLeft / window) : 0 }
 }
 
+export interface CardActions {
+  // Open the advertisement on the HZZ site.
+  open: (job: JobCard) => void
+  // Ask about the job in the conversation; null outside a host.
+  ask: ((job: JobCard) => void) | null
+}
+
+const OPEN_ICON = ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5']
+const ASK_ICON = ['M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z', 'M8.5 12h.01', 'M12 12h.01', 'M15.5 12h.01']
+
+/** A footer action: its icon pops when pressed. */
+function Action({ label, icon, onClick }: { label: string; icon: string[]; onClick: () => void }) {
+  return (
+    <button className="action" type="button" title={label} aria-label={label} onClick={(event) => {
+      finish(animate(event.currentTarget.firstElementChild!, { scale: [0.7, 1], duration: 500, ease: 'outBack(2.4)',
+        onComplete: releaseStyles('transform') }))
+      onClick()
+    }}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+        strokeLinejoin="round" aria-hidden="true">
+        {icon.map((d) => <path key={d} d={d} />)}
+      </svg>
+    </button>
+  )
+}
+
 /** order is the card's place among the cards that came in together, which delays its entrance. */
-export function JobCardView({ job, today, order }: { job: JobCard; today: string; order: number }) {
+export function JobCardView({ job, today, order, actions }: {
+  job: JobCard
+  today: string
+  order: number
+  actions: CardActions
+}) {
   const ring = deadlineOf(job, today)
   const labels = chips(job)
   const employer = job.employer_name ?? 'Poslodavac nije naveden'
@@ -90,6 +121,8 @@ export function JobCardView({ job, today, order }: { job: JobCard; today: string
         <p className="when">
           {published(job, today)} · <b>{deadline(job)}</b>
         </p>
+        <Action label="Otvori oglas na HZZ-u" icon={OPEN_ICON} onClick={() => actions.open(job)} />
+        {actions.ask && <Action label="Pitaj o ovom oglasu" icon={ASK_ICON} onClick={() => actions.ask?.(job)} />}
       </div>
     </article>
   )
