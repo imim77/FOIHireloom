@@ -234,3 +234,33 @@ class AlembicMigrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tuple(remaining), (["county"], 1, 1))
         await self.migrate(command.upgrade, "head")
         await self.migrate(command.check)
+
+    async def test_category_mapping_migration_keeps_feeds_and_rejects_county_mappings(self) -> None:
+        await self.migrate(command.upgrade, "head")
+        insert_feed = text(
+            "INSERT INTO source_feeds (county_id, ckan_resource_id, label, feed_url, scope, mapped_category, "
+            "mapping_status, mapping_matching_examples, mapping_contradicting_examples, mapping_verified_at) "
+            "VALUES (:county, gen_random_uuid(), 'Zanimanje', :url, :scope, 'STRUČNJACI U PROMETU', "
+            "'confirmed', 383, 0, now())"
+        )
+        async with self.engine.begin() as connection:
+            county_id = await connection.scalar(text(
+                "INSERT INTO counties (code, name) VALUES ('zagreb', 'Grad Zagreb') RETURNING id"
+            ))
+            await connection.execute(insert_feed, {"county": None, "url": "https://example.com/kat.xml", "scope": "occupation"})
+        with self.assertRaises(IntegrityError):
+            async with self.engine.begin() as connection:
+                await connection.execute(
+                    insert_feed, {"county": county_id, "url": "https://example.com/zup.xml", "scope": "county"}
+                )
+
+        await self.migrate(command.downgrade, "4668a0c36bbc")
+        async with self.engine.connect() as connection:
+            columns = await connection.scalar(text(
+                "SELECT count(*) FROM information_schema.columns "
+                "WHERE table_name = 'source_feeds' AND column_name LIKE 'mapp%'"
+            ))
+            feeds = await connection.scalar(text("SELECT count(*) FROM source_feeds"))
+        self.assertEqual((columns, feeds), (0, 1))
+        await self.migrate(command.upgrade, "head")
+        await self.migrate(command.check)

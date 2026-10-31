@@ -7,7 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from FOIHireloom.db.models import SourceFeed
 from FOIHireloom.db.models.source_feed import SYNCED_SCOPES
 from FOIHireloom.dto.job_sync import FeedCheckDTO
-from FOIHireloom.dto.source_feed import SourceFeedCreateDTO, SourceFeedDTO, SourceFeedUpdateDTO
+from FOIHireloom.dto.source_feed import (
+    FeedCategoryMappingDTO,
+    SourceFeedCreateDTO,
+    SourceFeedDTO,
+    SourceFeedUpdateDTO,
+)
 from FOIHireloom.exceptions import NotFoundError
 from FOIHireloom.dao.interfaces.source_feed import SourceFeedRepository
 
@@ -69,6 +74,8 @@ class SqlAlchemySourceFeedRepository(SourceFeedRepository):
         feed.label, feed.feed_url = changes.label, changes.feed_url
         if changes.reset_http_validators:
             feed.etag = feed.source_last_modified_at = None
+            feed.mapped_category = feed.mapping_status = feed.mapping_verified_at = None
+            feed.mapping_matching_examples = feed.mapping_contradicting_examples = None
         await self._session.flush()
         return SourceFeedDTO.model_validate(feed)
 
@@ -82,4 +89,18 @@ class SqlAlchemySourceFeedRepository(SourceFeedRepository):
             feed.etag, feed.source_last_modified_at = check.etag, check.source_last_modified_at
             if check.content_changed:
                 feed.last_content_change_at = checked_at
+        await self._session.flush()
+
+    async def record_category_mapping(
+        self, feed_id: int, mapping: FeedCategoryMappingDTO, verified_at: datetime
+    ) -> None:
+        feed = await self.get_by_id(feed_id)
+        if feed is None:
+            raise NotFoundError("source feed", str(feed_id))
+        if feed.scope != "occupation":
+            raise ValueError("Only occupation feeds have a category mapping.")
+        feed.mapped_category, feed.mapping_status = mapping.category, mapping.status
+        feed.mapping_matching_examples = mapping.matching_examples
+        feed.mapping_contradicting_examples = mapping.contradicting_examples
+        feed.mapping_verified_at = verified_at
         await self._session.flush()

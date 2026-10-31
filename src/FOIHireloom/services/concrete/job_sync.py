@@ -11,6 +11,7 @@ from FOIHireloom.exceptions import HzzFeedError, HzzFeedHttpError, NotFoundError
 from FOIHireloom.integrations.interfaces.hzz_feed import HzzFeedClientInterface
 from FOIHireloom.services.interfaces.job_sync import JobSyncServiceInterface
 
+from .feed_category import FeedCategoryVerifier
 from .hzz_feed_parser import HzzFeedParser
 
 PROVIDER = "hzz"
@@ -26,6 +27,10 @@ class JobSyncService(JobSyncServiceInterface):
     they neither create jobs nor change their content or last-seen time, and
     the jobs they list that are unknown are counted as unlinked. Their
     abandoned feeds still list long-closed jobs that no county feed has.
+
+    Each download of an occupation feed also verifies its category mapping on
+    the explicit categories of all the jobs it lists. A feed never verified is
+    downloaded in full, since an unchanged response carries no jobs to check.
     """
 
     def __init__(
@@ -34,6 +39,7 @@ class JobSyncService(JobSyncServiceInterface):
         parser: HzzFeedParser,
         uow_factory: Callable[[], UnitOfWork],
         min_retained_ratio: float = 0.5,
+        category_verifier: FeedCategoryVerifier | None = None,
     ) -> None:
         if not math.isfinite(min_retained_ratio) or not 0 <= min_retained_ratio <= 1:
             raise ValueError("min_retained_ratio must be between 0 and 1.")
@@ -41,6 +47,7 @@ class JobSyncService(JobSyncServiceInterface):
         self._parser = parser
         self._uow_factory = uow_factory
         self._min_retained_ratio = min_retained_ratio
+        self._category_verifier = category_verifier or FeedCategoryVerifier()
 
     async def sync_all(self) -> JobSyncResultDTO:
         async with self._uow_factory() as work:
@@ -70,7 +77,10 @@ class JobSyncService(JobSyncServiceInterface):
         http_status = None
         try:
             # No transaction is open while the feed downloads.
-            response = await self._client.fetch(feed.feed_url, feed.etag, feed.source_last_modified_at)
+            if feed.scope == "occupation" and feed.mapping_verified_at is None:
+                response = await self._client.fetch(feed.feed_url, None, None)
+            else:
+                response = await self._client.fetch(feed.feed_url, feed.etag, feed.source_last_modified_at)
             if response.not_modified:
                 return await self._confirm_unchanged(feed, run_id, response)
             http_status = 200
@@ -122,12 +132,14 @@ class JobSyncService(JobSyncServiceInterface):
 
             if feed.scope == "county":
                 job_ids, added, changed, unchanged = await self._upsert_jobs(work, parsed.jobs, now)
-                unlinked = 0
+                unlinked, mapping = 0, None
             else:
                 job_ids = await self._known_jobs(work, parsed.jobs)
                 added = changed = 0
                 unchanged = len(job_ids)
                 unlinked = seen - unchanged
+                mapping = self._category_verifier.verify(parsed.jobs)
+                await work.source_feeds.record_category_mapping(feed.id, mapping, now)
             memberships = {
                 m.job_id: m.presence_status
                 for m in await work.job_feed_memberships.list_snapshots_for_feed(feed.id)
@@ -155,7 +167,7 @@ class JobSyncService(JobSyncServiceInterface):
         return FeedSyncResultDTO(
             feed_id=feed.id, label=feed.label, status="succeeded", http_status=200, items_seen=seen,
             items_added=added, items_updated=changed, items_unchanged=unchanged, items_missing=len(missing),
-            items_returned=returned, items_invalid=invalid, items_unlinked=unlinked,
+            items_returned=returned, items_invalid=invalid, items_unlinked=unlinked, category_mapping=mapping,
         )
 
     @staticmethod

@@ -69,3 +69,39 @@ class SourceFeedModelTests(ModelTestCase):
         self.session.add(county)
         await self.session.flush()
         await self.assert_rejected(self.feed(scope="occupation", county_id=county.id))
+
+    def mapping(self, **overrides: object) -> dict[str, object]:
+        values = {
+            "mapped_category": "STRUČNJACI U PROMETU", "mapping_status": "confirmed",
+            "mapping_matching_examples": 3, "mapping_contradicting_examples": 0,
+            "mapping_verified_at": datetime.now(timezone.utc),
+        }
+        return values | overrides
+
+    async def test_only_occupation_feeds_store_a_complete_consistent_mapping(self) -> None:
+        for values in (
+            self.mapping(),
+            self.mapping(mapping_status="too_few_examples", mapped_category=None, mapping_matching_examples=0),
+            self.mapping(mapping_status="contradicted", mapping_contradicting_examples=2),
+        ):
+            with self.subTest(status=values["mapping_status"]):
+                feed = self.feed(scope="occupation", **values)
+                self.session.add(feed)
+                await self.session.flush()
+        county = County(code="zagreb", name="Grad Zagreb")
+        self.session.add(county)
+        await self.session.flush()
+        for values in (
+            self.mapping(mapping_verified_at=None),
+            self.mapping(mapping_status="unknown"),
+            self.mapping(mapped_category=None),
+            self.mapping(mapping_matching_examples=0),
+            self.mapping(mapping_matching_examples=-1),
+            self.mapping(mapping_contradicting_examples=1),
+            self.mapping(mapping_status="contradicted"),
+            self.mapping(mapped_category=None, mapping_matching_examples=0),
+        ):
+            with self.subTest(values=values):
+                await self.assert_rejected(self.feed(scope="occupation", **values))
+        await self.assert_rejected(self.feed(scope="county", county_id=county.id, **self.mapping()))
+        await self.assert_rejected(self.feed(**self.mapping()))

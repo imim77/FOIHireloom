@@ -4,7 +4,12 @@ from uuid import UUID
 
 from FOIHireloom.db.models import SourceFeed
 from FOIHireloom.dto.job_sync import FeedCheckDTO
-from FOIHireloom.dto.source_feed import SourceFeedCreateDTO, SourceFeedDTO, SourceFeedUpdateDTO
+from FOIHireloom.dto.source_feed import (
+    FeedCategoryMappingDTO,
+    SourceFeedCreateDTO,
+    SourceFeedDTO,
+    SourceFeedUpdateDTO,
+)
 
 
 class SourceFeedRepository(ABC):
@@ -51,7 +56,8 @@ class SourceFeedRepository(ABC):
     async def update(self, feed_id: int, changes: SourceFeedUpdateDTO) -> SourceFeedDTO:
         """Apply registration metadata to an existing feed and flush.
 
-        Enabled flags and sync timestamps are kept. Raise NotFoundError when no
+        Enabled flags and sync timestamps are kept; resetting the HTTP
+        validators also clears the category mapping. Raise NotFoundError when no
         county or occupation feed has this ID, and ValueError when the scope
         differs. Database errors propagate; the caller owns rollback.
         """
@@ -61,4 +67,14 @@ class SourceFeedRepository(ABC):
         """Store a check's time and, when it succeeded, its validators.
 
         Raise NotFoundError when no county or occupation feed has this ID.
+        """
+
+    @abstractmethod
+    async def record_category_mapping(
+        self, feed_id: int, mapping: FeedCategoryMappingDTO, verified_at: datetime
+    ) -> None:
+        """Replace an occupation feed's category mapping with this verification.
+
+        Raise NotFoundError when no county or occupation feed has this ID, and
+        ValueError for a county feed.
         """

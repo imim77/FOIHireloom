@@ -40,6 +40,7 @@ from .job_sync import (
     SyncRunOutcomeDTO,
 )
 from .source_feed import (
+    FeedCategoryMappingDTO,
     PlannedSourceDTO,
     RegistrationPlanDTO,
     RegistrationPreviewDTO,
@@ -59,6 +60,7 @@ __all__ = [
     "CountyMarketCountDTO",
     "CountyShareDTO",
     "CoverageDTO",
+    "FeedCategoryMappingDTO",
     "FeedCheckDTO",
     "FeedResponseDTO",
     "FeedSyncResultDTO",

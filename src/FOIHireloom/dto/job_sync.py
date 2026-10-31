@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from .base import ModelConfigBaseModel
+from .source_feed import FeedCategoryMappingDTO
 
 
 class JobSnapshotDTO(ModelConfigBaseModel):
@@ -38,7 +39,10 @@ class SyncRunOutcomeDTO(ModelConfigBaseModel):
 
 
 class FeedSyncResultDTO(ModelConfigBaseModel):
-    """items_unlinked counts an occupation feed's jobs that no county feed has imported."""
+    """items_unlinked counts an occupation feed's jobs that no county feed has imported.
+
+    category_mapping is the occupation feed's mapping verified by this download.
+    """
 
     feed_id: int
     label: str
@@ -52,6 +56,7 @@ class FeedSyncResultDTO(ModelConfigBaseModel):
     items_returned: int = 0
     items_invalid: int = 0
     items_unlinked: int = 0
+    category_mapping: FeedCategoryMappingDTO | None = None
     error: str | None = None
 
 

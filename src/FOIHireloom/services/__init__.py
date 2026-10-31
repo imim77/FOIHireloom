@@ -2,6 +2,7 @@
 
 from .concrete import (
     CroatianCountyCatalog,
+    FeedCategoryVerifier,
     HzzFeedParser,
     HzzJobPageParser,
     JobPageService,
@@ -19,6 +20,7 @@ from .interfaces import (
 
 __all__ = [
     "CroatianCountyCatalog",
+    "FeedCategoryVerifier",
     "HzzFeedParser",
     "HzzJobPageParser",
     "JobPageService",

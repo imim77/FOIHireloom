@@ -10,12 +10,17 @@ from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
 from FOIHireloom.exceptions import NotFoundError
 from FOIHireloom.integrations.concrete.hzz_feed import HzzFeedClient
-from FOIHireloom.services import HzzFeedParser, JobSyncService
+from FOIHireloom.services import FeedCategoryVerifier, HzzFeedParser, JobSyncService
 
 
-def ad(web_sifra: str, title: str = "KUHAR/KUHARICA", deadline: str = "30.11.2026") -> str:
+CATERING = "UGOSTITELJI, RADNICI U TURIZMU"
+
+
+def ad(web_sifra: str, title: str = "KUHAR/KUHARICA", deadline: str = "30.11.2026",
+       category: str | None = CATERING) -> str:
     link = f"http://burzarada.hzz.hr/RadnoMjesto_Ispis.aspx?WebSifra={web_sifra}"
-    description = (f"Opis posla: {title}, Kategorija: UGOSTITELJI, RADNICI U TURIZMU, Rok za prijavu: {deadline}, "
+    category_field = f"Kategorija: {category}, " if category else ""
+    description = (f"Opis posla: {title}, {category_field}Rok za prijavu: {deadline}, "
                    "Mjesto rada: BJELOVAR, Općina: BJELOVAR, Županija: BJELOVARSKO-BILOGORSKA")
     return (f"<item><title>{title}</title><subject>{title}</subject><pubDate>27.10.2026</pubDate>"
             f"<description>{description}</description><link>{link}</link><guid>{link}</guid></item>")
@@ -276,3 +281,58 @@ class JobSyncTests(ModelTestCase):
         self.assertEqual(await self.memberships(3), {"1": "missing", "99": "present"})
         async with self.sessions.session() as reader:
             self.assertEqual(await reader.scalar(select(func.count(Job.id)).where(Job.source_job_id == "99")), 1)
+
+    async def test_occupation_feed_download_verifies_its_category_mapping(self) -> None:
+        await self.add_occupation_feed()
+        self.items[3] = [ad("1"), ad("2", category=None), ad("99")]
+        result = await self.service.sync_all()
+        self.assertTrue(all(feed.category_mapping is None for feed in result.feeds[:-1]))
+        mapping = result.feeds[-1].category_mapping
+        self.assertEqual((mapping.category, mapping.status, mapping.matching_examples, mapping.contradicting_examples),
+                         (CATERING, "too_few_examples", 2, 0))
+        feed = await self.feed(3)
+        self.assertEqual((feed.mapped_category, feed.mapping_status), (CATERING, "too_few_examples"))
+        self.assertEqual(feed.mapping_verified_at, feed.last_success_at)
+        self.assertIsNone((await self.feed(1)).mapping_status)
+
+        verified_at = feed.mapping_verified_at
+        result = await self.service.sync_feed(self.feeds[3])
+        self.assertEqual((result.status, result.category_mapping), ("not_modified", None))
+        self.assertEqual((await self.feed(3)).mapping_verified_at, verified_at)
+
+        for items, expected in (
+            ([ad("1"), ad("2"), ad("99")], ("confirmed", 3, 0)),
+            ([ad("1"), ad("2"), ad("99"), ad("3", category="STRUČNJACI U PROMETU")], ("contradicted", 3, 1)),
+        ):
+            with self.subTest(expected=expected):
+                self.items[3], self.etag[3] = items, f'"{expected[0]}"'
+                result = await self.service.sync_feed(self.feeds[3])
+                feed = await self.feed(3)
+                self.assertEqual(
+                    (feed.mapped_category, feed.mapping_status, feed.mapping_matching_examples,
+                     feed.mapping_contradicting_examples), (CATERING, *expected),
+                )
+                self.assertGreater(feed.mapping_verified_at, verified_at)
+                self.assertEqual(result.category_mapping.status, expected[0])
+
+    async def test_unverified_occupation_feed_is_downloaded_in_full(self) -> None:
+        await self.add_occupation_feed()
+        self.items[3] = [ad("1")]
+        async with self.sessions.session() as writer:
+            feed = await writer.get(SourceFeed, self.feeds[3])
+            feed.etag = '"k1"'
+            await writer.commit()
+        await self.service.sync_all()
+        self.assertNotIn("if-none-match", self.requests[-1].headers)
+        self.assertEqual((await self.feed(3)).mapping_status, "too_few_examples")
+        result = await self.service.sync_feed(self.feeds[3])
+        self.assertEqual(self.requests[-1].headers["if-none-match"], '"k1"')
+        self.assertEqual(result.status, "not_modified")
+
+    async def test_min_examples_decides_when_a_mapping_is_confirmed(self) -> None:
+        await self.add_occupation_feed()
+        self.items[3] = [ad("1")]
+        service = JobSyncService(HzzFeedClient(self.http), HzzFeedParser(), SqlAlchemyUnitOfWorkFactory(self.sessions),
+                                 category_verifier=FeedCategoryVerifier(1))
+        result = await service.sync_feed(self.feeds[3])
+        self.assertEqual(result.category_mapping.status, "confirmed")

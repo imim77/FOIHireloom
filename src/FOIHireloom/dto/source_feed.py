@@ -19,6 +19,21 @@ class SourceFeedDTO(ModelConfigBaseModel):
     enabled: bool
     etag: str | None = None
     source_last_modified_at: datetime | None = None
+    mapping_verified_at: datetime | None = None
+
+
+class FeedCategoryMappingDTO(ModelConfigBaseModel):
+    """An occupation feed's HZZ category as its own jobs' explicit categories show it.
+
+    category is the most common explicit category, matching_examples the jobs
+    that name it and contradicting_examples those that name another. Only a
+    confirmed mapping may fill in categories that job descriptions leave out.
+    """
+
+    category: str | None
+    status: Literal["confirmed", "too_few_examples", "contradicted"]
+    matching_examples: int
+    contradicting_examples: int
 
 
 class SourceFeedCreateDTO(ModelConfigBaseModel):
@@ -44,7 +59,8 @@ class SourceFeedUpdateDTO(SourceFeedCreateDTO):
     """Registration metadata for an existing feed.
 
     reset_http_validators clears the ETag and Last-Modified values, which
-    belong to the previous URL. The scope must match the existing feed's.
+    belong to the previous URL, together with the category mapping verified
+    on its content. The scope must match the existing feed's.
     """
 
     reset_http_validators: bool = False
