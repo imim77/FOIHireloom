@@ -4,6 +4,7 @@ from datetime import date, datetime
 from typing import NamedTuple
 
 from FOIHireloom.db.models import Job
+from FOIHireloom.dto.category_snapshot import CategoryInputDTO
 from FOIHireloom.dto.hzz_job_page import ParsedJobPageDTO
 from FOIHireloom.dto.job import ParsedJobDTO
 from FOIHireloom.dto.job_market import JobMarketAggregatesDTO, JobMarketCriteriaDTO
@@ -95,6 +96,13 @@ class JobRepository(ABC):
         no category from its own description, ordered by job ID.
 
         Each job's mappings come from all its occupation feeds, not only this one.
+        """
+
+    @abstractmethod
+    async def list_category_inputs(self) -> list[CategoryInputDTO]:
+        """Return the category fill's inputs and stored result for every listed job, ordered by job ID.
+
+        Occupation feed IDs cover every presence and are ascending.
         """
 
     @abstractmethod

@@ -1,11 +1,12 @@
 from collections.abc import Collection, Mapping, Sequence
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import CTE, ColumnElement, and_, bindparam, func, not_, or_, select, update
+from sqlalchemy import CTE, ColumnElement, and_, bindparam, case, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.db.models.job import SEARCH_TITLE_WEIGHT
+from FOIHireloom.dto.category_snapshot import CategoryInputDTO
 from FOIHireloom.dto.hzz_job_page import ParsedJobPageDTO
 from FOIHireloom.dto.job import ParsedJobDTO
 from FOIHireloom.dto.job_market import (
@@ -211,6 +212,27 @@ class SqlAlchemyJobRepository(JobRepository):
                 known = known.model_copy(update={"mappings": (*known.mappings, (mapped_feed_id, mapped_category))})
             evidence[job_id] = known
         return list(evidence.values())
+
+    async def list_category_inputs(self) -> list[CategoryInputDTO]:
+        # ARRAY(subquery) gives jobs without occupation feeds an empty array.
+        feed_ids = func.array(
+            select(JobFeedMembership.feed_id)
+            .join(SourceFeed)
+            .where(JobFeedMembership.job_id == Job.id, SourceFeed.scope == "occupation")
+            .order_by(JobFeedMembership.feed_id)
+            .scalar_subquery()
+        )
+        statement = (
+            select(
+                Job.source_job_id,
+                case((Job.category_source == "description", Job.category)).label("description_category"),
+                feed_ids.label("occupation_feed_ids"), Job.category, Job.category_source, Job.category_feed_id,
+            )
+            .where(listed_condition())
+            .order_by(Job.id)
+        )
+        result = await self._session.execute(statement)
+        return [CategoryInputDTO.model_validate(row) for row in result.all()]
 
     async def set_feed_categories(self, categories: Mapping[int, FilledCategoryDTO | None]) -> None:
         rows = [

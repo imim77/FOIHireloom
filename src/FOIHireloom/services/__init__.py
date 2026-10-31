@@ -1,6 +1,7 @@
 """Services package."""
 
 from .concrete import (
+    CategorySnapshotService,
     CroatianCountyCatalog,
     FeedCategoryVerifier,
     HzzFeedParser,
@@ -12,6 +13,7 @@ from .concrete import (
     SourceFeedRegistrationService,
 )
 from .interfaces import (
+    CategorySnapshotServiceInterface,
     JobPageServiceInterface,
     JobSearchServiceInterface,
     JobSyncServiceInterface,
@@ -19,6 +21,8 @@ from .interfaces import (
 )
 
 __all__ = [
+    "CategorySnapshotService",
+    "CategorySnapshotServiceInterface",
     "CroatianCountyCatalog",
     "FeedCategoryVerifier",
     "HzzFeedParser",

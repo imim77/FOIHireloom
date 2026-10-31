@@ -41,6 +41,10 @@ class SourceFeedRepository(ABC):
         """
 
     @abstractmethod
+    async def list_synced(self) -> list[SourceFeed]:
+        """Return every county and occupation feed, enabled or not, ordered by database ID."""
+
+    @abstractmethod
     async def add(self, feed: SourceFeed) -> None:
         """Add and flush a county or occupation feed without committing the transaction.
 

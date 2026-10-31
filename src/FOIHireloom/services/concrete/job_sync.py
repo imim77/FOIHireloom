@@ -17,7 +17,7 @@ from FOIHireloom.exceptions import HzzFeedError, HzzFeedHttpError, NotFoundError
 from FOIHireloom.integrations.interfaces.hzz_feed import HzzFeedClientInterface
 from FOIHireloom.services.interfaces.job_sync import JobSyncServiceInterface
 
-from .feed_category import FeedCategoryVerifier
+from .feed_category import FeedCategoryVerifier, resolve_category
 from .hzz_feed_parser import HzzFeedParser
 
 PROVIDER = "hzz"
@@ -223,14 +223,8 @@ class JobSyncService(JobSyncServiceInterface):
         changes: dict[int, FilledCategoryDTO | None] = {}
         conflicting = 0
         for evidence in await work.jobs.list_category_evidence(feed_id):
-            categories = {category for _, category in evidence.mappings}
-            conflicting += len(categories) > 1
-            target = None
-            if len(categories) == 1:
-                category = categories.pop()
-                target = FilledCategoryDTO(category=category, feed_id=min(
-                    mapped_feed for mapped_feed, mapped in evidence.mappings if mapped == category
-                ))
+            target, conflict = resolve_category(evidence.mappings)
+            conflicting += conflict
             current = evidence.category and FilledCategoryDTO(
                 category=evidence.category, feed_id=evidence.category_feed_id,
             )

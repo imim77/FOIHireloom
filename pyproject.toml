@@ -14,6 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
+foihireloom-category-snapshot = "FOIHireloom.commands.category_snapshot:main"
 foihireloom-fetch-job-pages = "FOIHireloom.commands.fetch_job_pages:main"
 foihireloom-mcp = "FOIHireloom.main:main"
 foihireloom-register-sources = "FOIHireloom.commands.register_sources:main"

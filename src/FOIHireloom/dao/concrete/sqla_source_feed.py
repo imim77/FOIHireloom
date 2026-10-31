@@ -53,6 +53,11 @@ class SqlAlchemySourceFeedRepository(SourceFeedRepository):
         result = await self._session.scalars(statement)
         return list(result.all())
 
+    async def list_synced(self) -> list[SourceFeed]:
+        statement = select(SourceFeed).where(SourceFeed.scope.in_(SYNCED_SCOPES)).order_by(SourceFeed.id)
+        result = await self._session.scalars(statement)
+        return list(result.all())
+
     async def add(self, feed: SourceFeed) -> None:
         if feed.scope not in SYNCED_SCOPES:
             raise ValueError("Only Croatian county and occupation source feeds can be added.")

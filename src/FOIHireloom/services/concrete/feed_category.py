@@ -1,6 +1,8 @@
 from collections import Counter
+from collections.abc import Collection
 
 from FOIHireloom.dto.job import ParsedJobDTO
+from FOIHireloom.dto.job_sync import FilledCategoryDTO
 from FOIHireloom.dto.source_feed import FeedCategoryMappingDTO
 
 
@@ -31,3 +33,17 @@ class FeedCategoryVerifier:
         return FeedCategoryMappingDTO(
             category=category, status=status, matching_examples=matching, contradicting_examples=contradicting,
         )
+
+
+def resolve_category(mappings: Collection[tuple[int, str]]) -> tuple[FilledCategoryDTO | None, bool]:
+    """Decide the category of a job without a description category from the
+    confirmed mappings of its occupation feeds, as (feed ID, category).
+
+    Mappings that all name one category fill it in from the smallest feed ID
+    naming it. Return None and True when they disagree, None and False
+    without any.
+    """
+    categories = {category for _, category in mappings}
+    if len(categories) != 1:
+        return None, len(categories) > 1
+    return FilledCategoryDTO(category=categories.pop(), feed_id=min(feed_id for feed_id, _ in mappings)), False

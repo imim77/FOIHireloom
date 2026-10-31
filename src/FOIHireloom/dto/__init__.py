@@ -1,4 +1,5 @@
 from .base import ModelConfigBaseModel
+from .category_snapshot import CategoryCoverageDTO, CategoryInputDTO, CategorySnapshotDTO, CategorySnapshotFeedDTO
 from .ckan import CkanPackage, CkanResource
 from .county import CountyDefinitionDTO, CountyDTO
 from .hzz_feed import FeedResponseDTO
@@ -53,8 +54,12 @@ from .source_feed import (
 )
 
 __all__ = [
+    "CategoryCoverageDTO",
     "CategoryDTO",
     "CategoryEvidenceDTO",
+    "CategoryInputDTO",
+    "CategorySnapshotDTO",
+    "CategorySnapshotFeedDTO",
     "CkanPackage",
     "CkanResource",
     "CountyDTO",

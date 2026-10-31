@@ -2,7 +2,9 @@ import unittest
 from datetime import date
 
 from FOIHireloom.dto.job import ParsedJobDTO
+from FOIHireloom.dto.job_sync import FilledCategoryDTO
 from FOIHireloom.services import FeedCategoryVerifier
+from FOIHireloom.services.concrete.feed_category import resolve_category
 
 IT = "INFORMATIČKI, RAČUNALNI I STRUČNJACI ZA INTERNET"
 LAW = "EKONOMISTI, PRAVNICI, ADMINISTRATIVCI"
@@ -40,3 +42,15 @@ class FeedCategoryVerifierTests(unittest.TestCase):
     def test_min_examples_must_be_positive(self) -> None:
         with self.assertRaises(ValueError):
             FeedCategoryVerifier(0)
+
+
+class ResolveCategoryTests(unittest.TestCase):
+    def test_agreeing_mappings_fill_in_their_category_from_the_smallest_feed_id(self) -> None:
+        self.assertEqual(resolve_category([(7, IT)]), (FilledCategoryDTO(category=IT, feed_id=7), False))
+        self.assertEqual(resolve_category([(9, IT), (4, IT), (6, IT)]), (FilledCategoryDTO(category=IT, feed_id=4), False))
+
+    def test_disagreeing_mappings_leave_the_category_unknown_and_conflicting(self) -> None:
+        self.assertEqual(resolve_category([(4, IT), (5, LAW), (6, IT)]), (None, True))
+
+    def test_no_mapping_leaves_the_category_unknown_without_a_conflict(self) -> None:
+        self.assertEqual(resolve_category([]), (None, False))
