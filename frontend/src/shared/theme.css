@@ -11,6 +11,12 @@
   --orange-100: #ffd9c2;
   --orange-300: #ff9a5c;
   --orange-500: #f26419;
+  --orange-tint: #fff0e6;
+  --orange-on-tint: #a8420c;
+  --violet-tint: #efeafd;
+  --violet-on-tint: #4c2f9e;
+  --green-500: #34c26b;
+  --red-500: #e5484d;
   --warning-bg: #fff4e5;
   --warning-fg: #9a4d00;
   --focus: 0 0 0 2px color-mix(in srgb, var(--orange-500) 40%, transparent);
@@ -27,6 +33,12 @@
   --fg-on-muted: #18181b;
   --orange-100: #ffb98f;
   --orange-300: #e8742f;
+  --orange-tint: #3a2414;
+  --orange-on-tint: #ffb98f;
+  --violet-tint: #2a2340;
+  --violet-on-tint: #c9b8ff;
+  --green-500: #4ade80;
+  --red-500: #ff6369;
   --warning-bg: #3a2a14;
   --warning-fg: #ffc77a;
   color-scheme: dark;
