@@ -51,8 +51,11 @@ class SourceFeedUpdateDTO(SourceFeedCreateDTO):
 
 
 class PlannedSourceDTO(ModelConfigBaseModel):
+    """A CKAN resource to register; occupation feeds have no county."""
+
     resource: CkanResource
-    county: CountyDefinitionDTO
+    scope: Literal["county", "occupation"] = "county"
+    county: CountyDefinitionDTO | None
     label: str
 
 
@@ -62,8 +65,11 @@ class RegistrationPlanDTO(ModelConfigBaseModel):
 
 
 class RegistrationPreviewDTO(ModelConfigBaseModel):
+    """feeds counts both scopes; occupation_feeds is the occupation part."""
+
     counties: int
     feeds: int
+    occupation_feeds: int
     resources_skipped: int
 
 

@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     CKAN_DATASET_ID: str = Field(
         default="slobodna-radna-mjesta-po-zupanijama-u-rh-i-eu", min_length=1
     )
+    CKAN_OCCUPATION_DATASET_ID: str = Field(default="slobodna-radna-mjesta-po-zanimanju", min_length=1)
     CKAN_TIMEOUT: float = Field(default=15.0, gt=0, allow_inf_nan=False)
 
     HZZ_FEED_TIMEOUT: float = Field(default=15.0, gt=0, allow_inf_nan=False)

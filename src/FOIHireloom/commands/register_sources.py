@@ -19,15 +19,15 @@ class SourceFeedRegistrationCommand:
 
     async def run(self, dry_run: bool = False) -> dict[str, int | bool]:
         dependencies = DependencyService(self._settings)
-        dataset_id = self._settings.CKAN_DATASET_ID
+        datasets = self._settings.CKAN_DATASET_ID, self._settings.CKAN_OCCUPATION_DATASET_ID
         async with dependencies.source_feed_registration_service(with_database=not dry_run) as service:
             if dry_run:
-                return {"dry_run": True, **(await service.preview_sources(dataset_id)).model_dump()}
-            return (await service.register_sources(dataset_id)).model_dump()
+                return {"dry_run": True, **(await service.preview_sources(*datasets)).model_dump()}
+            return (await service.register_sources(*datasets)).model_dump()
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Register Croatian CKAN job feed sources.")
+    parser = argparse.ArgumentParser(description="Register Croatian county and occupation job feed sources from CKAN.")
     parser.add_argument("--dry-run", action="store_true", help="Validate and count sources without accessing the database.")
     args = parser.parse_args(argv)
     try:
