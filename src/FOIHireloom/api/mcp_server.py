@@ -21,10 +21,10 @@ INSTRUCTIONS = (
     "Jobs come from HZZ county RSS feeds and the jobs' HZZ pages, which this server imports regularly; "
     "the tools read the stored copy and never contact HZZ. Use list_regions and "
     "list_categories for valid filter values, search_jobs to list jobs and "
-    "job_market_stats for counts and breakdowns, and show_jobs_by_county to "
-    "show the user a chart of where the jobs are. When a result carries a "
-    "coverage warning, pass it on to the user. Send users to canonical_url to "
-    "read the full advertisement or apply."
+    "job_market_stats for counts and breakdowns. To show the user jobs as "
+    "cards use show_jobs, and show_jobs_by_county for a chart of where the "
+    "jobs are. When a result carries a coverage warning, pass it on to the "
+    "user. Send users to canonical_url to read the full advertisement or apply."
 )
 
 type JobSearchServiceOpener = Callable[[], AbstractAsyncContextManager[JobSearchServiceInterface]]

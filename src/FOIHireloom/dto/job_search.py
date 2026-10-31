@@ -175,9 +175,23 @@ class JobSearchPageDTO(ModelConfigBaseModel):
 
 
 class JobCardsPageDTO(ModelConfigBaseModel):
+    """A search page of job cards; today is the day in Croatia that deadlines were compared with."""
+
     jobs: tuple[JobCardDTO, ...]
     next_cursor: str | None
     coverage: CoverageDTO
+    today: date
+
+
+class JobCardsDTO(JobCardsPageDTO):
+    """A page of job cards for the job cards view, with its heading and the filters that found it.
+
+    filters are the show_jobs arguments, so the view can ask for the next page with next_cursor.
+    """
+
+    title: str
+    description: str
+    filters: JobSearchFiltersDTO
 
 
 class JobListingDTO(ModelConfigBaseModel):

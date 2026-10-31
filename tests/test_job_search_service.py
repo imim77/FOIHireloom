@@ -338,7 +338,7 @@ class JobSearchServiceTests(ModelTestCase):
         search = await self.service.search(JobSearchFiltersDTO(limit=2))
         cards = await self.service.search_cards(JobSearchFiltersDTO(limit=2))
         self.assertEqual([job.id for job in cards.jobs], [job.id for job in search.jobs])
-        self.assertEqual((cards.next_cursor, cards.coverage), (search.next_cursor, search.coverage))
+        self.assertEqual((cards.next_cursor, cards.coverage, cards.today), (search.next_cursor, search.coverage, self.today))
         driver, cook = cards.jobs
         self.assertEqual(driver.model_dump(include=set(JobSummaryDTO.model_fields) - {"last_seen_at"}),
                          search.jobs[0].model_dump(include=set(JobSummaryDTO.model_fields) - {"last_seen_at"}))

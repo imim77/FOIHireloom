@@ -64,17 +64,17 @@ class JobSearchService(JobSearchServiceInterface):
         self._stale_after = stale_after
 
     async def search(self, filters: JobSearchFiltersDTO) -> JobSearchPageDTO:
-        jobs, next_cursor, coverage = await self._search(filters, self._summary)
+        jobs, next_cursor, coverage, _ = await self._search(filters, self._summary)
         return JobSearchPageDTO(jobs=jobs, next_cursor=next_cursor, coverage=coverage)
 
     async def search_cards(self, filters: JobSearchFiltersDTO) -> JobCardsPageDTO:
-        jobs, next_cursor, coverage = await self._search(filters, self._card)
-        return JobCardsPageDTO(jobs=jobs, next_cursor=next_cursor, coverage=coverage)
+        jobs, next_cursor, coverage, today = await self._search(filters, self._card)
+        return JobCardsPageDTO(jobs=jobs, next_cursor=next_cursor, coverage=coverage, today=today)
 
     async def _search[T: JobSummaryDTO](
         self, filters: JobSearchFiltersDTO, result: Callable[[Job, date, JobCountyDTO | None, bool | None], T],
-    ) -> tuple[tuple[T, ...], str | None, CoverageDTO]:
-        """One page of jobs, each made by result, with the next page's cursor and the searched counties' coverage."""
+    ) -> tuple[tuple[T, ...], str | None, CoverageDTO, date]:
+        """One page of jobs, each made by result, with the next page's cursor, the searched counties' coverage and today."""
         terms = self._terms(filters.query)
         after = self._decode_cursor(filters.cursor) if filters.cursor else None
         # A cursor orders by title match exactly when the search has a query.
@@ -101,7 +101,7 @@ class JobSearchService(JobSearchServiceInterface):
             regions = [region for region in regions if region.code == county_code]
         page = jobs[:filters.limit]
         next_cursor = self._encode_cursor(page[-1]) if len(jobs) > filters.limit else None
-        return tuple(page), next_cursor, self._coverage(regions)
+        return tuple(page), next_cursor, self._coverage(regions), today
 
     async def market_stats(self, filters: JobMarketFiltersDTO) -> JobMarketStatsDTO:
         terms = self._terms(filters.query)

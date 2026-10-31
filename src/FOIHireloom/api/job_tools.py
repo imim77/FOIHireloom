@@ -19,6 +19,7 @@ from FOIHireloom.dto.job_search import (
     MAX_PAGE_SIZE,
     MAX_QUERY_LENGTH,
     CategoryDTO,
+    JobCardsDTO,
     JobDetailsDTO,
     JobSearchFiltersDTO,
     JobSearchPageDTO,
@@ -27,8 +28,8 @@ from FOIHireloom.dto.job_search import (
 from FOIHireloom.exceptions import InvalidJobSearchError, NotFoundError, PersistenceError
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 
-from .apps import jobs_by_county
-from .apps.views import JOBS_BY_COUNTY
+from .apps import job_cards, jobs_by_county
+from .apps.views import JOB_CARDS, JOBS_BY_COUNTY
 from .tool_provider import ToolGroup
 
 # Key of the search service in the server's lifespan context.
@@ -100,6 +101,48 @@ class JobTools(ToolGroup):
             filters = JobSearchFiltersDTO(query=query, county=county, category=category,
                                           include_expired=include_expired, limit=limit, cursor=cursor)
             return await self._call(service(ctx).search(filters))
+
+        @server.tool(app=AppConfig(resource_uri=JOB_CARDS.uri), annotations=READ_ONLY)
+        async def show_jobs(
+            ctx: Context,
+            query: Annotated[str | None, Field(
+                max_length=MAX_QUERY_LENGTH,
+                description="Words chosen as for search_jobs, e.g. 'kuhar' or 'njemački'; leave out for the newest jobs.",
+            )] = None,
+            county: Annotated[str | None, Field(
+                description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
+            )] = None,
+            category: Annotated[str | None, Field(
+                description="Exact category name from list_categories; letter case is ignored. Only about half "
+                            "of the jobs state a category, so prefer query to find an occupation.",
+            )] = None,
+            include_expired: Annotated[bool, Field(
+                description="Also show jobs whose application deadline has passed.",
+            )] = False,
+            limit: Annotated[int, Field(
+                ge=1, le=MAX_PAGE_SIZE,
+                description="Cards to show; keep the default unless the user asks for a number.",
+            )] = job_cards.DEFAULT_LIMIT,
+            cursor: Annotated[str | None, Field(
+                description="next_cursor from the previous result, with the same other arguments.",
+            )] = None,
+        ) -> JobCardsDTO:
+            """Show the user the jobs search_jobs would find as cards, newest first.
+
+            Use it when the user wants to see or browse jobs, not just read
+            about them. Hosts that support MCP Apps draw a card per job: the
+            employer, the title, the days left to apply, the place, the
+            employment type, working hours, education, experience, workers
+            sought and accommodation, with a link to the HZZ advertisement.
+            The user can load more cards there. Every host also gets the
+            data: the jobs as in search_jobs plus those job page values, which
+            are null until the job's HZZ page has been read. When
+            coverage.warning is set, tell the user the results may be
+            outdated or incomplete.
+            """
+            filters = JobSearchFiltersDTO(query=query, county=county, category=category,
+                                          include_expired=include_expired, limit=limit, cursor=cursor)
+            return job_cards.job_cards(await self._call(service(ctx).search_cards(filters)), filters)
 
         @server.tool(annotations=READ_ONLY)
         async def job_market_stats(
