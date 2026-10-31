@@ -1,0 +1,31 @@
+.columns { display: flex; flex-direction: column; gap: 24px; }
+.selection { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.chart { display: flex; flex-direction: column; gap: 8px; }
+.plot { position: relative; isolation: isolate; display: flex; gap: 8px; height: 208.921px; }
+.column { position: relative; flex: 1; min-width: 0; padding: 0; border: 0; background: none; cursor: pointer; outline: none; }
+.bar { position: absolute; bottom: 0; pointer-events: none; overflow: visible;
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 72%, transparent 100%); }
+/* The padding leaves room for the focus rings, which reach 4px past a column. */
+.scroller { overflow-x: auto; overflow-y: hidden; padding: 4px; margin: -4px; }
+.bar .look { transition: opacity 300ms; }
+.value {
+  position: absolute; left: 50%; z-index: 1; transform: translateX(-50%); pointer-events: none;
+  font-size: 12px; font-weight: 500; line-height: 16px; white-space: nowrap; color: var(--fg-soft);
+  font-variant-numeric: tabular-nums; transition: color 200ms;
+}
+.value span { display: block; }
+.column.active .value { font-weight: 600; color: var(--orange-500); }
+.focus-ring { position: absolute; inset: -4px; z-index: 1; border-radius: 12px; pointer-events: none; opacity: 0;
+  box-shadow: var(--focus); transition: opacity 150ms; }
+.column:focus-visible .focus-ring { opacity: 1; }
+.axis { position: relative; display: flex; gap: 8px; }
+.pill { position: absolute; inset-block: 0; border-radius: 8px; background: var(--surface-muted); }
+.axis-label { position: relative; display: flex; flex: 1; min-width: 0; justify-content: center; padding: 6px 2px; }
+.axis-label span {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; text-overflow: ellipsis;
+  text-align: center; font-size: 12px; line-height: 1.25; color: var(--fg-soft); transition: color 200ms;
+}
+.axis-label.active span { font-weight: 600; color: var(--fg-on-muted); }
+.footer { margin-top: -8px; }
+@media (prefers-reduced-motion: reduce) { .bar .look, .value, .axis-label span { transition: none; } }

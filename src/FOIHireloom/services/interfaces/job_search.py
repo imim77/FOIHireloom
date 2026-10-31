@@ -1,7 +1,14 @@
 from abc import ABC, abstractmethod
 
 from FOIHireloom.dto.job_market import JobMarketFiltersDTO, JobMarketStatsDTO
-from FOIHireloom.dto.job_search import CategoryDTO, JobDetailsDTO, JobSearchFiltersDTO, JobSearchPageDTO, RegionDTO
+from FOIHireloom.dto.job_search import (
+    CategoryDTO,
+    JobCardsPageDTO,
+    JobDetailsDTO,
+    JobSearchFiltersDTO,
+    JobSearchPageDTO,
+    RegionDTO,
+)
 
 
 class JobSearchServiceInterface(ABC):
@@ -16,6 +23,10 @@ class JobSearchServiceInterface(ABC):
         Raise NotFoundError for an unknown county and InvalidJobSearchError
         for a query without words or a malformed cursor.
         """
+
+    @abstractmethod
+    async def search_cards(self, filters: JobSearchFiltersDTO) -> JobCardsPageDTO:
+        """Return the same page as search(), each job with the job page values a job card shows."""
 
     @abstractmethod
     async def market_stats(self, filters: JobMarketFiltersDTO) -> JobMarketStatsDTO:

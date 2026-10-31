@@ -12,6 +12,8 @@ from FOIHireloom.config.settings import Settings
 from FOIHireloom.services.dependency import DependencyService
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 
+from .app_views import AppViews
+from .apps.views import BUILD_HINT, stale_sources
 from .job_tools import JOB_SEARCH_SERVICE, JobTools
 
 INSTRUCTIONS = (
@@ -19,9 +21,10 @@ INSTRUCTIONS = (
     "Jobs come from HZZ county RSS feeds and the jobs' HZZ pages, which this server imports regularly; "
     "the tools read the stored copy and never contact HZZ. Use list_regions and "
     "list_categories for valid filter values, search_jobs to list jobs and "
-    "job_market_stats for counts and breakdowns. When a result carries a "
-    "coverage warning, pass it on to the user. Send users to canonical_url to "
-    "read the full advertisement or apply."
+    "job_market_stats for counts and breakdowns. To show the user jobs as "
+    "cards use show_jobs, and show_jobs_by_county for a chart of where the "
+    "jobs are. When a result carries a coverage warning, pass it on to the "
+    "user. Send users to canonical_url to read the full advertisement or apply."
 )
 
 type JobSearchServiceOpener = Callable[[], AbstractAsyncContextManager[JobSearchServiceInterface]]
@@ -47,7 +50,7 @@ class McpServer:
         # Unexpected errors reach the client without details; tools raise ToolError for the rest.
         self.server = FastMCP("FOIHireloom", instructions=INSTRUCTIONS, lifespan=self._lifespan,
                               mask_error_details=True)
-        for group in (JobTools(),):
+        for group in (JobTools(), AppViews()):
             group.register(self.server)
         self.server.custom_route("/health", methods=["GET"], include_in_schema=False)(self._health)
 
@@ -62,6 +65,8 @@ class McpServer:
         return JSONResponse({"status": "ok"})
 
     def run(self) -> None:
+        if stale := stale_sources():
+            print(f"Warning: the MCP App pages are older than {', '.join(stale)}; {BUILD_HINT}.", file=sys.stderr)
         if self._settings.MCP_TRANSPORT == "stdio":
             print("Starting MCP server", file=sys.stderr)
             self.server.run("stdio")

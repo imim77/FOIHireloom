@@ -331,6 +331,23 @@ class JobSearchServiceTests(ModelTestCase):
         regions = {region.code: region.open_jobs for region in await self.service.list_regions()}
         self.assertEqual(regions["bjelovarsko-bilogorska"], 1)
 
+    async def test_search_cards_add_the_job_page_values_to_the_same_page(self) -> None:
+        await self.set_page("driver", page_workers_needed=2, page_employment_type="Na određeno",
+                            page_working_hours="Puno radno vrijeme", page_education="SSS",
+                            page_experience="1 godina", page_accommodation="Osiguran smještaj")
+        search = await self.service.search(JobSearchFiltersDTO(limit=2))
+        cards = await self.service.search_cards(JobSearchFiltersDTO(limit=2))
+        self.assertEqual([job.id for job in cards.jobs], [job.id for job in search.jobs])
+        self.assertEqual((cards.next_cursor, cards.coverage, cards.today), (search.next_cursor, search.coverage, self.today))
+        driver, cook = cards.jobs
+        self.assertEqual(driver.model_dump(include=set(JobSummaryDTO.model_fields) - {"last_seen_at"}),
+                         search.jobs[0].model_dump(include=set(JobSummaryDTO.model_fields) - {"last_seen_at"}))
+        self.assertEqual((driver.workers_needed, driver.employment_type, driver.working_hours, driver.education,
+                          driver.experience, driver.accommodation),
+                         (2, "Na određeno", "Puno radno vrijeme", "SSS", "1 godina", "Osiguran smještaj"))
+        # Before its page is read a job has none of them.
+        self.assertEqual((cook.workers_needed, cook.employment_type, cook.accommodation), (None, None, None))
+
     async def test_market_stats_count_what_search_finds(self) -> None:
         await self.set_page("cook", page_employer_name="HOTEL d.o.o.", page_workers_needed=3,
                             page_employment_type="Na neodređeno; sezonski")

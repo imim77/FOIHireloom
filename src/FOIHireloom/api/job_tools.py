@@ -2,15 +2,24 @@ from collections.abc import Awaitable
 from typing import Annotated
 
 from fastmcp import Context, FastMCP
+from fastmcp.apps import AppConfig
 from fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from FOIHireloom.dto.job_market import DEFAULT_MARKET_TOP, MAX_MARKET_TOP, JobMarketFiltersDTO, JobMarketStatsDTO
+from FOIHireloom.dto.job_market import (
+    DEFAULT_MARKET_TOP,
+    MAX_MARKET_TOP,
+    CountyMetric,
+    JobMarketFiltersDTO,
+    JobMarketStatsDTO,
+    JobsByCountyDTO,
+)
 from FOIHireloom.dto.job_search import (
     MAX_PAGE_SIZE,
     MAX_QUERY_LENGTH,
     CategoryDTO,
+    JobCardsDTO,
     JobDetailsDTO,
     JobSearchFiltersDTO,
     JobSearchPageDTO,
@@ -19,6 +28,8 @@ from FOIHireloom.dto.job_search import (
 from FOIHireloom.exceptions import InvalidJobSearchError, NotFoundError, PersistenceError
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 
+from .apps import job_cards, jobs_by_county
+from .apps.views import JOB_CARDS, JOBS_BY_COUNTY
 from .tool_provider import ToolGroup
 
 # Key of the search service in the server's lifespan context.
@@ -91,6 +102,48 @@ class JobTools(ToolGroup):
                                           include_expired=include_expired, limit=limit, cursor=cursor)
             return await self._call(service(ctx).search(filters))
 
+        @server.tool(app=AppConfig(resource_uri=JOB_CARDS.uri), annotations=READ_ONLY)
+        async def show_jobs(
+            ctx: Context,
+            query: Annotated[str | None, Field(
+                max_length=MAX_QUERY_LENGTH,
+                description="Words chosen as for search_jobs, e.g. 'kuhar' or 'njemački'; leave out for the newest jobs.",
+            )] = None,
+            county: Annotated[str | None, Field(
+                description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
+            )] = None,
+            category: Annotated[str | None, Field(
+                description="Exact category name from list_categories; letter case is ignored. Only about half "
+                            "of the jobs state a category, so prefer query to find an occupation.",
+            )] = None,
+            include_expired: Annotated[bool, Field(
+                description="Also show jobs whose application deadline has passed.",
+            )] = False,
+            limit: Annotated[int, Field(
+                ge=1, le=MAX_PAGE_SIZE,
+                description="Cards to show; keep the default unless the user asks for a number.",
+            )] = job_cards.DEFAULT_LIMIT,
+            cursor: Annotated[str | None, Field(
+                description="next_cursor from the previous result, with the same other arguments.",
+            )] = None,
+        ) -> JobCardsDTO:
+            """Show the user the jobs search_jobs would find as cards, newest first.
+
+            Use it when the user wants to see or browse jobs, not just read
+            about them. Hosts that support MCP Apps draw a card per job: the
+            employer, the title, the place, the employment type, working
+            hours, education, experience, workers sought, accommodation and
+            the application deadline, with a link to the HZZ advertisement.
+            The user can load more cards there. Every host also gets the
+            data: the jobs as in search_jobs plus those job page values, which
+            are null until the job's HZZ page has been read. When
+            coverage.warning is set, tell the user the results may be
+            outdated or incomplete.
+            """
+            filters = JobSearchFiltersDTO(query=query, county=county, category=category,
+                                          include_expired=include_expired, limit=limit, cursor=cursor)
+            return job_cards.job_cards(await self._call(service(ctx).search_cards(filters)), filters)
+
         @server.tool(annotations=READ_ONLY)
         async def job_market_stats(
             ctx: Context,
@@ -140,6 +193,46 @@ class JobTools(ToolGroup):
             filters = JobMarketFiltersDTO(query=query, county=county, category=category,
                                           include_expired=include_expired, top=top)
             return await self._call(service(ctx).market_stats(filters))
+
+        @server.tool(app=AppConfig(resource_uri=JOBS_BY_COUNTY.uri), annotations=READ_ONLY)
+        async def show_jobs_by_county(
+            ctx: Context,
+            query: Annotated[str | None, Field(
+                max_length=MAX_QUERY_LENGTH,
+                description="Words chosen as for search_jobs, e.g. 'kuhar' or 'njemački'; leave out for all jobs.",
+            )] = None,
+            category: Annotated[str | None, Field(
+                description="Exact category name from list_categories; letter case is ignored. Only about half "
+                            "of the jobs state a category, so prefer query to find an occupation.",
+            )] = None,
+            include_expired: Annotated[bool, Field(
+                description="Also count jobs whose application deadline has passed.",
+            )] = False,
+            top: Annotated[int, Field(
+                ge=1, le=jobs_by_county.MAX_TOP,
+                description="Columns the chart shows before the user expands it to every county; keep the default "
+                            "unless the user asks for a number.",
+            )] = jobs_by_county.DEFAULT_TOP,
+            metric: Annotated[CountyMetric, Field(
+                description="What to rank and draw the counties by: 'jobs' (job ads) or 'workers_needed' (positions "
+                            "the ads seek; one ad can seek several workers). Pick the one the question is about, "
+                            "e.g. 'workers_needed' for which county needs the most workers.",
+            )] = "jobs",
+        ) -> JobsByCountyDTO:
+            """Show the user a chart of the counties ranked by matching jobs or by workers sought.
+
+            Use it when the user wants to see where jobs of a kind are, or
+            which county needs the most workers, not just read it. Hosts that
+            support MCP Apps draw the top counties as columns the user can
+            hover and select, with a button that opens every county full
+            screen. Every host also gets the data: each county with matching
+            jobs, ranked by metric, with jobs, workers_needed and share
+            (percent of total_jobs). When coverage.warning is set, tell the
+            user the numbers may be outdated or incomplete.
+            """
+            filters = JobMarketFiltersDTO(query=query, category=category, include_expired=include_expired)
+            stats = await self._call(service(ctx).market_stats(filters))
+            return jobs_by_county.jobs_by_county(stats, top, query, category, metric)
 
         @server.tool(annotations=READ_ONLY)
         async def get_job(

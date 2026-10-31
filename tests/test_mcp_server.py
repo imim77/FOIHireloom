@@ -13,12 +13,15 @@ from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from pydantic import ValidationError
 
+from FOIHireloom.api.apps.views import JOB_CARDS, JOBS_BY_COUNTY
 from FOIHireloom.api.mcp_server import McpServer
 from FOIHireloom.config.settings import Settings
 from FOIHireloom.dto.job_market import JobMarketFiltersDTO, JobMarketStatsDTO
 from FOIHireloom.dto.job_search import (
     CategoryDTO,
     CoverageDTO,
+    JobCardDTO,
+    JobCardsPageDTO,
     JobDetailsDTO,
     JobSearchFiltersDTO,
     JobSearchPageDTO,
@@ -49,6 +52,12 @@ class FakeJobSearchService(JobSearchServiceInterface):
         self.filters.append(filters)
         self.raise_error()
         return JobSearchPageDTO(jobs=(JobSummaryDTO(**SUMMARY),), next_cursor="next", coverage=COVERAGE)
+
+    async def search_cards(self, filters: JobSearchFiltersDTO) -> JobCardsPageDTO:
+        self.filters.append(filters)
+        self.raise_error()
+        return JobCardsPageDTO(jobs=(JobCardDTO(**SUMMARY, workers_needed=2, employment_type="Na neodređeno"),),
+                               next_cursor="next", coverage=COVERAGE, today=SEEN.date())
 
     async def market_stats(self, filters: JobMarketFiltersDTO) -> JobMarketStatsDTO:
         self.market_filters.append(filters)
@@ -94,7 +103,8 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
             tools = {tool.name: tool for tool in await client.list_tools()}
             self.assertEqual(self.open_services, 1)
         self.assertEqual(self.open_services, 0)
-        self.assertEqual(set(tools), {"search_jobs", "job_market_stats", "get_job", "list_regions", "list_categories"})
+        self.assertEqual(set(tools), {"search_jobs", "show_jobs", "job_market_stats", "show_jobs_by_county", "get_job",
+                                      "list_regions", "list_categories"})
         for tool in tools.values():
             with self.subTest(tool=tool.name):
                 self.assertTrue(tool.annotations.readOnlyHint)
@@ -128,6 +138,46 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
                                               "data_status": "fresh", "last_success_at": "2026-10-29T03:31:00Z"}])
         self.assertEqual(categories["result"][0]["open_jobs"], 2)
 
+    async def test_jobs_by_county_is_an_mcp_app_served_from_the_built_page(self) -> None:
+        async with Client(self.server) as client:
+            tool = next(tool for tool in await client.list_tools() if tool.name == "show_jobs_by_county")
+            uri = tool.meta["ui"]["resourceUri"]
+            resources = {str(resource.uri): resource for resource in await client.list_resources()}
+            chart_page = (await client.read_resource(uri))[0]
+            chart = (await client.call_tool("show_jobs_by_county", {"query": "kuhar", "top": 3})).structured_content
+            by_workers = (await client.call_tool("show_jobs_by_county", {"metric": "workers_needed"})).structured_content
+        self.assertRegex(uri, r"^ui://foihireloom/jobs-by-county-[0-9a-f]{12}\.html$")
+        self.assertEqual(resources[uri].mimeType, "text/html;profile=mcp-app")
+        self.assertEqual(chart_page.text, JOBS_BY_COUNTY.page())
+        self.assertEqual(self.service.market_filters, [JobMarketFiltersDTO(query="kuhar"), JobMarketFiltersDTO()])
+        self.assertEqual((chart["title"], chart["top"], chart["counties"], chart["coverage"]["warning"]),
+                         ("Broj oglasa po županijama", 3, [], COVERAGE.warning))
+        self.assertEqual((by_workers["metric"], by_workers["title"]),
+                         ("workers_needed", "Broj traženih radnika po županijama"))
+
+    async def test_show_jobs_is_an_mcp_app_whose_cards_carry_the_job_page_values(self) -> None:
+        async with Client(self.server) as client:
+            tool = next(tool for tool in await client.list_tools() if tool.name == "show_jobs")
+            uri = tool.meta["ui"]["resourceUri"]
+            resources = {str(resource.uri): resource for resource in await client.list_resources()}
+            cards_page = (await client.read_resource(uri))[0]
+            cards = (await client.call_tool("show_jobs", {"query": "kuhar", "county": "istarska",
+                                                          "cursor": "abc"})).structured_content
+        self.assertRegex(uri, r"^ui://foihireloom/job-cards-[0-9a-f]{12}\.html$")
+        self.assertEqual(resources[uri].mimeType, "text/html;profile=mcp-app")
+        self.assertEqual(cards_page.text, JOB_CARDS.page())
+        self.assertEqual(self.service.filters,
+                         [JobSearchFiltersDTO(query="kuhar", county="istarska", limit=6, cursor="abc")])
+        self.assertEqual((cards["title"], cards["description"], cards["next_cursor"], cards["today"]),
+                         ("Oglasi za „kuhar”", "Županija istarska · aktivni oglasi na dan 29. 10. 2026.", "next",
+                          "2026-10-29"))
+        self.assertEqual((cards["filters"]["query"], cards["filters"]["limit"], cards["filters"]["cursor"]),
+                         ("kuhar", 6, None))
+        job = cards["jobs"][0]
+        self.assertEqual((job["display_title"], job["workers_needed"], job["employment_type"], job["education"]),
+                         ("KUHAR/KUHARICA", 2, "Na neodređeno", None))
+        self.assertEqual(cards["coverage"]["warning"], COVERAGE.warning)
+
     async def test_job_market_stats_passes_filters_and_returns_coverage(self) -> None:
         async with Client(self.server) as client:
             stats = (await client.call_tool("job_market_stats", {"query": "kuhar", "county": "istarska",
@@ -139,7 +189,10 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
     async def test_invalid_arguments_are_rejected_before_the_service(self) -> None:
         async with Client(self.server) as client:
             for tool, arguments in (("search_jobs", {"limit": 21}), ("search_jobs", {"query": "x" * 201}),
+                                    ("show_jobs", {"limit": 0}), ("show_jobs", {"limit": 21}),
                                     ("job_market_stats", {"top": 0}), ("job_market_stats", {"top": 51}),
+                                    ("show_jobs_by_county", {"top": 0}), ("show_jobs_by_county", {"top": 22}),
+                                    ("show_jobs_by_county", {"metric": "share"}),
                                     ("get_job", {"job_id": 0}), ("get_job", {})):
                 with self.subTest(tool=tool, arguments=arguments), self.assertRaises(ToolError):
                     await client.call_tool(tool, arguments)
@@ -208,7 +261,7 @@ class McpHttpTransportTests(unittest.IsolatedAsyncioTestCase):
     async def test_tools_and_health_are_served_over_http(self) -> None:
         base = await self.serve(MCP_PATH="/tools")
         async with Client(f"{base}/tools") as client:
-            self.assertEqual(len(await client.list_tools()), 5)
+            self.assertEqual(len(await client.list_tools()), 7)
             page = (await client.call_tool("search_jobs", {"query": "kuhar"})).structured_content
         self.assertEqual(page["jobs"][0]["title"], "KUHAR/KUHARICA")
         async with httpx.AsyncClient() as http:
