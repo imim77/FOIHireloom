@@ -1,9 +1,9 @@
 import { animate } from 'animejs'
 import { useState } from 'react'
-import { Card, Warning } from '../../shared/Card'
+import { Card, ExpandButton, Warning } from '../../shared/Card'
 import { finish, releaseStyles } from '../../shared/chart-motion'
 import { formatAds } from '../../shared/format'
-import { useMcpApp } from '../../shared/mcp'
+import { useExpanded, useMcpApp } from '../../shared/mcp'
 import { type CardActions, JobCardView } from './JobCardView'
 import { sentenceCase } from './job-format'
 import { sample } from './sample'
@@ -18,10 +18,11 @@ interface More {
   cursor: string | null
 }
 
-/** show_jobs: the found jobs as cards, with more on request. */
+/** show_jobs: the found jobs as cards, with more on request; expanded (full screen) they fill several columns. */
 export function JobCards() {
   const mcp = useMcpApp<JobCardsData>('FOIHireloom job cards', sample)
   const { app, data } = mcp
+  const { expanded, toggle } = useExpanded(mcp)
   const [more, setMore] = useState<More | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -65,10 +66,13 @@ export function JobCards() {
   }
 
   return (
-    <Card sunken title={data.title} description={data.description}>
+    <Card sunken title={data.title} description={data.description} actions={cards.length > 1 && (
+      <ExpandButton expanded={expanded} label={expanded ? 'Smanji prikaz' : 'Prikaži oglase preko cijelog zaslona'}
+        onClick={toggle} />
+    )}>
       <Warning text={data.coverage?.warning} />
       {cards.length ? (
-        <div className="job-list">
+        <div className={`job-list${expanded ? ' expanded' : ''}`}>
           {cards.map(({ job, order }) => (
             <JobCardView key={job.id} job={job} today={data.today} order={order} actions={actions} />
           ))}

@@ -1,8 +1,11 @@
 /* Each job is a tile of the Performance chart (white, 16px round, a soft drop shadow and a 1px ring), laid out after
    the reference job row: labels, the title, the employer line, a rule and the details in three columns with icons. */
-.job-list { display: flex; flex-direction: column; gap: 12px; }
+.job-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
+/* Expanded (full screen) the tiles fill as many columns as fit. */
+.job-list.expanded { grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr)); }
 
 .job {
+  container-type: inline-size;
   display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 16px; border-radius: 16px;
   background: var(--card); box-shadow: 0 1px 2px rgb(40 40 40 / 0.08), 0 0 0 1px var(--border);
 }
@@ -31,7 +34,8 @@
 .detail { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; line-height: 1.3; color: var(--fg-loud); }
 .detail svg { flex: none; width: 16px; height: 16px; color: var(--fg-soft); }
 .detail span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-@media (max-width: 560px) { .details { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* A narrow tile, in a narrow view or one of several columns, has two columns of details. */
+@container (max-width: 520px) { .details { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .cards-foot { display: flex; align-items: center; gap: 12px; }
 .cards-foot .soft { flex: 1; }
