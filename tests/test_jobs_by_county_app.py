@@ -1,9 +1,12 @@
 import hashlib
+import json
+import tempfile
 import unittest
 from datetime import date
+from pathlib import Path
 
 from FOIHireloom.api.apps.jobs_by_county import jobs_by_county
-from FOIHireloom.api.apps.views import JOBS_BY_COUNTY, AppView
+from FOIHireloom.api.apps.views import BUILD_HINT, JOBS_BY_COUNTY, AppView, stale_sources
 from FOIHireloom.dto.job_market import JobMarketStatsDTO
 from FOIHireloom.dto.job_search import CoverageDTO
 
@@ -76,3 +79,32 @@ class JobsByCountyAppTests(unittest.TestCase):
     def test_a_page_that_was_not_built_says_how_to_build_it(self) -> None:
         with self.assertRaisesRegex(FileNotFoundError, "npm run build"):
             AppView("missing", "").page()
+
+
+class BuiltPagesTests(unittest.TestCase):
+    def test_pages_are_built_from_the_current_frontend(self) -> None:
+        stale = stale_sources()
+        self.assertEqual(stale, [], f"frontend/dist/ is older than these sources; {BUILD_HINT}.")
+
+    def test_stale_sources_names_each_file_added_removed_or_changed_since_the_build(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            frontend = Path(directory)
+            (frontend / "src" / "views").mkdir(parents=True)
+            (frontend / "src" / "views" / "a.tsx").write_text("a")
+            (frontend / "src" / "b.ts").write_text("b")
+            (frontend / "package.json").write_text("{}")
+            self.assertEqual(stale_sources(frontend), ["dist/sources.json"])
+
+            files = {path: hashlib.sha256((frontend / path).read_bytes()).hexdigest()
+                     for path in ("src/views/a.tsx", "src/b.ts", "package.json")}
+            (frontend / "dist").mkdir()
+            (frontend / "dist" / "sources.json").write_text(
+                json.dumps({"sources": ["src", "package.json"], "files": files}))
+            # Dotfiles such as .DS_Store do not count.
+            (frontend / "src" / ".DS_Store").write_text("x")
+            self.assertEqual(stale_sources(frontend), [])
+
+            (frontend / "src" / "views" / "a.tsx").write_text("a2")
+            (frontend / "src" / "c.ts").write_text("c")
+            (frontend / "package.json").unlink()
+            self.assertEqual(stale_sources(frontend), ["package.json", "src/c.ts", "src/views/a.tsx"])

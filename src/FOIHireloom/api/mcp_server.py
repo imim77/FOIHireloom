@@ -13,6 +13,7 @@ from FOIHireloom.services.dependency import DependencyService
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 
 from .app_views import AppViews
+from .apps.views import BUILD_HINT, stale_sources
 from .job_tools import JOB_SEARCH_SERVICE, JobTools
 
 INSTRUCTIONS = (
@@ -64,6 +65,8 @@ class McpServer:
         return JSONResponse({"status": "ok"})
 
     def run(self) -> None:
+        if stale := stale_sources():
+            print(f"Warning: the MCP App pages are older than {', '.join(stale)}; {BUILD_HINT}.", file=sys.stderr)
         if self._settings.MCP_TRANSPORT == "stdio":
             print("Starting MCP server", file=sys.stderr)
             self.server.run("stdio")
