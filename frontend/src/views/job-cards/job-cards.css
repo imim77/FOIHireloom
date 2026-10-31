@@ -1,6 +1,6 @@
 /* The chart's type scale (16/600 titles, 12px text), grey labels, orange for what stands out, the dark pill and its
    36px bordered buttons, on the Performance chart's tiles. */
-.job-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; }
+.job-list { display: flex; flex-direction: column; gap: 12px; }
 
 /* A job is a tile of the Performance chart: white, 16px round, a soft drop shadow and a 1px ring. */
 .job {

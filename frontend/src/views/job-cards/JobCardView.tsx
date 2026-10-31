@@ -63,7 +63,7 @@ export function JobCardView({ job, today, order, actions }: {
     return () => {
       for (const el of [card, ...labels, ...foot]) {
         el.style.removeProperty('opacity')
-        el?.style.removeProperty('transform')
+        el.style.removeProperty('transform')
       }
     }
   })
