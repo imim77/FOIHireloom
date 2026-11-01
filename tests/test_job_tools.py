@@ -81,3 +81,23 @@ class JobToolsDatabaseTests(ModelTestCase):
         self.assertEqual((stats["employers"], stats["coverage"]["data_status"]), ([], "unavailable"))
         self.assertEqual((full_time["jobs"], full_time["unknown_conditions"], full_time["unknown_total"]),
                          (0, {"full_time": 3}, 3))
+
+    async def test_compare_jobs_over_mcp(self) -> None:
+        first, second, third = self.job_ids
+        async with Client(self.server) as client:
+            comparison = (await client.call_tool("compare_jobs", {"job_ids": [third, first], "full_time": True,
+                                                                  "education": "primary"})).structured_content
+            with self.assertRaisesRegex(ToolError, f"given more than once: {first}\\."):
+                await client.call_tool("compare_jobs", {"job_ids": [first, second, first]})
+            with self.assertRaisesRegex(ToolError, f"Job {third + 1} not found\\."):
+                await client.call_tool("compare_jobs", {"job_ids": [first, third + 1]})
+        self.assertEqual([job["id"] for job in comparison["jobs"]], [third, first])
+        self.assertEqual(comparison["conditions"], {"max_experience_months": None, "contract": None,
+                                                    "full_time": True, "education": "primary",
+                                                    "accommodation": None})
+        # No job page has been read, so every stated condition is unknown and nothing else gets a verdict.
+        verdicts = {row["aspect"]: [cell["verdict"] for cell in row["cells"]] for row in comparison["rows"]}
+        self.assertEqual(verdicts, {"experience": [None, None], "education": ["unknown", "unknown"],
+                                    "contract": [None, None], "working_time": ["unknown", "unknown"],
+                                    "accommodation": [None, None], "deadline": [None, None]})
+        self.assertEqual(comparison["rows"][1]["cells"][0]["reason"], "the job's HZZ page has not been read yet")
