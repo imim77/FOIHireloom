@@ -57,7 +57,14 @@ body { margin: 0; background: transparent; font-family: Inter, ui-sans-serif, sy
 .body:empty { display: none; }
 .warning { margin: 0; padding: 10px 12px; border-radius: 12px; font-size: 12px; line-height: 1.4;
   background: var(--warning-bg); color: var(--warning-fg); }
+/* A warning with a quieter note under it, e.g. the jobs that might also match; the note is not a warning. */
+.notes { display: flex; flex-direction: column; gap: 8px; animation: fade-in 400ms ease-out; }
+.note { margin: 0; padding: 0 12px; font-size: 12px; line-height: 1.4; color: var(--fg-soft); }
 .empty { margin: 0; font-size: 14px; color: var(--fg-soft); }
+
+/* Elements that come with new data fade in. */
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } }
+@media (prefers-reduced-motion: reduce) { .notes { animation: none; } }
 
 .icon-button {
   display: grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0; border-radius: 10px;

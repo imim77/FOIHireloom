@@ -39,6 +39,26 @@
 /* A narrow tile, in a narrow view or one of several columns, has two columns of details. */
 @container (max-width: 520px) { .details { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
+/* The filters as chips under the header; one removed shows the jobs found without it. */
+.filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.filter {
+  display: inline-flex; align-items: center; gap: 2px; min-width: 0; max-width: 100%; padding: 4px 10px;
+  border-radius: 999px; font-size: 12px; font-weight: 500; line-height: 1.25; background: var(--surface-subdued);
+  color: var(--fg-loud); animation: fade-in 400ms ease-out;
+}
+.filter span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* With a remove button the chip's right padding is the button's. */
+.filter:has(.filter-remove) { padding-right: 2px; }
+.filter-remove {
+  display: grid; place-items: center; flex: none; width: 20px; height: 20px; padding: 0; border: 0;
+  border-radius: 999px; background: none; color: var(--fg-soft); cursor: pointer;
+}
+.filter-remove svg { width: 12px; height: 12px; }
+.filter-remove:hover:not(:disabled) { background: var(--card); color: var(--fg-loud); }
+.filter-remove:focus-visible { outline: none; box-shadow: var(--focus); }
+.filter-remove:disabled { cursor: progress; }
+@media (prefers-reduced-motion: reduce) { .filter { animation: none; } }
+
 .cards-foot { display: flex; align-items: center; gap: 12px; }
 .cards-foot .soft { flex: 1; }
 .more {

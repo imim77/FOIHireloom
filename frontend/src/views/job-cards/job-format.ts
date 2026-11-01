@@ -10,6 +10,9 @@ export function sentenceCase(text: string): string {
   return lower.charAt(0).toLocaleUpperCase('hr-HR') + lower.slice(1)
 }
 
+/** "županija istarska" → "Županija istarska": only the first letter changes. */
+export const capitalise = (text: string) => text.charAt(0).toLocaleUpperCase('hr-HR') + text.slice(1)
+
 /** "PULA-POLA" → "Pula-Pola": a place name keeps a capital on each word. */
 export function titleCase(text: string): string {
   return text.toLocaleLowerCase('hr-HR').replace(/(^|[\s\-/(])(\p{L})/gu,

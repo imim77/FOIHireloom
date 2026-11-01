@@ -1,4 +1,4 @@
-import type { Coverage } from '../../shared/types'
+import type { ActiveFilter, Coverage } from '../../shared/types'
 
 export type Contract = 'permanent' | 'fixed_term' | 'other'
 export type EducationLevel = 'primary_lower' | 'primary' | 'secondary_3' | 'secondary_4' | 'college' | 'university'
@@ -50,7 +50,7 @@ export interface JobCard {
   conditions: JobConditions | null
 }
 
-// The show_jobs arguments that found the cards, so the view can ask for the next page.
+// The show_jobs arguments that found the cards, so the view can ask for the next page or drop a filter.
 export interface JobCardsFilters {
   query: string | null
   county: string | null
@@ -75,5 +75,10 @@ export interface JobCardsData {
   jobs: JobCard[]
   next_cursor: string | null
   filters: JobCardsFilters
+  // Every set filter but the query, which is in the title.
+  active_filters: ActiveFilter[]
   coverage: Coverage | null
+  // Croatian for coverage.warning and for the jobs left out only because a value is unknown.
+  coverage_note: string | null
+  unknown_note: string | null
 }

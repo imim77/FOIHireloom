@@ -36,6 +36,17 @@ export function Warning({ text }: { text: string | null | undefined }) {
   return text ? <p className="warning">{text}</p> : null
 }
 
+/** How current the data is, as a warning, and under it a quieter note; nothing when both are empty. */
+export function Notes({ warning, note }: { warning: string | null | undefined; note: string | null | undefined }) {
+  if (!warning && !note) return null
+  return (
+    <div className="notes">
+      <Warning text={warning} />
+      {note && <p className="note">{note}</p>}
+    </div>
+  )
+}
+
 const EXPAND = ['M15 3h6v6', 'M9 21H3v-6', 'M21 3l-7 7', 'M3 21l7-7']
 const COLLAPSE = ['M4 14h6v6', 'M20 10h-6V4', 'M14 10l7-7', 'M3 21l7-7']
 

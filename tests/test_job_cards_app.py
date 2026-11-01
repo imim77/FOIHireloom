@@ -2,6 +2,7 @@ import unittest
 from datetime import UTC, date, datetime
 
 from FOIHireloom.api.apps.job_cards import job_cards
+from FOIHireloom.api.apps.views import JOB_CARDS
 from FOIHireloom.dto.job_search import (
     ActiveFilterDTO,
     CoverageDTO,
@@ -58,3 +59,10 @@ class JobCardsAppTests(unittest.TestCase):
         self.assertEqual(cards.unknown_note, "Još 2 oglasa možda odgovaraju, ali im nije poznato: ugovor (2).")
         # The LLM still gets the service's warning.
         self.assertEqual(cards.coverage.warning, "Job data for the requested county …")
+
+    def test_built_page_shows_the_filters_the_notes_and_the_normalised_conditions(self) -> None:
+        html = JOB_CARDS.page()
+        for expected in ("Ukloni filtar", "show_jobs", "Skupina zanimanja dopunjena iz HZZ-ova feeda po zanimanju",
+                         "Za pripravnike", "h tjedno", "Na neodređeno", "Obiteljski stan", ".note{"):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, html)

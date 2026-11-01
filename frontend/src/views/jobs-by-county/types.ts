@@ -1,4 +1,4 @@
-import type { Coverage } from '../../shared/types'
+import type { ActiveFilter, Coverage } from '../../shared/types'
 
 export type CountyMetric = 'jobs' | 'workers_needed'
 
@@ -22,4 +22,9 @@ export interface JobsByCountyData {
   top: number
   counties: County[]
   coverage: Coverage | null
+  // Every set filter but the query; the description names them too.
+  active_filters: ActiveFilter[]
+  // Croatian for coverage.warning and for the jobs left out only because a value is unknown.
+  coverage_note: string | null
+  unknown_note: string | null
 }

@@ -21,12 +21,18 @@ export function sample(): JobCardsData {
     description: 'Pregled s probnim podacima',
     today: '2026-10-31',
     filters: {
-      query: 'kuhar', county: null, category: null, max_experience_months: null, contract: null, full_time: null,
-      education: null, accommodation: null, employment_tags: null, place: null, include_expired: false, limit: 5,
-      cursor: null,
+      query: 'kuhar', county: null, category: null, max_experience_months: 24, contract: null, full_time: null,
+      education: 'secondary_3', accommodation: null, employment_tags: null, place: null, include_expired: false,
+      limit: 5, cursor: null,
     },
+    active_filters: [
+      { argument: 'max_experience_months', label: 'iskustvo do 2 godine' },
+      { argument: 'education', label: 'obrazovanje: srednja škola (3 god.)' },
+    ],
     next_cursor: 'sample',
     coverage: { warning: null },
+    coverage_note: null,
+    unknown_note: 'Još 14 oglasa možda odgovara, ali im nije poznato: iskustvo (12), obrazovanje (9).',
     jobs: [
       job(1, {
         display_title: 'KUHAR/KUHARICA', employer_name: 'HOTEL ADRIATIC d.o.o.',
@@ -61,14 +67,15 @@ export function sample(): JobCardsData {
         education: 'Srednja škola 3 godine', experience: '2 godine u struci',
         conditions: conditions({
           contract: 'permanent', employment_tags: ['new_position'], full_time: true, education_levels: ['secondary_3'],
-          unrecognised: ['experience', 'accommodation'],
+          unrecognised: ['experience'],
         }),
       }),
       job(5, {
         display_title: 'POMOĆNI KUHAR/POMOĆNA KUHARICA - PRIPRAVNIK', employer_name: 'DJEČJI VRTIĆ MASLAČAK',
         category: 'UGOSTITELJI, RADNICI U TURIZMU', category_source: 'description',
-        county_name: 'Osječko-baranjska županija', work_place: 'OSIJEK, OSJEČKO-BARANJSKA ŽUPANIJA', published_on: '2026-10-30', deadline_on: '2026-11-07',
-        deadline_passed: false, workers_needed: 1, employment_type: 'Na određeno; pripravnik',
+        county_name: 'Osječko-baranjska županija', work_place: 'OSIJEK, OSJEČKO-BARANJSKA ŽUPANIJA',
+        published_on: '2026-10-30', deadline_on: '2026-11-07', deadline_passed: false, workers_needed: 1,
+        employment_type: 'Na određeno; pripravnik',
         working_hours: '30 sati tjedno', education: 'Srednja škola 3 godine', experience: 'Traži se pripravnik',
         accommodation: 'Obiteljski stan',
         conditions: conditions({
