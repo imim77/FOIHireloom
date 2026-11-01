@@ -5,6 +5,14 @@ from .county import CountyDefinitionDTO, CountyDTO
 from .hzz_feed import FeedResponseDTO
 from .hzz_job_page import ParsedJobPageDTO
 from .job import ParsedFeedDTO, ParsedJobDTO
+from .job_comparison import (
+    ComparedJobDTO,
+    ComparisonCellDTO,
+    ComparisonRowDTO,
+    JobComparisonConditionsDTO,
+    JobComparisonDTO,
+    JobComparisonInputDTO,
+)
 from .job_conditions import JobConditionsDTO, JobConditionsInputDTO, JobConditionsRunDTO, RawJobConditionsDTO
 from .job_market import (
     CountyMarketCountDTO,
@@ -18,6 +26,7 @@ from .job_market import (
 )
 from .job_page import JobPageFetchResultDTO, JobPageTargetDTO
 from .job_search import (
+    CandidateConditionsDTO,
     CategoryDTO,
     CountyFeedCheckDTO,
     CoverageDTO,
@@ -56,6 +65,7 @@ from .source_feed import (
 )
 
 __all__ = [
+    "CandidateConditionsDTO",
     "CategoryCoverageDTO",
     "CategoryDTO",
     "CategoryEvidenceDTO",
@@ -64,6 +74,9 @@ __all__ = [
     "CategorySnapshotFeedDTO",
     "CkanPackage",
     "CkanResource",
+    "ComparedJobDTO",
+    "ComparisonCellDTO",
+    "ComparisonRowDTO",
     "CountyDTO",
     "CountyDefinitionDTO",
     "CountyFeedCheckDTO",
@@ -75,6 +88,9 @@ __all__ = [
     "FeedResponseDTO",
     "FeedSyncResultDTO",
     "FilledCategoryDTO",
+    "JobComparisonConditionsDTO",
+    "JobComparisonDTO",
+    "JobComparisonInputDTO",
     "JobConditionFiltersDTO",
     "JobConditionsDTO",
     "JobConditionsInputDTO",

@@ -4,21 +4,27 @@ from typing import get_args
 from uuid import uuid4
 
 from pydantic import ValidationError
-from sqlalchemy import func, text, update
+from sqlalchemy import func, select, text, update
 
 from model_test_case import ModelTestCase
 
 from FOIHireloom.api.apps.jobs_by_county import MAX_TOP, jobs_by_county
-from FOIHireloom.dao.concrete.sqla_job import SqlAlchemyJobRepository
+from FOIHireloom.dao.concrete.sqla_job import UNKNOWN_CONDITIONS, SqlAlchemyJobRepository
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.db.models.job import CONDITION_CODES
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
-from FOIHireloom.dto.job_conditions import EducationLevel, EmploymentTag
+from FOIHireloom.dto.job_conditions import Contract, EducationLevel, EmploymentTag
 from FOIHireloom.dto.job_market import JobMarketCriteriaDTO, JobMarketFiltersDTO
-from FOIHireloom.dto.job_search import JobSearchCriteriaDTO, JobSearchFiltersDTO, UnknownConditionsDTO
+from FOIHireloom.dto.job_search import (
+    MAX_EXPERIENCE_MONTHS,
+    CandidateConditionsDTO,
+    JobSearchCriteriaDTO,
+    JobSearchFiltersDTO,
+    UnknownConditionsDTO,
+)
 from FOIHireloom.exceptions import InvalidJobSearchError
-from FOIHireloom.services import CroatianCountyCatalog, JobSearchService
+from FOIHireloom.services import CroatianCountyCatalog, JobConditionMatcher, JobSearchService
 
 # The plan's example: jobs in Varaždin county for someone without experience who wants a permanent full-time job.
 EXAMPLE = dict(county="varazdinska", max_experience_months=0, contract="permanent", full_time=True)
@@ -356,3 +362,59 @@ class JobConditionFilterTests(ModelTestCase):
                          (2, {"university": 2, "college": 2, "secondary_4": 1}))
         # "Zagreb" finds "ZAGREB-DUBRAVA".
         self.assertEqual(set(await self.keys(place="Zagreb")), {"multi", "senior"})
+
+    async def test_comparison_verdicts_agree_with_the_condition_filters(self) -> None:
+        page = {"page_status": "fetched", "page_checked_at": func.now(), "page_fetched_at": func.now()}
+        feed = await self.session.scalar(text("SELECT id FROM source_feeds WHERE label = 'grad-zagreb'"))
+        for key, values in (
+            # The experience is stated in a way the normaliser does not read.
+            ("unread_experience", dict(conditions_unrecognised=["experience"], full_time=False, weekly_hours=20,
+                                       education_levels=["primary", "secondary_4"], **page)),
+            # The type of employment names tags but no contract.
+            ("tags_only", dict(experience_months=6, trainee=False, employment_tags=["seasonal"], full_time=True,
+                               weekly_hours=40, accommodation="none", **page)),
+            ("other", dict(experience_months=1, trainee=False, contract="other", education_levels=["primary_lower"],
+                           accommodation="single", **page)),
+        ):
+            job = Job(provider="hzz", source_job_id=key, canonical_url=f"https://example.com/{key}", content_hash=key,
+                      page_source_hash=key, title=f"POSAO {key}", **values)
+            self.session.add(job)
+            await self.session.flush()
+            self.ids[key] = job.id
+            self.session.add(JobFeedMembership(job_id=job.id, feed_id=feed))
+        await self.session.commit()
+        jobs = (await self.session.scalars(select(Job).execution_options(populate_existing=True))).all()
+        conditions = {job.id: JobSearchService._stored_conditions(job) for job in jobs}
+        self.assertIsNone(conditions[self.ids["unread"]])
+        matcher = JobConditionMatcher()
+        values = {
+            "max_experience_months": (*range(50), MAX_EXPERIENCE_MONTHS),
+            "contract": get_args(Contract.__value__),
+            "full_time": (True, False),
+            "education": get_args(EducationLevel.__value__),
+            "accommodation": (True, False),
+        }
+        self.assertEqual(set(values), set(CandidateConditionsDTO.model_fields))
+        for name, options in values.items():
+            for value in options:
+                with self.subTest(condition=name, value=value):
+                    # Expired jobs too, since a comparison may show them.
+                    criteria = JobSearchCriteriaDTO(limit=100, **{name: value})
+                    found = {hit.job.id for hit in await self.repository.search(criteria)}
+                    unknown = set(await self.session.scalars(select(Job.id).where(UNKNOWN_CONDITIONS[name])))
+                    verdicts = {job_id: matcher.verdicts(known, CandidateConditionsDTO(**{name: value}))[name]
+                                for job_id, known in conditions.items()}
+                    self.assertEqual({job_id for job_id, verdict in verdicts.items() if verdict == "match"}, found)
+                    self.assertEqual({job_id for job_id, verdict in verdicts.items() if verdict == "unknown"}, unknown)
+                    self.assertEqual({job_id for job_id, verdict in verdicts.items() if verdict == "no_match"},
+                                     set(conditions) - found - unknown)
+                    self.assertEqual(await self.repository.count_unknown_conditions(criteria),
+                                     UnknownConditionsDTO(by_filter={name: len(unknown)}, total=len(unknown)))
+        # Each condition gets every verdict for some job, so none is decided one way only.
+        for name, options in values.items():
+            with self.subTest(condition=name):
+                seen = {matcher.verdicts(known, CandidateConditionsDTO(**{name: value}))[name]
+                        for value in options for known in conditions.values()}
+                self.assertEqual(seen, {"match", "no_match", "unknown"})
+        # No condition set, no verdict.
+        self.assertEqual(matcher.verdicts(conditions[self.ids["any"]], CandidateConditionsDTO()), {})
