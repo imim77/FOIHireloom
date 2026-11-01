@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from FOIHireloom.db.models import Job
 from FOIHireloom.db.models.job import SEARCH_FOLD_FROM, SEARCH_FOLD_TO
 from FOIHireloom.db.uow.base import UnitOfWork
+from FOIHireloom.dto.job_conditions import JobConditionsDTO
 from FOIHireloom.dto.job_market import JobMarketCriteriaDTO, JobMarketFiltersDTO, JobMarketStatsDTO
 from FOIHireloom.dto.job_search import (
     SEARCH_TERM,
@@ -294,6 +295,17 @@ class JobSearchService(JobSearchServiceInterface):
             "education": job.page_education,
             "experience": job.page_experience,
             "accommodation": job.page_accommodation,
+            "conditions": self._stored_conditions(job),
+        })
+
+    @staticmethod
+    def _stored_conditions(job: Job) -> JobConditionsDTO | None:
+        """The normalised conditions stored with the job page; None while the page has not been read."""
+        if job.page_status != "fetched":
+            return None
+        return JobConditionsDTO(**{
+            name: getattr(job, "conditions_unrecognised" if name == "unrecognised" else name)
+            for name in JobConditionsDTO.model_fields
         })
 
     @staticmethod

@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import Field, computed_field, field_validator
 
 from .base import ModelConfigBaseModel
-from .job_conditions import Contract, EducationLevel, EmploymentTag
+from .job_conditions import Contract, EducationLevel, EmploymentTag, JobConditionsDTO
 
 MAX_PAGE_SIZE = 20
 MAX_QUERY_LENGTH = 200
@@ -114,7 +114,8 @@ class JobSummaryDTO(ModelConfigBaseModel):
     work_place and employer_name come from it; deadline_on is then its
     "Natječaj vrijedi do" date. Otherwise they come from the feed, whose
     description suffix HZZ often cuts off. category is stated in that
-    description or filled in from an HZZ occupation feed verified on its jobs.
+    description (category_source 'description') or filled in from an HZZ
+    occupation feed verified on its jobs ('feed'); both are None together.
     deadline_passed is None when the deadline is unknown. county_name comes
     from the county feed that publishes the job and is known for every job in
     a feed. title_match tells whether every query word matched the title;
@@ -125,6 +126,7 @@ class JobSummaryDTO(ModelConfigBaseModel):
     source_job_id: str | None
     title: str | None
     category: str | None
+    category_source: Literal["description", "feed"] | None = None
     location_text: str | None
     municipality: str | None
     county_code: str | None = None
@@ -168,7 +170,12 @@ class JobSummaryDTO(ModelConfigBaseModel):
 
 
 class JobCardDTO(JobSummaryDTO):
-    """A search result with the job page values a job card shows; None until the page is read or when it omits them."""
+    """A search result with the job page values a job card shows; None until the page is read or when it omits them.
+
+    The text fields are as the page states them. conditions are the
+    normalised ones stored with the page, None while details_status is not
+    'fetched'; a None value within them is unknown.
+    """
 
     workers_needed: int | None = None
     employment_type: str | None = None
@@ -176,6 +183,7 @@ class JobCardDTO(JobSummaryDTO):
     education: str | None = None
     experience: str | None = None
     accommodation: str | None = None
+    conditions: JobConditionsDTO | None = None
 
 
 class RegionFreshnessDTO(ModelConfigBaseModel):
@@ -247,15 +255,29 @@ class JobCardsPageDTO(ModelConfigBaseModel):
     unknown_total: int = 0
 
 
+class ActiveFilterDTO(ModelConfigBaseModel):
+    """A filter a view names in Croatian; argument is the tool argument that sets it."""
+
+    argument: str
+    label: str
+
+
 class JobCardsDTO(JobCardsPageDTO):
     """A page of job cards for the job cards view, with its heading and the filters that found it.
 
-    filters are the show_jobs arguments, so the view can ask for the next page with next_cursor.
+    filters are the show_jobs arguments, so the view can ask for the next page
+    with next_cursor. active_filters name the set filters but the query, which
+    is in the title. coverage_note and unknown_note say in Croatian what
+    coverage.warning and unknown_total do; each is None when there is nothing
+    to say.
     """
 
     title: str
     description: str
     filters: JobSearchFiltersDTO
+    active_filters: tuple[ActiveFilterDTO, ...]
+    coverage_note: str | None
+    unknown_note: str | None
 
 
 class JobListingDTO(ModelConfigBaseModel):

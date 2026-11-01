@@ -133,8 +133,11 @@ class JobTools(ToolGroup):
             display_title labels jobs without a title. Show display_location
             as the job's location: it is the place of work from the job page
             when that has been read, otherwise the town from the feed or, when
-            HZZ gave none, the county. Use get_job for the full details, and
-            canonical_url to view or apply on the HZZ site.
+            HZZ gave none, the county. category_source says where category
+            came from: 'description' when the job's own description states
+            it, 'feed' when it was filled in from an HZZ occupation feed whose
+            category was verified on its jobs. Use get_job for the full
+            details, and canonical_url to view or apply on the HZZ site.
 
             The condition filters (max_experience_months, contract,
             full_time, education, accommodation, employment_tags and place)
@@ -198,13 +201,21 @@ class JobTools(ToolGroup):
             employer, the title, the place, the employment type, working
             hours, education, experience, workers sought, accommodation and
             the application deadline, with a link to the HZZ advertisement.
-            The user can load more cards there. Every host also gets the
-            data: the jobs as in search_jobs plus those job page values, which
-            are null until the job's HZZ page has been read. Condition
-            filters, unknown_total and unknown_conditions work as in
-            search_jobs; report unknown_total whenever it is not 0. When
-            coverage.warning is set, tell the user the results may be
-            outdated or incomplete.
+            The user can load more cards there, and remove a filter, which
+            shows the cards found without it. Every host also gets the data:
+            the jobs as in search_jobs, category_source included, plus those
+            job page values as text, which are null until the job's HZZ page
+            has been read. conditions holds the same page's normalised
+            conditions, as the filters read them (codes as in the filter
+            arguments, experience_months, weekly_hours, trainee for trainee
+            ads, accommodation 'none', 'shared', 'single' or 'family'); it is
+            null until the page has been read, and a null value in it is
+            unknown, not "not required". Condition filters, unknown_total and
+            unknown_conditions work as in search_jobs; report unknown_total
+            whenever it is not 0. When coverage.warning is set, tell the user
+            the results may be outdated or incomplete. active_filters,
+            coverage_note and unknown_note are the Croatian wording the view
+            shows for the filters, coverage.warning and unknown_total.
             """
             filters = JobSearchFiltersDTO(
                 query=query, county=county, category=category, max_experience_months=max_experience_months,
@@ -325,7 +336,8 @@ class JobTools(ToolGroup):
             (percent of total_jobs). Condition filters, unknown_total and
             unknown_conditions work as in search_jobs; report unknown_total
             whenever it is not 0. When coverage.warning is set, tell the user
-            the numbers may be outdated or incomplete.
+            the numbers may be outdated or incomplete. active_filters,
+            coverage_note and unknown_note are as in show_jobs.
             """
             filters = JobMarketFiltersDTO(
                 query=query, category=category, max_experience_months=max_experience_months, contract=contract,
@@ -333,7 +345,7 @@ class JobTools(ToolGroup):
                 employment_tags=employment_tags, place=place, include_expired=include_expired,
             )
             stats = await self._call(service(ctx).market_stats(filters))
-            return jobs_by_county.jobs_by_county(stats, top, query, category, metric)
+            return jobs_by_county.jobs_by_county(stats, top, filters, metric)
 
         @server.tool(annotations=READ_ONLY)
         async def get_job(

@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import Field
 
 from .base import ModelConfigBaseModel
-from .job_search import MAX_QUERY_LENGTH, CoverageDTO, JobConditionFiltersDTO, JobFilterCriteriaDTO
+from .job_search import MAX_QUERY_LENGTH, ActiveFilterDTO, CoverageDTO, JobConditionFiltersDTO, JobFilterCriteriaDTO
 
 # What the jobs-by-county chart ranks and draws the counties by.
 type CountyMetric = Literal["jobs", "workers_needed"]
@@ -124,6 +124,8 @@ class JobsByCountyDTO(ModelConfigBaseModel):
     Counties are ranked by metric, highest first; the chart draws that value
     as columns, shows the first top counties and lets the user expand it to all.
     unknown_conditions and unknown_total are as in JobSearchPageDTO.
+    description names the query, the active_filters and the day; the
+    filters are as in JobCardsDTO, and so are coverage_note and unknown_note.
     """
 
     metric: CountyMetric
@@ -137,3 +139,6 @@ class JobsByCountyDTO(ModelConfigBaseModel):
     coverage: CoverageDTO
     unknown_conditions: dict[str, int] = {}
     unknown_total: int = 0
+    active_filters: tuple[ActiveFilterDTO, ...]
+    coverage_note: str | None
+    unknown_note: str | None

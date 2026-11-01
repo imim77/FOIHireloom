@@ -174,8 +174,8 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.service.filters,
                          [JobSearchFiltersDTO(query="kuhar", county="istarska", limit=6, cursor="abc")])
         self.assertEqual((cards["title"], cards["description"], cards["next_cursor"], cards["today"]),
-                         ("Oglasi za „kuhar”", "Županija istarska · aktivni oglasi na dan 29. 10. 2026.", "next",
-                          "2026-10-29"))
+                         ("Oglasi za „kuhar”", "Aktivni oglasi na dan 29. 10. 2026.", "next", "2026-10-29"))
+        self.assertEqual(cards["active_filters"], [{"argument": "county", "label": "županija istarska"}])
         self.assertEqual((cards["filters"]["query"], cards["filters"]["limit"], cards["filters"]["cursor"]),
                          ("kuhar", 6, None))
         job = cards["jobs"][0]

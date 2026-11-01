@@ -5,7 +5,15 @@ views.JOBS_BY_COUNTY page in a sandboxed iframe and passes it that result
 over the MCP Apps bridge. Text-only hosts still get the same data.
 """
 
-from FOIHireloom.dto.job_market import CountyMetric, CountyShareDTO, JobMarketStatsDTO, JobsByCountyDTO
+from FOIHireloom.dto.job_market import (
+    CountyMetric,
+    CountyShareDTO,
+    JobMarketFiltersDTO,
+    JobMarketStatsDTO,
+    JobsByCountyDTO,
+)
+
+from .labels import active_filters, coverage_note, day, sentence, unknown_note
 
 DEFAULT_TOP = 7
 # There are 21 counties.
@@ -17,16 +25,19 @@ TITLES: dict[CountyMetric, str] = {
 
 
 def jobs_by_county(
-    stats: JobMarketStatsDTO, top: int, query: str | None, category: str | None, metric: CountyMetric = "jobs",
+    stats: JobMarketStatsDTO, top: int, filters: JobMarketFiltersDTO, metric: CountyMetric = "jobs",
 ) -> JobsByCountyDTO:
-    filters = [f"upit „{query.strip()}”" if query and query.strip() else None,
-               f"kategorija {category.strip()}" if category and category.strip() else None]
-    description = " · ".join([*(f for f in filters if f), f"aktivni oglasi na dan {stats.today:%d. %m. %Y.}"])
+    query = (filters.query or "").strip()
+    labels = active_filters(filters)
+    # The chart shows no chips, so its description names the filters; the day says whether expired jobs count.
+    parts = [*([f"upit „{query}”"] if query else []),
+             *(label.label for label in labels if label.argument != "include_expired"),
+             day(stats.today, filters.include_expired)]
     counties = sorted(stats.counties, key=lambda county: (-getattr(county, metric), county.name))
     return JobsByCountyDTO(
         metric=metric,
         title=TITLES[metric],
-        description=description[0].upper() + description[1:],
+        description=sentence(" · ".join(parts)),
         today=stats.today,
         total_jobs=stats.jobs,
         total_workers_needed=stats.workers_needed,
@@ -42,4 +53,7 @@ def jobs_by_county(
         coverage=stats.coverage,
         unknown_conditions=stats.unknown_conditions,
         unknown_total=stats.unknown_total,
+        active_filters=labels,
+        coverage_note=coverage_note(stats.coverage),
+        unknown_note=unknown_note(stats.unknown_conditions, stats.unknown_total),
     )
