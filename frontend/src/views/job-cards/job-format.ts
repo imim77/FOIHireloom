@@ -1,7 +1,7 @@
 // HZZ writes most values in capitals and with every option it allows; these turn them into the card's short labels.
 
 import { formatWorkers, plural } from '../../shared/format'
-import type { JobCard } from './types'
+import type { Contract, JobCard, JobConditions } from './types'
 
 /** "PRODAVAČ/PRODAVAČICA" → "Prodavač/prodavačica"; text that is not all capitals stays. */
 export function sentenceCase(text: string): string {
@@ -45,26 +45,60 @@ export function town(job: JobCard): string | null {
 }
 
 // What a detail is about, which picks its icon.
-export type DetailKind = 'place' | 'hours' | 'deadline' | 'type' | 'education' | 'experience' | 'workers' | 'accommodation'
+export type DetailKind = 'place' | 'hours' | 'deadline' | 'contract' | 'education' | 'experience' | 'workers'
+  | 'accommodation'
 
 export interface Detail {
   kind: DetailKind
   text: string
 }
 
-/** The card's details, in the reference's three columns: where and when first, then what the job asks and offers. */
+const CONTRACTS: Record<Contract, string> = {
+  permanent: 'Na neodređeno', fixed_term: 'Na određeno', other: 'Drugi oblici rada',
+}
+const ACCOMMODATION: Record<Exclude<NonNullable<JobConditions['accommodation']>, 'none'>, string> = {
+  shared: 'Zajednički smještaj', single: 'Samački smještaj', family: 'Obiteljski stan',
+}
+
+/** "Bez iskustva", "Za pripravnike", "Iskustvo 18 mj." or, in whole years, "Iskustvo 2 godine". */
+function experience(job: JobCard): string | null {
+  const { experience_months: months, trainee } = job.conditions ?? {}
+  if (trainee) return 'Za pripravnike'
+  if (months === 0) return 'Bez iskustva'
+  if (months && months % 12) return `Iskustvo ${months} mj.`
+  if (months) return `Iskustvo ${months / 12} ${plural(months / 12, 'godina', 'godine', 'godina')}`
+  if (job.experience === 'Nije važno') return 'Bez traženog iskustva'
+  return job.experience ? `Iskustvo ${job.experience}` : null
+}
+
+/** "Puno radno vrijeme" or "Nepuno, 20 h tjedno"; the page's own words when they were not recognised. */
+function workingTime(job: JobCard): string | null {
+  const { full_time: full, weekly_hours: hours } = job.conditions ?? {}
+  if (full == null) return job.working_hours
+  if (hours) return `${full ? 'Puno' : 'Nepuno'}, ${hours} h tjedno`
+  return full ? 'Puno radno vrijeme' : 'Nepuno radno vrijeme'
+}
+
+/**
+ * The card's details, in the reference's three columns: where and when first, then what the job asks and offers.
+ * Each uses the normalised conditions where known and the page's text otherwise, whose first part is the lowest
+ * education level or the contract.
+ */
 export function details(job: JobCard): Detail[] {
   const first = (value: string | null) => value?.split(';')[0].trim() || null
-  const experience = job.experience === 'Nije važno' ? 'Bez traženog iskustva'
-    : job.experience ? `Iskustvo ${job.experience}` : null
-  const accommodation = job.accommodation && job.accommodation !== 'Nema smještaja' ? job.accommodation : null
+  const conditions = job.conditions
+  const contract = conditions?.contract ? CONTRACTS[conditions.contract] : first(job.employment_type)
+  // No accommodation is the usual case and is not shown.
+  const accommodation = conditions?.accommodation
+    ? conditions.accommodation === 'none' ? null : ACCOMMODATION[conditions.accommodation]
+    : job.accommodation && job.accommodation !== 'Nema smještaja' ? job.accommodation : null
   const all: [DetailKind, string | null][] = [
     ['place', town(job)],
-    ['hours', job.working_hours],
+    ['hours', workingTime(job)],
     ['deadline', deadline(job)],
-    ['type', first(job.employment_type)],
+    ['contract', contract],
     ['education', first(job.education)],
-    ['experience', experience],
+    ['experience', experience(job)],
     ['workers', job.workers_needed && job.workers_needed > 1 ? formatWorkers(job.workers_needed) : null],
     ['accommodation', accommodation],
   ]

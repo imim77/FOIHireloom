@@ -19,6 +19,8 @@
   background: var(--surface-subdued); color: var(--fg-loud);
 }
 .label.age { background: var(--green-tint); color: var(--green-on-tint); }
+/* A category filled in from an HZZ occupation feed, not stated in the job's description: dashed, on the card colour. */
+.label.feed { background: var(--card); outline: 1px dashed var(--fg-soft); outline-offset: -1px; cursor: help; }
 .job-top .icon-button { width: 32px; height: 32px; border-radius: 8px; }
 .job-top .icon-button svg { width: 16px; height: 16px; }
 
