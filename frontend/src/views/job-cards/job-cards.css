@@ -68,3 +68,28 @@
 .more:hover:not(:disabled) { background: var(--surface-subdued); }
 .more:focus-visible { outline: none; box-shadow: var(--focus); }
 .more:disabled { color: var(--fg-soft); cursor: progress; }
+
+/* Picking a card for a comparison: a checkbox with its label, as tall as the card's icon buttons. */
+.compare-toggle {
+  display: inline-flex; flex: none; align-items: center; gap: 6px; height: 32px; padding: 0 10px 0 8px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--fg-loud);
+  font-size: 12px; font-weight: 600; cursor: pointer; user-select: none;
+}
+.compare-toggle:hover:not(:has(input:disabled)) { background: var(--surface-subdued); }
+.compare-toggle:has(input:focus-visible) { box-shadow: var(--focus); }
+.compare-toggle.checked { background: var(--green-tint); color: var(--green-on-tint); border-color: transparent; }
+.compare-toggle:has(input:disabled) { color: var(--fg-soft); cursor: not-allowed; }
+.compare-toggle input { width: 14px; height: 14px; margin: 0; accent-color: var(--green-on-tint); cursor: inherit; }
+.compare-toggle input:focus-visible { outline: none; }
+
+/* The picked cards: what is still needed and the button that asks for the comparison. */
+.compare-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border-radius: 12px;
+  background: var(--surface-sunken); animation: fade-in 400ms ease-out;
+}
+.compare-bar .soft { flex: 1 1 200px; }
+.compare-bar .more:disabled { cursor: not-allowed; }
+.more.primary { border-color: transparent; background: var(--surface-muted); color: var(--fg-on-muted); }
+.more.primary:hover:not(:disabled) { background: var(--surface-muted); opacity: 0.9; }
+.more.primary:disabled { background: var(--surface-disable); color: var(--fg-on-muted); }
+@media (prefers-reduced-motion: reduce) { .compare-bar { animation: none; } }
