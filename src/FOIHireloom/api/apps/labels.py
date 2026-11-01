@@ -8,6 +8,7 @@ from datetime import date
 
 from FOIHireloom.dto.job_market import JobMarketFiltersDTO
 from FOIHireloom.dto.job_search import ActiveFilterDTO, CoverageDTO, JobSearchFiltersDTO
+from FOIHireloom.services.concrete.croatian_counties import CroatianCountyCatalog
 
 CONTRACTS = {"permanent": "na neodređeno", "fixed_term": "na određeno", "other": "drugi oblici rada"}
 # The levels as HZZ names them, made short enough for a chip.
@@ -41,6 +42,9 @@ UNKNOWN_VALUES = {
     "employment_tags": "vrsta zaposlenja",
     "place": "mjesto rada",
 }
+# A county filter is a code or a name, as the tools accept it; the chip names the county.
+COUNTIES = CroatianCountyCatalog()
+COUNTY_NAMES = {county.code: county.name for county in COUNTIES.definitions}
 # Counties named in a coverage note before the rest are only counted.
 NOTE_REGION_LIMIT = 3
 
@@ -81,7 +85,7 @@ def active_filters(filters: JobSearchFiltersDTO | JobMarketFiltersDTO) -> tuple[
     """
     tags = [name for tag, name in EMPLOYMENT_TAGS.items() if tag in (filters.employment_tags or ())]
     labels: dict[str, str | None] = {
-        "county": f"županija {county}" if (county := (filters.county or "").strip()) else None,
+        "county": county_label(county) if (county := (filters.county or "").strip()) else None,
         "category": f"kategorija {category}" if (category := (filters.category or "").strip()) else None,
         "max_experience_months": experience(filters.max_experience_months),
         "contract": CONTRACTS[filters.contract] if filters.contract else None,
@@ -90,9 +94,16 @@ def active_filters(filters: JobSearchFiltersDTO | JobMarketFiltersDTO) -> tuple[
         "accommodation": either(filters.accommodation, "uz smještaj", "bez smještaja"),
         "employment_tags": f"vrsta zaposlenja: {listing(tags)}" if tags else None,
         "place": f"mjesto rada {place}" if (place := (filters.place or "").strip()) else None,
-        "include_expired": "i istekli oglasi" if filters.include_expired else None,
+        "include_expired": "uključujući istekle oglase" if filters.include_expired else None,
     }
     return tuple(ActiveFilterDTO(argument=argument, label=label) for argument, label in labels.items() if label)
+
+
+def county_label(county: str) -> str:
+    """"grad-zagreb" or "grad zagreb" → "Grad Zagreb"; a county the catalogue does not know stays as given."""
+    definition = COUNTIES.match(county)
+    name = definition.name if definition else COUNTY_NAMES.get(county.casefold())
+    return name or f"županija {county}"
 
 
 def either(value: bool | None, true: str, false: str) -> str | None:

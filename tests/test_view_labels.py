@@ -69,17 +69,22 @@ class ActiveFiltersTests(unittest.TestCase):
             place=" Pula ", include_expired=True, limit=3, cursor="abc",
         ))
         self.assertEqual([(chip.argument, chip.label) for chip in chips], [
-            ("county", "županija istarska"), ("category", "kategorija UGOSTITELJI"),
+            ("county", "Istarska županija"), ("category", "kategorija UGOSTITELJI"),
             ("max_experience_months", "bez iskustva"), ("contract", "na neodređeno"),
             ("full_time", "puno radno vrijeme"), ("education", "obrazovanje: viša škola ili prvostupnik"),
             ("accommodation", "bez smještaja"),
             # Tags keep their fixed order.
             ("employment_tags", "vrsta zaposlenja: sezonski posao i pripravnik"),
-            ("place", "mjesto rada Pula"), ("include_expired", "i istekli oglasi"),
+            ("place", "mjesto rada Pula"), ("include_expired", "uključujući istekle oglase"),
         ])
         self.assertEqual(labels(employment_tags=("new_position", "vacancy", "retirees")),
                          ["vrsta zaposlenja: novootvoreno radno mjesto, upražnjeno radno mjesto i "
                           "zapošljavanje umirovljenika"])
+
+    def test_county_is_named_by_its_code_or_name(self) -> None:
+        self.assertEqual(labels(county="grad-zagreb"), ["Grad Zagreb"])
+        self.assertEqual(labels(county="Međimurska županija"), ["Međimurska županija"])
+        self.assertEqual(labels(county="nepoznata"), ["županija nepoznata"])
 
     def test_unset_and_blank_filters_have_no_label(self) -> None:
         self.assertEqual(labels(), [])

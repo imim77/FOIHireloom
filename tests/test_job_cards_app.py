@@ -26,7 +26,7 @@ class JobCardsAppTests(unittest.TestCase):
     def test_title_names_the_query_and_description_the_day_while_the_filters_become_chips(self) -> None:
         cards = job_cards(PAGE, JobSearchFiltersDTO(query=" kuhar ", county="istarska", category="UGOSTITELJI"))
         self.assertEqual((cards.title, cards.description), ("Oglasi za „kuhar”", "Aktivni oglasi na dan 30. 10. 2026."))
-        self.assertEqual(cards.active_filters, (ActiveFilterDTO(argument="county", label="županija istarska"),
+        self.assertEqual(cards.active_filters, (ActiveFilterDTO(argument="county", label="Istarska županija"),
                                                 ActiveFilterDTO(argument="category", label="kategorija UGOSTITELJI")))
         newest = job_cards(PAGE, JobSearchFiltersDTO(include_expired=True))
         self.assertEqual((newest.title, newest.description), ("Najnoviji oglasi", "Svi oglasi na dan 30. 10. 2026."))
