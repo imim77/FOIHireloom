@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 
+from FOIHireloom.dto.job_comparison import JobComparisonConditionsDTO, JobComparisonDTO
 from FOIHireloom.dto.job_market import JobMarketFiltersDTO, JobMarketStatsDTO
 from FOIHireloom.dto.job_search import (
     CategoryDTO,
@@ -42,6 +44,19 @@ class JobSearchServiceInterface(ABC):
     @abstractmethod
     async def get_job(self, job_id: int) -> JobDetailsDTO:
         """Return a job, listed or not, with its feed listings; raise NotFoundError if absent."""
+
+    @abstractmethod
+    async def compare_jobs(
+        self, job_ids: Sequence[int], conditions: JobComparisonConditionsDTO | None = None,
+    ) -> JobComparisonDTO:
+        """Compare two or three distinct jobs, listed or not, in the given order.
+
+        Expired jobs and jobs whose page was not read are compared too; what
+        is unknown stays unknown. Each condition set gets a verdict per job,
+        as JobComparisonConditionsDTO describes. Raise InvalidJobSearchError
+        for fewer than two, more than three or repeated IDs and NotFoundError
+        naming every ID without a job.
+        """
 
     @abstractmethod
     async def list_regions(self) -> tuple[RegionDTO, ...]:

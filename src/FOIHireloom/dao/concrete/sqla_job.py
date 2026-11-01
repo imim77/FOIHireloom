@@ -53,6 +53,11 @@ class SqlAlchemyJobRepository(JobRepository):
     async def get_by_id(self, job_id: int) -> Job | None:
         return await self._session.get(Job, job_id)
 
+    async def list_by_ids(self, job_ids: Collection[int]) -> list[Job]:
+        if not job_ids:
+            return []
+        return list(await self._session.scalars(select(Job).where(Job.id.in_(job_ids))))
+
     async def get_by_source_job_id(self, provider: str, source_job_id: str) -> Job | None:
         statement = select(Job).where(
             Job.provider == provider,

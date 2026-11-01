@@ -3,7 +3,7 @@ import logging
 import os
 import socket
 import unittest
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, date, datetime
 from unittest import mock
@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from FOIHireloom.api.apps.views import JOB_CARDS, JOBS_BY_COUNTY
 from FOIHireloom.api.mcp_server import McpServer
 from FOIHireloom.config.settings import Settings
+from FOIHireloom.dto.job_comparison import JobComparisonConditionsDTO, JobComparisonDTO
 from FOIHireloom.dto.job_market import JobMarketFiltersDTO, JobMarketStatsDTO
 from FOIHireloom.dto.job_search import (
     CategoryDTO,
@@ -75,6 +76,12 @@ class FakeJobSearchService(JobSearchServiceInterface):
         self.raise_error()
         return JobDetailsDTO(**SUMMARY | {"id": job_id}, description_text="Rad u kuhinji.",
                              availability_status="unknown", first_seen_at=SEEN, content_changed_at=SEEN)
+
+    async def compare_jobs(
+        self, job_ids: Sequence[int], conditions: JobComparisonConditionsDTO | None = None,
+    ) -> JobComparisonDTO:
+        # No tool compares jobs yet.
+        raise NotImplementedError
 
     async def list_regions(self) -> tuple[RegionDTO, ...]:
         self.raise_error()
