@@ -1,7 +1,7 @@
 from datetime import timedelta
 from uuid import uuid4
 
-from sqlalchemy import func, text
+from sqlalchemy import func, text, update
 
 from model_test_case import ModelTestCase
 
@@ -10,6 +10,7 @@ from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
 from FOIHireloom.dto.job_comparison import ComparisonCellDTO, JobComparisonConditionsDTO, JobComparisonDTO
 from FOIHireloom.dto.job_conditions import RawJobConditionsDTO
+from FOIHireloom.dto.job_search import JobSearchFiltersDTO
 from FOIHireloom.exceptions import InvalidJobSearchError, NotFoundError
 from FOIHireloom.services import (
     CroatianCountyCatalog,
@@ -226,6 +227,19 @@ class JobComparisonTests(ModelTestCase):
         })
         self.assertEqual(self.row(no_match, "education")[1].reason,
                          "the job page asks for secondary school (4 years) or higher levels, not primary school")
+
+    async def test_a_page_read_once_keeps_its_conditions_after_a_failed_fetch(self) -> None:
+        # The search filters still use the stored conditions, so the comparison and the cards must too.
+        await self.session.execute(update(Job).where(Job.id == self.ids["baker"]).values(page_status="failed"))
+        await self.session.commit()
+        conditions = JobComparisonConditionsDTO(contract="permanent")
+        comparison = await self.compare("baker", "cook", conditions=conditions)
+        self.assertEqual(self.row(comparison, "contract")[0].verdict, "match")
+        self.assertEqual(self.row(comparison, "contract")[0].evidence, "Na neodređeno")
+        self.assertIsNotNone(comparison.jobs[0].conditions)
+        found = await self.service.search_cards(JobSearchFiltersDTO(contract="permanent"))
+        baker = next(job for job in found.jobs if job.id == self.ids["baker"])
+        self.assertEqual(baker.conditions.contract, "permanent")
 
     async def test_differs_compares_the_values_with_unknown_as_a_value_of_its_own(self) -> None:
         def differs(comparison: JobComparisonDTO) -> dict[str, bool]:

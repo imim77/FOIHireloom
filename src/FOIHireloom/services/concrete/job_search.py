@@ -42,8 +42,8 @@ from FOIHireloom.exceptions import InvalidJobSearchError, NotFoundError
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 
 from .croatian_counties import CroatianCountyCatalog
-from .job_comparison import JobComparator, JobConditionMatcher
 from .croatian_stem import stem
+from .job_comparison import JobComparator, JobConditionMatcher
 
 # HZZ deadlines are Croatian calendar days and stay open until the end of the day.
 LOCAL_TIME_ZONE = ZoneInfo("Europe/Zagreb")
@@ -353,8 +353,12 @@ class JobSearchService(JobSearchServiceInterface):
 
     @staticmethod
     def _stored_conditions(job: Job) -> JobConditionsDTO | None:
-        """The normalised conditions stored with the job page; None while the page has not been read."""
-        if job.page_status != "fetched":
+        """The normalised conditions stored with the job page; None while no page has been read.
+
+        A page read once keeps its conditions when a later fetch fails, and the
+        search filters still use them, so this goes by page_fetched_at, not page_status.
+        """
+        if job.page_fetched_at is None:
             return None
         return JobConditionsDTO(**{
             name: getattr(job, "conditions_unrecognised" if name == "unrecognised" else name)
