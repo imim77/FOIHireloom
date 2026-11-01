@@ -7,6 +7,7 @@
 import { animate, stagger, utils } from 'animejs'
 import { useRef } from 'react'
 import { fadeIn, finish, releaseStyles, useChartEntrance } from '../../shared/chart-motion'
+import { FEED_CATEGORY } from '../../shared/text'
 import { age, type DetailKind, details, sentenceCase } from './job-format'
 import type { JobCard } from './types'
 
@@ -22,9 +23,6 @@ export interface CardActions {
   // Ask about the job in the conversation; null outside a host.
   ask: ((job: JobCard) => void) | null
 }
-
-// The tooltip of a category the job's description does not state.
-const FEED_CATEGORY = 'Skupina zanimanja dopunjena iz HZZ-ova feeda po zanimanju'
 
 const OPEN_ICON = ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5']
 const ASK_ICON = ['M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z', 'M8.5 12h.01', 'M12 12h.01', 'M15.5 12h.01']

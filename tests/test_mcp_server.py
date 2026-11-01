@@ -13,7 +13,7 @@ from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from pydantic import ValidationError
 
-from FOIHireloom.api.apps.views import JOB_CARDS, JOBS_BY_COUNTY
+from FOIHireloom.api.apps.views import JOB_CARDS, JOB_COMPARISON, JOBS_BY_COUNTY
 from FOIHireloom.api.mcp_server import McpServer
 from FOIHireloom.config.settings import Settings
 from FOIHireloom.dto.job_comparison import (
@@ -95,12 +95,19 @@ class FakeJobSearchService(JobSearchServiceInterface):
             jobs=tuple(ComparedJobDTO(id=job_id, display_title="KUHAR/KUHARICA", employer_name=None,
                                       county_name="Grad Zagreb", display_location="ZAGREB",
                                       canonical_url=SUMMARY["canonical_url"], details_status="pending", category=None,
-                                      category_source=None, conditions=None) for job_id in job_ids),
+                                      category_source=None, published_on=date(2026, 10, 27),
+                                      deadline_on=date(2026, 10, 30), deadline_passed=False, conditions=None)
+                       for job_id in job_ids),
             rows=(ComparisonRowDTO(aspect="experience", differs=False, condition=experience, cells=tuple(
                 ComparisonCellDTO(job_id=job_id, value=None, evidence=None,
                                   verdict=None if experience is None else "unknown",
-                                  reason=None if experience is None else "the job's HZZ page has not been read yet")
-                for job_id in job_ids)),),
+                                  reason=None if experience is None else "the job's HZZ page has not been read yet",
+                                  unknown_reason="page_not_read")
+                for job_id in job_ids)),
+                ComparisonRowDTO(aspect="deadline", differs=False, condition=None, cells=tuple(
+                    ComparisonCellDTO(job_id=job_id, value="open until 2026-10-30 (1 day left)",
+                                      evidence="2026-10-30, from the HZZ feed", verdict=None, reason=None)
+                    for job_id in job_ids))),
             conditions=conditions,
         )
 
@@ -137,7 +144,7 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self.open_services, 1)
         self.assertEqual(self.open_services, 0)
         self.assertEqual(set(tools), {"search_jobs", "show_jobs", "job_market_stats", "show_jobs_by_county", "get_job",
-                                      "compare_jobs", "list_regions", "list_categories"})
+                                      "compare_jobs", "show_job_comparison", "list_regions", "list_categories"})
         for tool in tools.values():
             with self.subTest(tool=tool.name):
                 self.assertTrue(tool.annotations.readOnlyHint)
@@ -147,7 +154,7 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("ctx", tools["search_jobs"].inputSchema["properties"])
         self.assertEqual(tools["search_jobs"].inputSchema["properties"]["limit"]["maximum"], 20)
         self.assertEqual(tools["job_market_stats"].inputSchema["properties"]["top"]["maximum"], 50)
-        # A plain tool for now: no MCP App view.
+        # The data tool has no view; show_job_comparison draws it.
         self.assertNotIn("ui", tools["compare_jobs"].meta or {})
 
     async def test_compare_jobs_takes_two_or_three_ids_and_the_users_conditions(self) -> None:
@@ -211,6 +218,58 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
                 with self.subTest(error=error), self.assertRaisesRegex(ToolError, message) as raised:
                     await client.call_tool("compare_jobs", {"job_ids": [7, 99]})
                 self.assertNotIn("10.0.0.5", str(raised.exception))
+
+    async def test_show_job_comparison_is_an_mcp_app_with_the_arguments_of_compare_jobs(self) -> None:
+        async with Client(self.server) as client:
+            tools = {tool.name: tool for tool in await client.list_tools()}
+            uri = tools["show_job_comparison"].meta["ui"]["resourceUri"]
+            resources = {str(resource.uri): resource for resource in await client.list_resources()}
+            page = (await client.read_resource(uri))[0]
+            shown = (await client.call_tool("show_job_comparison", {"job_ids": [8, 7], "max_experience_months": 0,
+                                                                    "contract": None})).structured_content
+            plain = (await client.call_tool("show_job_comparison", {"job_ids": [7, 8]})).structured_content
+        tool = tools["show_job_comparison"]
+        self.assertRegex(uri, r"^ui://foihireloom/job-comparison-[0-9a-f]{12}\.html$")
+        self.assertEqual(resources[uri].mimeType, "text/html;profile=mcp-app")
+        self.assertEqual(page.text, JOB_COMPARISON.page())
+        self.assertEqual(tool.inputSchema, tools["compare_jobs"].inputSchema)
+        self.assertTrue(tool.annotations.readOnlyHint and tool.annotations.idempotentHint)
+        description = " ".join(tool.description.split())
+        for expected in ("use compare_jobs when only the data is needed", "never guessed or inferred",
+                         "never that the employer will accept the user", "report 'unknown' as unknown"):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, description)
+        self.assertIn("show_job_comparison", " ".join(tools["compare_jobs"].description.split()))
+        # Leaving out conditions and passing them as null are the same, as for compare_jobs.
+        self.assertEqual(self.service.comparisons, [([8, 7], JobComparisonConditionsDTO(max_experience_months=0)),
+                                                    ([7, 8], None)])
+        self.assertEqual((shown["title"], shown["description"], shown["unknown_note"]),
+                         ("Usporedba oglasa", "Vaši uvjeti: bez iskustva",
+                          "Za 2 uvjeta podatak u oglasima nije poznat; to ne znači da su ispunjeni."))
+        self.assertEqual(shown["disclaimer"],
+                         "Usporedba pokazuje samo što oglasi navode, ne i hoće li vas poslodavac odabrati.")
+        experience, deadline = shown["rows"]
+        self.assertEqual((experience["name"], experience["condition_label"], deadline["name"]),
+                         ("Iskustvo", "bez iskustva", "Rok prijave"))
+        cell = experience["cells"][0]
+        # The English fields stay for the LLM next to the Croatian ones.
+        self.assertEqual((cell["reason"], cell["unknown_reason"], cell["text"], cell["verdict_label"]),
+                         ("the job's HZZ page has not been read yet", "page_not_read",
+                          "stranica oglasa još nije pročitana", "nije poznato"))
+        self.assertEqual(deadline["cells"][0]["text"], "do 30. 10. 2026. (još 1 dan)")
+        self.assertEqual(shown["jobs"][0]["deadline_on"], "2026-10-30")
+        self.assertEqual((plain["description"], plain["unknown_note"], plain["rows"][0]["cells"][0]["verdict_label"]),
+                         ("Bez zadanih uvjeta", None, None))
+
+    async def test_show_job_comparison_rejects_what_compare_jobs_rejects(self) -> None:
+        async with Client(self.server) as client:
+            for arguments in ({"job_ids": [7]}, {"job_ids": [7, 8, 9, 10]}, {"job_ids": [7, 8], "education": "phd"}):
+                with self.subTest(arguments=arguments), self.assertRaises(ToolError):
+                    await client.call_tool("show_job_comparison", arguments)
+            self.assertEqual(self.service.comparisons, [])
+            self.service.error = NotFoundError("job", "99")
+            with self.assertRaisesRegex(ToolError, "Job 99 not found."):
+                await client.call_tool("show_job_comparison", {"job_ids": [7, 99]})
 
     async def test_search_jobs_passes_filters_and_returns_structured_page(self) -> None:
         async with Client(self.server) as client:
@@ -382,7 +441,7 @@ class McpHttpTransportTests(unittest.IsolatedAsyncioTestCase):
     async def test_tools_and_health_are_served_over_http(self) -> None:
         base = await self.serve(MCP_PATH="/tools")
         async with Client(f"{base}/tools") as client:
-            self.assertEqual(len(await client.list_tools()), 8)
+            self.assertEqual(len(await client.list_tools()), 9)
             page = (await client.call_tool("search_jobs", {"query": "kuhar"})).structured_content
         self.assertEqual(page["jobs"][0]["title"], "KUHAR/KUHARICA")
         async with httpx.AsyncClient() as http:

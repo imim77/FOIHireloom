@@ -24,7 +24,9 @@ INSTRUCTIONS = (
     "job_market_stats for counts and breakdowns. To show the user jobs as "
     "cards use show_jobs, and show_jobs_by_county for a chart of where the "
     "jobs are. To compare 2 or 3 jobs the user picked, pass their ids to "
-    "compare_jobs. When a result carries a coverage warning, pass it on to the "
+    "show_job_comparison to show the user a comparison table, or to compare_jobs "
+    "when only the data is needed; pass only the conditions the user stated. "
+    "When a result carries a coverage warning, pass it on to the "
     "user. Send users to canonical_url to read the full advertisement or apply."
 )
 

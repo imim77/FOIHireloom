@@ -36,13 +36,16 @@ export function Warning({ text }: { text: string | null | undefined }) {
   return text ? <p className="warning">{text}</p> : null
 }
 
-/** How current the data is, as a warning, and under it a quieter note; nothing when both are empty. */
-export function Notes({ warning, note }: { warning: string | null | undefined; note: string | null | undefined }) {
-  if (!warning && !note) return null
+type Text = string | null | undefined
+
+/** How current the data is, as a warning, and under it one or more quieter notes; nothing when all are empty. */
+export function Notes({ warning, note }: { warning: Text; note: Text | Text[] }) {
+  const notes = (Array.isArray(note) ? note : [note]).filter((text): text is string => Boolean(text))
+  if (!warning && !notes.length) return null
   return (
     <div className="notes">
       <Warning text={warning} />
-      {note && <p className="note">{note}</p>}
+      {notes.map((text) => <p key={text} className="note">{text}</p>)}
     </div>
   )
 }

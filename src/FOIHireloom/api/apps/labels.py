@@ -72,9 +72,14 @@ def sentence(text: str) -> str:
     return text[:1].upper() + text[1:]
 
 
+def date_label(value: date) -> str:
+    """"30. 10. 2026.", as the views write a day."""
+    return f"{value:%d. %m. %Y.}"
+
+
 def day(today: date, include_expired: bool) -> str:
     """Which jobs on which day: "aktivni oglasi na dan 30. 10. 2026.", or "svi oglasi …" with expired ones."""
-    return f"{'svi' if include_expired else 'aktivni'} oglasi na dan {today:%d. %m. %Y.}"
+    return f"{'svi' if include_expired else 'aktivni'} oglasi na dan {date_label(today)}"
 
 
 def active_filters(filters: JobSearchFiltersDTO | JobMarketFiltersDTO) -> tuple[ActiveFilterDTO, ...]:

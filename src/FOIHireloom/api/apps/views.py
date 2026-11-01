@@ -36,8 +36,9 @@ class AppView:
 
 JOBS_BY_COUNTY = AppView("jobs-by-county", "Chart page for show_jobs_by_county.")
 JOB_CARDS = AppView("job-cards", "Job card page for show_jobs.")
+JOB_COMPARISON = AppView("job-comparison", "Job comparison page for show_job_comparison.")
 
-VIEWS = (JOBS_BY_COUNTY, JOB_CARDS)
+VIEWS = (JOBS_BY_COUNTY, JOB_CARDS, JOB_COMPARISON)
 
 
 def stale_sources(frontend: Path = FRONTEND) -> list[str]:

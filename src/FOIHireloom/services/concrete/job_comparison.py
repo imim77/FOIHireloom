@@ -8,6 +8,7 @@ from FOIHireloom.dto.job_comparison import (
     ComparisonRowDTO,
     ConditionVerdict,
     JobComparisonInputDTO,
+    UnknownReason,
 )
 from FOIHireloom.dto.job_conditions import EducationLevel, JobConditionsDTO
 from FOIHireloom.dto.job_search import CandidateConditionsDTO
@@ -58,6 +59,14 @@ UNREAD_REASONS = {
     "unavailable": "HZZ did not return the job's page, so its conditions are unknown",
     "failed": "reading the job's HZZ page failed, so its conditions are unknown",
     "fetched": "the job's conditions are unknown",
+}
+# The unknown_reason code of every condition of a job whose page is not read, by its details_status. A fetched job
+# without stored conditions has not had its page read either.
+UNREAD_CODES: dict[str, UnknownReason] = {
+    "pending": "page_not_read",
+    "unavailable": "page_unavailable",
+    "failed": "page_failed",
+    "fetched": "page_not_read",
 }
 
 
@@ -123,9 +132,17 @@ class JobComparator:
 
     @staticmethod
     def _cell(job: JobComparisonInputDTO, value: str | None, evidence: str | None, verdict: ConditionVerdict | None,
-              reasons: Callable[[ConditionVerdict], str]) -> ComparisonCellDTO:
+              reasons: Callable[[ConditionVerdict], str], unknown: Callable[[], UnknownReason]) -> ComparisonCellDTO:
         return ComparisonCellDTO(job_id=job.summary.id, value=value, evidence=evidence, verdict=verdict,
-                                 reason=None if verdict is None else reasons(verdict))
+                                 reason=None if verdict is None else reasons(verdict),
+                                 unknown_reason=unknown() if value is None else None)
+
+    @staticmethod
+    def _unknown_code(job: JobComparisonInputDTO, field: str) -> UnknownReason:
+        """Why the job's value from the page field is unknown, as an unknown_reason code; see _unknown."""
+        if job.conditions is None:
+            return UNREAD_CODES[job.summary.details_status]
+        return "unreadable" if field in job.conditions.unrecognised else "not_stated"
 
     @staticmethod
     def _unknown(job: JobComparisonInputDTO, field: str, subject: str) -> str:
@@ -162,7 +179,8 @@ class JobComparator:
                     "the job asks for no experience"
             return f"the job asks for {_months(months)} of experience; you have {_months(have) if have else 'none'}"
 
-        return self._cell(job, value, self._evidence(job, "experience"), verdict, reasons)
+        return self._cell(job, value, self._evidence(job, "experience"), verdict, reasons,
+                          lambda: self._unknown_code(job, "experience"))
 
     def _education(
         self, job: JobComparisonInputDTO, verdict: ConditionVerdict | None, level: str | None,
@@ -177,7 +195,8 @@ class JobComparator:
                 return f"the job page lists {EDUCATION_NAMES[level]} among the accepted levels"
             return f"the job page asks for {value}, not {EDUCATION_NAMES[level]}"
 
-        return self._cell(job, value, self._evidence(job, "education"), verdict, reasons)
+        return self._cell(job, value, self._evidence(job, "education"), verdict, reasons,
+                          lambda: self._unknown_code(job, "education"))
 
     def _contract(
         self, job: JobComparisonInputDTO, verdict: ConditionVerdict | None, wanted: str | None,
@@ -186,17 +205,22 @@ class JobComparator:
         contract = None if conditions is None else conditions.contract
         value = None if contract is None else CONTRACT_NAMES[contract]
         evidence = self._evidence(job, "employment_type")
+        # The page states a type of employment it recognised, but no contract among it.
+        types_only = conditions is not None and bool(evidence) and "employment_type" not in conditions.unrecognised
 
         def reasons(verdict: ConditionVerdict) -> str:
             if verdict == "match":
                 return f"the job's contract is {value}, as you want"
             if verdict == "no_match":
                 return f"the job's contract is {value}; you want {CONTRACT_NAMES[wanted]}"
-            if conditions is not None and evidence and "employment_type" not in conditions.unrecognised:
+            if types_only:
                 return "the job page states the type of employment but not the contract"
             return self._unknown(job, "employment_type", "contract")
 
-        return self._cell(job, value, evidence, verdict, reasons)
+        def unknown() -> UnknownReason:
+            return "contract_not_stated" if types_only else self._unknown_code(job, "employment_type")
+
+        return self._cell(job, value, evidence, verdict, reasons, unknown)
 
     def _working_time(
         self, job: JobComparisonInputDTO, verdict: ConditionVerdict | None, wanted: bool | None,
@@ -214,7 +238,8 @@ class JobComparator:
                 return f"the job is {stated}, as you want"
             return f"the job is {stated}; you want {'full time' if wanted else 'part time'}"
 
-        return self._cell(job, value, self._evidence(job, "working_hours"), verdict, reasons)
+        return self._cell(job, value, self._evidence(job, "working_hours"), verdict, reasons,
+                          lambda: self._unknown_code(job, "working_hours"))
 
     def _accommodation(
         self, job: JobComparisonInputDTO, verdict: ConditionVerdict | None, wanted: bool | None,
@@ -231,7 +256,8 @@ class JobComparator:
             return "the job offers no accommodation, as you want" if verdict == "match" else \
                 f"the job offers {value}; you want a job without accommodation"
 
-        return self._cell(job, value, self._evidence(job, "accommodation"), verdict, reasons)
+        return self._cell(job, value, self._evidence(job, "accommodation"), verdict, reasons,
+                          lambda: self._unknown_code(job, "accommodation"))
 
     @staticmethod
     def _deadline(job: JobComparisonInputDTO, today: date) -> ComparisonCellDTO:
