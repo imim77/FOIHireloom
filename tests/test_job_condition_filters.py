@@ -1,12 +1,14 @@
+from collections import Counter
 from datetime import timedelta
 from typing import get_args
 from uuid import uuid4
 
 from pydantic import ValidationError
-from sqlalchemy import func, text
+from sqlalchemy import func, text, update
 
 from model_test_case import ModelTestCase
 
+from FOIHireloom.api.apps.jobs_by_county import MAX_TOP, jobs_by_county
 from FOIHireloom.dao.concrete.sqla_job import SqlAlchemyJobRepository
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.db.models.job import CONDITION_CODES
@@ -246,3 +248,111 @@ class JobConditionFilterTests(ModelTestCase):
                 for result in (cards, stats):
                     self.assertEqual((result.unknown_conditions, result.unknown_total),
                                      (everything.unknown_conditions, everything.unknown_total))
+
+    async def test_condition_filters_combine_with_expired_jobs_categories_and_counties(self) -> None:
+        # The expired job is permanent and full-time, but its page does not state the experience.
+        expired = await self.service.search(JobSearchFiltersDTO(**EXAMPLE, include_expired=True))
+        self.assertEqual([job.source_job_id for job in expired.jobs], ["trainee"])
+        self.assertEqual((expired.unknown_conditions, expired.unknown_total),
+                         ({"max_experience_months": 3, "contract": 2, "full_time": 1}, 4))
+        permanent = dict(county="varazdinska", contract="permanent", full_time=True)
+        self.assertEqual(set(await self.keys(**permanent)), {"trainee", "unstated"})
+        self.assertEqual(set(await self.keys(**permanent, include_expired=True)), {"trainee", "unstated", "expired"})
+
+        for category, keys in (("UGOSTITELJI, RADNICI U TURIZMU", ("trainee", "any", "year", "unread")),
+                               ("POMOĆNI RADNICI", ("senior",))):
+            await self.session.execute(update(Job).where(Job.id.in_([self.ids[key] for key in keys])).values(
+                category=category, category_source="description"))
+        await self.session.commit()
+        for filters, keys, unknown in (
+            ({"full_time": True}, {"trainee", "any", "year"}, ({"full_time": 1}, 1)),
+            # year needs a year of experience; the unread job is unknown for both filters and counts once.
+            ({"max_experience_months": 0, "contract": "permanent"}, {"trainee", "any"},
+             ({"max_experience_months": 1, "contract": 1}, 1)),
+            ({"place": "Pula", "county": "istarska"}, {"any"}, ({"place": 0}, 0)),
+        ):
+            with self.subTest(filters=filters):
+                page = await self.service.search(JobSearchFiltersDTO(category="ugostitelji, radnici u turizmu",
+                                                                     **filters))
+                self.assertEqual(({job.source_job_id for job in page.jobs}, (page.unknown_conditions,
+                                                                            page.unknown_total)), (keys, unknown))
+
+        for filters, keys, unknown in (
+            ({"county": "grad-zagreb", "place": "Zagreb"}, {"senior"}, ({"place": 0}, 0)),
+            ({"county": "istarska", "place": "Zagreb"}, set(), ({"place": 0}, 0)),
+            # The unstated job states no place; the expired one counts only with include_expired.
+            ({"county": "varazdinska", "place": "Varaždin"}, {"trainee", "unread"}, ({"place": 1}, 1)),
+            ({"county": "varazdinska", "place": "Varaždin", "include_expired": True},
+             {"trainee", "unread", "expired"}, ({"place": 1}, 1)),
+        ):
+            with self.subTest(filters=filters):
+                page = await self.service.search(JobSearchFiltersDTO(**filters))
+                self.assertEqual(({job.source_job_id for job in page.jobs}, (page.unknown_conditions,
+                                                                            page.unknown_total)), (keys, unknown))
+
+    async def test_county_breakdown_and_chart_count_the_jobs_search_finds(self) -> None:
+        for filters in ({}, {"full_time": True}, {"place": "Zagreb"}, EXAMPLE, {"education": "university"},
+                        {"accommodation": True, "include_expired": True}, {"contract": "other"}):
+            with self.subTest(filters=filters):
+                search = await self.service.search(JobSearchFiltersDTO(**filters))
+                market = JobMarketFiltersDTO(**filters)
+                stats = await self.service.market_stats(market)
+                chart = jobs_by_county(stats, MAX_TOP, market)
+                by_county = dict(Counter(job.county_code for job in search.jobs))
+                self.assertEqual({county.code: county.jobs for county in stats.counties}, by_county)
+                self.assertEqual({county.code: county.jobs for county in chart.counties}, by_county)
+                self.assertEqual((stats.jobs, chart.total_jobs), (len(search.jobs), len(search.jobs)))
+                self.assertEqual((chart.unknown_conditions, chart.unknown_total),
+                                 (search.unknown_conditions, search.unknown_total))
+                if filters == {"full_time": True}:
+                    self.assertEqual(by_county, {"varazdinska": 3, "istarska": 1, "grad-zagreb": 1})
+
+    async def test_a_cursor_from_other_filters_continues_after_its_job(self) -> None:
+        # A cursor holds only a position in the search order, not the filters that found it. With other
+        # condition filters it is valid and continues after that job, so their jobs ordered before it are left
+        # out; the unknown counts are those of the filters used.
+        first = await self.service.search(JobSearchFiltersDTO(full_time=True, limit=2))
+        self.assertEqual([job.source_job_id for job in first.jobs], ["year", "any"])
+        for filters, keys, unknown in (
+            ({"contract": "permanent"}, ["unstated", "trainee"], ({"contract": 3}, 3)),
+            ({"accommodation": True}, ["unstated"], ({"accommodation": 3}, 3)),
+            ({"contract": "fixed_term"}, [], ({"contract": 3}, 3)),
+        ):
+            with self.subTest(filters=filters):
+                for method in (self.service.search, self.service.search_cards):
+                    page = await method(JobSearchFiltersDTO(**filters, cursor=first.next_cursor))
+                    self.assertEqual([job.source_job_id for job in page.jobs], keys)
+                    self.assertEqual((page.next_cursor, page.unknown_conditions, page.unknown_total),
+                                     (None, *unknown))
+        # A cursor from a search with a query still needs a query, whatever the condition filters.
+        queried = await self.service.search(JobSearchFiltersDTO(query="posao", full_time=True, limit=1))
+        with self.assertRaises(InvalidJobSearchError):
+            await self.service.search(JobSearchFiltersDTO(full_time=True, cursor=queried.next_cursor))
+
+    async def test_a_job_accepting_several_levels_is_found_by_each_and_counted_once(self) -> None:
+        job = Job(provider="hzz", source_job_id="multi", canonical_url="https://example.com/multi",
+                  content_hash="multi", page_source_hash="multi", title="POSAO multi", page_status="fetched",
+                  page_checked_at=func.now(), page_fetched_at=func.now(), experience_months=0, trainee=False,
+                  full_time=True, education_levels=["secondary_4", "college", "university"], accommodation="none",
+                  employment_tags=["new_position"], page_work_place="ZAGREB-DUBRAVA, GRAD ZAGREB")
+        self.session.add(job)
+        await self.session.flush()
+        feed = await self.session.scalar(text("SELECT id FROM source_feeds WHERE label = 'grad-zagreb'"))
+        self.session.add(JobFeedMembership(job_id=job.id, feed_id=feed))
+        await self.session.commit()
+        self.ids["multi"] = job.id
+        for level, keys in (("secondary_4", {"multi"}), ("college", {"multi", "year"}),
+                            ("university", {"multi", "year", "senior"})):
+            with self.subTest(level=level):
+                filters = dict(county="grad-zagreb", education=level)
+                self.assertEqual(set(await self.keys(**filters)), keys)
+                stats = await self.service.market_stats(JobMarketFiltersDTO(**filters))
+                self.assertEqual(stats.jobs, len(keys))
+                # Its contract is unknown, so it is left out once, whichever of its levels matched.
+                page = await self.service.search(JobSearchFiltersDTO(**filters, contract="permanent"))
+                self.assertEqual((page.unknown_conditions, page.unknown_total), ({"education": 0, "contract": 1}, 1))
+        stats = await self.service.market_stats(JobMarketFiltersDTO(county="grad-zagreb", full_time=True))
+        self.assertEqual((stats.jobs, {item.name: item.jobs for item in stats.education_levels}),
+                         (2, {"university": 2, "college": 2, "secondary_4": 1}))
+        # "Zagreb" finds "ZAGREB-DUBRAVA".
+        self.assertEqual(set(await self.keys(place="Zagreb")), {"multi", "senior"})
