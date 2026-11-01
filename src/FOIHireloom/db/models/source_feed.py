@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Identity,
+    Integer,
     SmallInteger,
     Text,
     Uuid,
@@ -23,6 +24,11 @@ if TYPE_CHECKING:
     from .job_feed_membership import JobFeedMembership
     from .sync_run import SyncRun
 
+# County feeds place a job in a county; occupation feeds only add an HZZ
+# occupation group to jobs already known from county feeds. Legacy EU rows
+# are kept but never synced.
+SYNCED_SCOPES = ("county", "occupation")
+
 
 class SourceFeed(Base):
     __tablename__ = "source_feeds"
@@ -31,13 +37,29 @@ class SourceFeed(Base):
         CheckConstraint("length(btrim(feed_url)) > 0", name="url_not_blank"),
         CheckConstraint(
             "(scope = 'county' AND county_id IS NOT NULL) OR "
-            "(scope = 'eu' AND county_id IS NULL)",
+            "(scope IN ('occupation', 'eu') AND county_id IS NULL)",
             name="scope_matches_county",
         ),
         CheckConstraint(
             "last_success_at IS NULL OR "
             "(last_checked_at IS NOT NULL AND last_success_at <= last_checked_at)",
             name="success_not_after_check",
+        ),
+        CheckConstraint(
+            "(mapping_status IS NULL AND mapped_category IS NULL AND mapping_matching_examples IS NULL "
+            "AND mapping_contradicting_examples IS NULL AND mapping_verified_at IS NULL) OR "
+            "(scope = 'occupation' AND mapping_status IS NOT NULL AND mapping_matching_examples IS NOT NULL "
+            "AND mapping_contradicting_examples IS NOT NULL AND mapping_verified_at IS NOT NULL)",
+            name="mapping_verified_for_occupation",
+        ),
+        CheckConstraint(
+            "mapping_status IN ('confirmed', 'too_few_examples', 'contradicted') "
+            "AND mapping_matching_examples >= 0 "
+            "AND mapping_contradicting_examples >= 0 "
+            "AND (mapped_category IS NULL) = (mapping_matching_examples = 0) "
+            "AND (mapping_status = 'contradicted') = (mapping_contradicting_examples > 0) "
+            "AND (mapping_status <> 'confirmed' OR mapping_matching_examples > 0)",
+            name="mapping_evidence_consistent",
         ),
     )
 
@@ -55,6 +77,14 @@ class SourceFeed(Base):
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_content_change_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # An occupation feed's category, checked against the explicit categories of
+    # its own jobs because CKAN labels name the wrong group. Only a confirmed
+    # mapping may fill in categories that job descriptions leave out.
+    mapped_category: Mapped[str | None] = mapped_column(Text)
+    mapping_status: Mapped[str | None] = mapped_column(Text)
+    mapping_matching_examples: Mapped[int | None] = mapped_column(Integer)
+    mapping_contradicting_examples: Mapped[int | None] = mapped_column(Integer)
+    mapping_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     county: Mapped["County | None"] = relationship(
         back_populates="source_feeds", lazy="raise"

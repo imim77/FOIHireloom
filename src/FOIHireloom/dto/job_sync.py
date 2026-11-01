@@ -1,12 +1,31 @@
 from datetime import datetime
 
 from .base import ModelConfigBaseModel
+from .source_feed import FeedCategoryMappingDTO
 
 
 class JobSnapshotDTO(ModelConfigBaseModel):
     id: int
     source_job_id: str
     content_hash: str
+
+
+class CategoryEvidenceDTO(ModelConfigBaseModel):
+    """A job without a description category and the confirmed mappings of
+    the occupation feeds that list or have listed it, as (feed ID, category).
+
+    category and category_feed_id are its current filled-in value, if any.
+    """
+
+    job_id: int
+    category: str | None
+    category_feed_id: int | None
+    mappings: tuple[tuple[int, str], ...]
+
+
+class FilledCategoryDTO(ModelConfigBaseModel):
+    category: str
+    feed_id: int
 
 
 class MembershipSnapshotDTO(ModelConfigBaseModel):
@@ -38,6 +57,15 @@ class SyncRunOutcomeDTO(ModelConfigBaseModel):
 
 
 class FeedSyncResultDTO(ModelConfigBaseModel):
+    """items_unlinked counts an occupation feed's jobs that no county feed has imported.
+
+    category_mapping is the occupation feed's mapping verified by this download.
+    categories_filled counts its jobs whose category was filled in or changed
+    from feed mappings, categories_cleared those whose filled-in category no
+    mapping supports any more, and categories_conflicting those left without
+    a category because confirmed mappings of their feeds disagree.
+    """
+
     feed_id: int
     label: str
     status: str
@@ -49,6 +77,11 @@ class FeedSyncResultDTO(ModelConfigBaseModel):
     items_missing: int = 0
     items_returned: int = 0
     items_invalid: int = 0
+    items_unlinked: int = 0
+    category_mapping: FeedCategoryMappingDTO | None = None
+    categories_filled: int = 0
+    categories_cleared: int = 0
+    categories_conflicting: int = 0
     error: str | None = None
 
 

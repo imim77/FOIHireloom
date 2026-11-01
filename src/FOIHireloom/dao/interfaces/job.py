@@ -4,12 +4,14 @@ from datetime import date, datetime
 from typing import NamedTuple
 
 from FOIHireloom.db.models import Job
+from FOIHireloom.dto.category_snapshot import CategoryInputDTO
 from FOIHireloom.dto.hzz_job_page import ParsedJobPageDTO
 from FOIHireloom.dto.job import ParsedJobDTO
+from FOIHireloom.dto.job_conditions import JobConditionsDTO, JobConditionsInputDTO
 from FOIHireloom.dto.job_market import JobMarketAggregatesDTO, JobMarketCriteriaDTO
 from FOIHireloom.dto.job_page import JobPageTargetDTO
-from FOIHireloom.dto.job_search import CategoryDTO, JobSearchCriteriaDTO
-from FOIHireloom.dto.job_sync import JobSnapshotDTO
+from FOIHireloom.dto.job_search import CategoryDTO, JobFilterCriteriaDTO, JobSearchCriteriaDTO, UnknownConditionsDTO
+from FOIHireloom.dto.job_sync import CategoryEvidenceDTO, FilledCategoryDTO, JobSnapshotDTO
 
 
 class JobSearchHit(NamedTuple):
@@ -46,6 +48,15 @@ class JobRepository(ABC):
         """
 
     @abstractmethod
+    async def count_unknown_conditions(self, criteria: JobFilterCriteriaDTO) -> UnknownConditionsDTO:
+        """Count the listed jobs the condition filters of criteria left out only for unknown values.
+
+        Such a job matches every other criterion, and each condition filter
+        either matches it or its value is unknown. by_filter counts them per
+        filter whose value is unknown; total counts each job once.
+        """
+
+    @abstractmethod
     async def market_aggregates(self, criteria: JobMarketCriteriaDTO) -> JobMarketAggregatesDTO:
         """Count the listed jobs matching criteria, as search() would find them, by county and other fields."""
 
@@ -70,19 +81,46 @@ class JobRepository(ABC):
 
     @abstractmethod
     async def create_many(self, provider: str, jobs: Sequence[ParsedJobDTO], seen_at: datetime) -> dict[str, int]:
-        """Insert first-seen jobs and flush; return database IDs by source job ID."""
+        """Insert first-seen jobs and flush; return database IDs by source job ID.
+
+        A category is recorded as coming from the job's description.
+        """
 
     @abstractmethod
     async def update_content(self, jobs: Mapping[int, ParsedJobDTO], seen_at: datetime) -> None:
         """Replace the published content of these jobs, keyed by database ID.
 
         Marks them seen and changed at seen_at; availability and employer
-        links are left alone.
+        links are left alone. A category in the new content replaces the
+        stored one, including one filled in from a feed; content without a
+        category keeps the stored category and its source.
         """
 
     @abstractmethod
     async def mark_seen(self, job_ids: Collection[int], seen_at: datetime) -> None:
         """Record that these jobs were still published at seen_at."""
+
+    @abstractmethod
+    async def list_category_evidence(self, feed_id: int) -> list[CategoryEvidenceDTO]:
+        """Return evidence for every job this feed lists or has listed that has
+        no category from its own description, ordered by job ID.
+
+        Each job's mappings come from all its occupation feeds, not only this one.
+        """
+
+    @abstractmethod
+    async def list_category_inputs(self) -> list[CategoryInputDTO]:
+        """Return the category fill's inputs and stored result for every listed job, ordered by job ID.
+
+        Occupation feed IDs cover every presence and are ascending.
+        """
+
+    @abstractmethod
+    async def set_feed_categories(self, categories: Mapping[int, FilledCategoryDTO | None]) -> None:
+        """Store filled-in categories by job ID; None clears one.
+
+        Jobs whose category comes from their description are left alone.
+        """
 
     @abstractmethod
     async def list_page_candidates(self, retry_before: datetime, limit: int) -> list[JobPageTargetDTO]:
@@ -97,9 +135,23 @@ class JobRepository(ABC):
         """Count the listed jobs whose detail page is due, as list_page_candidates defines it."""
 
     @abstractmethod
-    async def record_page(self, job_id: int, page: ParsedJobPageDTO, source_hash: str, checked_at: datetime) -> None:
-        """Store a fetched detail page for the feed content with source_hash."""
+    async def record_page(
+        self, job_id: int, page: ParsedJobPageDTO, conditions: JobConditionsDTO, source_hash: str, checked_at: datetime,
+    ) -> None:
+        """Store a fetched detail page and its normalised conditions for the feed content with source_hash."""
 
     @abstractmethod
     async def record_page_problem(self, job_id: int, status: str, error: str, checked_at: datetime) -> None:
-        """Mark a detail page check 'unavailable' or 'failed'; earlier fetched values stay."""
+        """Mark a detail page check 'unavailable' or 'failed'; earlier fetched and normalised values stay."""
+
+    @abstractmethod
+    async def list_condition_inputs(self) -> list[JobConditionsInputDTO]:
+        """Return the raw and stored conditions of every job with a fetched page, ordered by ID.
+
+        The jobs stay locked until the caller's transaction ends, so a page
+        stored meanwhile is not overwritten with conditions of its older values.
+        """
+
+    @abstractmethod
+    async def set_conditions(self, conditions: Mapping[int, JobConditionsDTO]) -> None:
+        """Replace the stored normalised conditions by job ID; the page's raw values are left alone."""

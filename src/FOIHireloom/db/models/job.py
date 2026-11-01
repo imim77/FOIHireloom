@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Computed,
     Date,
@@ -41,6 +42,34 @@ SEARCH_DOCUMENT = (
     "coalesce(page_work_place, '') || ' ' || coalesce(page_education, ''), "
     f"'{SEARCH_FOLD_FROM}', '{SEARCH_FOLD_TO}'))"
 )
+# Codes JobConditionsNormalizer stores, by column; a new code needs a
+# migration. conditions_unrecognised names RawJobConditionsDTO fields.
+CONDITION_CODES = {
+    "contract": ("permanent", "fixed_term", "other"),
+    "employment_tags": ("new_position", "vacancy", "replacement", "increased_workload", "seasonal", "reappointment",
+                        "trainee", "retirees", "disability"),
+    "education_levels": ("primary_lower", "primary", "secondary_3", "secondary_4", "college", "university"),
+    "accommodation": ("none", "shared", "single", "family"),
+    "schedule_tags": ("morning", "afternoon", "two_shifts", "three_shifts", "split", "night", "weekends_holidays"),
+    "transport_allowance": ("full", "partial", "none"),
+    "conditions_unrecognised": ("experience", "employment_type", "working_hours", "education", "accommodation",
+                                "work_schedule", "transport_allowance"),
+}
+CONDITION_LISTS = ("employment_tags", "education_levels", "schedule_tags", "conditions_unrecognised")
+
+
+def quoted(codes: tuple[str, ...]) -> str:
+    return ", ".join(f"'{code}'" for code in codes)
+
+
+CONDITIONS_KNOWN = " AND ".join(
+    f"{column} <@ ARRAY[{quoted(codes)}]::text[]" if column in CONDITION_LISTS else f"{column} IN ({quoted(codes)})"
+    for column, codes in CONDITION_CODES.items()
+)
+CONDITION_COLUMNS = (
+    "experience_months", "trainee", "contract", "employment_tags", "full_time", "weekly_hours", "education_levels",
+    "accommodation", "schedule_tags", "transport_allowance",
+)
 
 if TYPE_CHECKING:
     from .employer import Employer
@@ -67,6 +96,12 @@ class Job(Base):
         ),
         CheckConstraint("first_seen_at <= last_seen_at", name="observation_times_ordered"),
         CheckConstraint(
+            "(category IS NULL) = (category_source IS NULL) "
+            "AND (coalesce(category_source, '') = 'feed') = (category_feed_id IS NOT NULL) "
+            "AND coalesce(category_source, 'description') IN ('description', 'feed')",
+            name="category_source_recorded",
+        ),
+        CheckConstraint(
             "content_changed_at BETWEEN first_seen_at AND last_seen_at",
             name="content_change_within_observation",
         ),
@@ -78,6 +113,18 @@ class Job(Base):
         CheckConstraint(
             "page_status <> 'fetched' OR (page_fetched_at IS NOT NULL AND page_source_hash IS NOT NULL)",
             name="page_fetch_recorded",
+        ),
+        CheckConstraint(CONDITIONS_KNOWN, name="conditions_known"),
+        CheckConstraint(
+            "(experience_months IS NULL) = (trainee IS NULL) AND experience_months >= 0 "
+            "AND (NOT trainee OR experience_months = 0)",
+            name="experience_consistent",
+        ),
+        CheckConstraint("weekly_hours > 0", name="weekly_hours_positive"),
+        CheckConstraint(
+            f"page_fetched_at IS NOT NULL OR (num_nonnulls({', '.join(CONDITION_COLUMNS)}) = 0 "
+            "AND conditions_unrecognised = '{}')",
+            name="conditions_need_page",
         ),
     )
 
@@ -94,6 +141,13 @@ class Job(Base):
     published_on: Mapped[date | None] = mapped_column(Date, index=True)
     deadline_on: Mapped[date | None] = mapped_column(Date, index=True)
     category: Mapped[str | None] = mapped_column(Text, index=True)
+    # 'description' when the job's own description names the category, 'feed'
+    # when it was filled in from category_feed_id's confirmed mapping. A
+    # description category always replaces a filled-in one.
+    category_source: Mapped[str | None] = mapped_column(Text)
+    category_feed_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("source_feeds.id", ondelete="RESTRICT"), index=True
+    )
     location_text: Mapped[str | None] = mapped_column(Text)
     municipality: Mapped[str | None] = mapped_column(Text)
     availability_status: Mapped[str] = mapped_column(
@@ -130,6 +184,22 @@ class Job(Base):
     page_experience: Mapped[str | None] = mapped_column(Text)
     page_description_text: Mapped[str | None] = mapped_column(Text)
     page_employer_name: Mapped[str | None] = mapped_column(Text)
+    # The page's conditions as JobConditionsNormalizer codes, stored with the
+    # page; None is unknown. conditions_unrecognised names the page fields
+    # whose value was not recognised.
+    experience_months: Mapped[int | None] = mapped_column(Integer)
+    trainee: Mapped[bool | None] = mapped_column(Boolean)
+    contract: Mapped[str | None] = mapped_column(Text)
+    employment_tags: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
+    full_time: Mapped[bool | None] = mapped_column(Boolean)
+    weekly_hours: Mapped[int | None] = mapped_column(Integer)
+    education_levels: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
+    accommodation: Mapped[str | None] = mapped_column(Text)
+    schedule_tags: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
+    transport_allowance: Mapped[str | None] = mapped_column(Text)
+    conditions_unrecognised: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=list, server_default=text("'{}'::text[]")
+    )
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     content_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

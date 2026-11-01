@@ -1,13 +1,15 @@
 from collections.abc import Collection, Mapping, Sequence
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import CTE, ColumnElement, and_, func, not_, or_, select, update
+from sqlalchemy import CTE, ColumnElement, Text, and_, bindparam, case, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
-from FOIHireloom.db.models.job import SEARCH_TITLE_WEIGHT
+from FOIHireloom.db.models.job import SEARCH_FOLD_FROM, SEARCH_FOLD_TO, SEARCH_TITLE_WEIGHT
+from FOIHireloom.dto.category_snapshot import CategoryInputDTO
 from FOIHireloom.dto.hzz_job_page import ParsedJobPageDTO
 from FOIHireloom.dto.job import ParsedJobDTO
+from FOIHireloom.dto.job_conditions import JobConditionsDTO, JobConditionsInputDTO, RawJobConditionsDTO
 from FOIHireloom.dto.job_market import (
     MARKET_WINDOW_DAYS,
     CountyMarketCountDTO,
@@ -16,9 +18,32 @@ from FOIHireloom.dto.job_market import (
     MarketCountDTO,
 )
 from FOIHireloom.dto.job_page import JobPageTargetDTO
-from FOIHireloom.dto.job_search import CategoryDTO, JobFilterCriteriaDTO, JobSearchCriteriaDTO
-from FOIHireloom.dto.job_sync import JobSnapshotDTO
+from FOIHireloom.dto.job_search import (
+    CategoryDTO,
+    JobConditionFiltersDTO,
+    JobFilterCriteriaDTO,
+    JobSearchCriteriaDTO,
+    UnknownConditionsDTO,
+)
+from FOIHireloom.dto.job_sync import CategoryEvidenceDTO, FilledCategoryDTO, JobSnapshotDTO
 from FOIHireloom.dao.interfaces.job import JobRepository, JobSearchHit
+
+# Columns by JobConditionsDTO field, and the page columns by RawJobConditionsDTO field.
+STORED_CONDITIONS = {
+    name: getattr(Job, "conditions_unrecognised" if name == "unrecognised" else name)
+    for name in JobConditionsDTO.model_fields
+}
+PAGE_CONDITIONS = {name: getattr(Job, f"page_{name}") for name in RawJobConditionsDTO.model_fields}
+# When a job's value for each JobConditionFiltersDTO filter is unknown.
+UNKNOWN_CONDITIONS = {
+    "max_experience_months": Job.experience_months.is_(None),
+    "contract": Job.contract.is_(None),
+    "full_time": Job.full_time.is_(None),
+    "education": Job.education_levels.is_(None),
+    "accommodation": Job.accommodation.is_(None),
+    "employment_tags": Job.employment_tags.is_(None),
+    "place": and_(Job.page_work_place.is_(None), Job.municipality.is_(None)),
+}
 
 
 class SqlAlchemyJobRepository(JobRepository):
@@ -66,36 +91,66 @@ class SqlAlchemyJobRepository(JobRepository):
         statement = statement.order_by(*order).limit(criteria.limit)
         return [JobSearchHit(job, title_match) for job, title_match in await self._session.execute(statement)]
 
+    async def count_unknown_conditions(self, criteria: JobFilterCriteriaDTO) -> UnknownConditionsDTO:
+        conditions = condition_filters(criteria)
+        if not conditions:
+            return UnknownConditionsDTO()
+        # A job could match a filter when it matches it or its value is unknown.
+        possible = {name: or_(condition, UNKNOWN_CONDITIONS[name]) for name, condition in conditions.items()}
+        counts = [
+            func.count().filter(UNKNOWN_CONDITIONS[name], *(other for key, other in possible.items() if key != name))
+            for name in conditions
+        ]
+        total = func.count().filter(*possible.values(), or_(*(UNKNOWN_CONDITIONS[name] for name in conditions)))
+        # Every criterion but the condition filters, as search applies it.
+        others = filter_conditions(criteria.model_copy(update=dict.fromkeys(conditions)))
+        *by_filter, total = (await self._session.execute(select(*counts, total).select_from(Job).where(*others))).one()
+        return UnknownConditionsDTO(by_filter=dict(zip(conditions, by_filter)), total=total)
+
     async def market_aggregates(self, criteria: JobMarketCriteriaDTO) -> JobMarketAggregatesDTO:
         found = (
             select(
-                Job.id, Job.category, Job.published_on, effective_deadline().label("deadline"), Job.page_fetched_at,
-                Job.page_workers_needed.label("workers"), Job.page_employer_name, Job.page_employment_type,
-                Job.page_working_hours, Job.page_education, Job.page_experience, Job.page_accommodation,
+                Job.id, Job.category, Job.category_source, Job.published_on, effective_deadline().label("deadline"),
+                Job.page_fetched_at, Job.page_workers_needed.label("workers"), Job.page_employer_name, Job.contract,
+                Job.employment_tags, Job.full_time, Job.experience_months, Job.education_levels, Job.accommodation,
+                Job.schedule_tags, Job.transport_allowance,
             )
             .where(*filter_conditions(criteria))
             .cte("found")
+        )
+        # Without an else, an unknown value stays NULL and is left out.
+        working_time = case((found.c.full_time, "full_time"), (not_(found.c.full_time), "part_time"))
+        experience_band = case(
+            (found.c.experience_months == 0, "none"),
+            (found.c.experience_months <= 12, "1_to_12_months"),
+            (found.c.experience_months <= 36, "13_to_36_months"),
+            (found.c.experience_months > 36, "over_36_months"),
         )
         window_end = criteria.today + timedelta(days=MARKET_WINDOW_DAYS - 1)
         totals = (await self._session.execute(select(
             func.count(),
             func.count().filter(found.c.page_fetched_at.is_not(None)),
-            func.count().filter(found.c.category.is_not(None)),
+            func.count().filter(found.c.category_source == "description"),
+            func.count().filter(found.c.category_source == "feed"),
             func.coalesce(func.sum(found.c.workers), 0),
             func.count().filter(found.c.published_on > criteria.today - timedelta(days=MARKET_WINDOW_DAYS)),
             func.count().filter(found.c.deadline.between(criteria.today, window_end)),
         ))).one()
         return JobMarketAggregatesDTO(
-            jobs=totals[0], with_details=totals[1], with_category=totals[2], workers_needed=totals[3],
-            published_recently=totals[4], closing_soon=totals[5],
+            jobs=totals[0], with_details=totals[1], with_category=totals[2] + totals[3],
+            category_from_description=totals[2], category_from_feed=totals[3], workers_needed=totals[4],
+            published_recently=totals[5], closing_soon=totals[6],
             counties=await self._county_counts(found),
             categories=await self._value_counts(found, found.c.category),
             employers=await self._value_counts(found, found.c.page_employer_name, criteria.top),
-            employment_types=await self._value_counts(found, found.c.page_employment_type, listed=True),
-            working_hours=await self._value_counts(found, found.c.page_working_hours, criteria.top),
-            education=await self._value_counts(found, found.c.page_education, listed=True),
-            experience=await self._value_counts(found, found.c.page_experience, criteria.top),
-            accommodation=await self._value_counts(found, found.c.page_accommodation),
+            contracts=await self._value_counts(found, found.c.contract),
+            employment_tags=await self._value_counts(found, func.unnest(found.c.employment_tags)),
+            working_time=await self._value_counts(found, working_time),
+            experience_bands=await self._value_counts(found, experience_band),
+            education_levels=await self._value_counts(found, func.unnest(found.c.education_levels)),
+            accommodation=await self._value_counts(found, found.c.accommodation),
+            schedule_tags=await self._value_counts(found, func.unnest(found.c.schedule_tags)),
+            transport_allowance=await self._value_counts(found, found.c.transport_allowance),
         )
 
     async def _county_counts(self, found: CTE) -> tuple[CountyMarketCountDTO, ...]:
@@ -120,10 +175,9 @@ class SqlAlchemyJobRepository(JobRepository):
         return tuple(CountyMarketCountDTO.model_validate(row) for row in (await self._session.execute(statement)).all())
 
     async def _value_counts(
-        self, found: CTE, column: ColumnElement[str | None], limit: int | None = None, listed: bool = False,
+        self, found: CTE, value: ColumnElement[str | None], limit: int | None = None,
     ) -> tuple[MarketCountDTO, ...]:
-        """Jobs per value, most common first; listed values are the "; "-joined items the page parser stores."""
-        value = func.unnest(func.string_to_array(column, "; ")) if listed else column
+        """Jobs per value, most common first; with unnest() of an array a job counts once per item."""
         values = select(found.c.id, value.label("name"), found.c.workers).distinct().subquery()
         jobs = func.count().label("jobs")
         statement = (
@@ -170,17 +224,82 @@ class SqlAlchemyJobRepository(JobRepository):
         return {entity.source_job_id: entity.id for entity in entities}
 
     async def update_content(self, jobs: Mapping[int, ParsedJobDTO], seen_at: datetime) -> None:
-        if jobs:
-            await self._session.execute(update(Job), [
-                {"id": job_id, **self._content(job), "last_seen_at": seen_at,
-                 "content_changed_at": seen_at}
-                for job_id, job in jobs.items()
-            ])
+        # Rows that keep their category have fewer columns, so each kind is
+        # sent as its own batch.
+        for has_category in (True, False):
+            rows = [
+                {"id": job_id, **self._content(job), "last_seen_at": seen_at, "content_changed_at": seen_at}
+                for job_id, job in jobs.items() if bool(job.category) == has_category
+            ]
+            if rows:
+                await self._session.execute(update(Job), rows)
 
     async def mark_seen(self, job_ids: Collection[int], seen_at: datetime) -> None:
         if job_ids:
             await self._session.execute(
                 update(Job).where(Job.id.in_(job_ids)).values(last_seen_at=seen_at)
+            )
+
+    async def list_category_evidence(self, feed_id: int) -> list[CategoryEvidenceDTO]:
+        in_feed = select(JobFeedMembership.job_id).where(JobFeedMembership.feed_id == feed_id)
+        confirmed = (
+            select(JobFeedMembership.job_id, SourceFeed.id.label("feed_id"), SourceFeed.mapped_category)
+            .join(SourceFeed)
+            .where(SourceFeed.scope == "occupation", SourceFeed.mapping_status == "confirmed")
+            .subquery()
+        )
+        statement = (
+            select(Job.id, Job.category, Job.category_feed_id, confirmed.c.feed_id, confirmed.c.mapped_category)
+            .outerjoin(confirmed, confirmed.c.job_id == Job.id)
+            .where(Job.id.in_(in_feed), Job.category_source.is_distinct_from("description"))
+            .order_by(Job.id, confirmed.c.feed_id)
+        )
+        evidence: dict[int, CategoryEvidenceDTO] = {}
+        for job_id, category, category_feed_id, mapped_feed_id, mapped_category in await self._session.execute(statement):
+            known = evidence.get(job_id) or CategoryEvidenceDTO(
+                job_id=job_id, category=category, category_feed_id=category_feed_id, mappings=(),
+            )
+            if mapped_feed_id is not None:
+                known = known.model_copy(update={"mappings": (*known.mappings, (mapped_feed_id, mapped_category))})
+            evidence[job_id] = known
+        return list(evidence.values())
+
+    async def list_category_inputs(self) -> list[CategoryInputDTO]:
+        # ARRAY(subquery) gives jobs without occupation feeds an empty array.
+        feed_ids = func.array(
+            select(JobFeedMembership.feed_id)
+            .join(SourceFeed)
+            .where(JobFeedMembership.job_id == Job.id, SourceFeed.scope == "occupation")
+            .order_by(JobFeedMembership.feed_id)
+            .scalar_subquery()
+        )
+        statement = (
+            select(
+                Job.source_job_id,
+                case((Job.category_source == "description", Job.category)).label("description_category"),
+                feed_ids.label("occupation_feed_ids"), Job.category, Job.category_source, Job.category_feed_id,
+            )
+            .where(listed_condition())
+            .order_by(Job.id)
+        )
+        result = await self._session.execute(statement)
+        return [CategoryInputDTO.model_validate(row) for row in result.all()]
+
+    async def set_feed_categories(self, categories: Mapping[int, FilledCategoryDTO | None]) -> None:
+        rows = [
+            {"job_id": job_id, "new_category": filled.category if filled else None,
+             "new_source": "feed" if filled else None, "new_feed_id": filled.feed_id if filled else None}
+            for job_id, filled in categories.items()
+        ]
+        if rows:
+            # A Core update, so the extra WHERE works for every row of the batch.
+            jobs = Job.__table__
+            await self._session.execute(
+                update(jobs)
+                .where(jobs.c.id == bindparam("job_id"), jobs.c.category_source.is_distinct_from("description"))
+                .values(category=bindparam("new_category"), category_source=bindparam("new_source"),
+                        category_feed_id=bindparam("new_feed_id")),
+                rows,
             )
 
     async def list_page_candidates(self, retry_before: datetime, limit: int) -> list[JobPageTargetDTO]:
@@ -197,11 +316,13 @@ class SqlAlchemyJobRepository(JobRepository):
         statement = select(func.count()).select_from(Job).where(listed_condition(), page_due_condition(retry_before))
         return await self._session.scalar(statement)
 
-    async def record_page(self, job_id: int, page: ParsedJobPageDTO, source_hash: str, checked_at: datetime) -> None:
+    async def record_page(
+        self, job_id: int, page: ParsedJobPageDTO, conditions: JobConditionsDTO, source_hash: str, checked_at: datetime,
+    ) -> None:
         await self._session.execute(update(Job).where(Job.id == job_id).values(
             page_status="fetched", page_checked_at=checked_at, page_fetched_at=checked_at,
             page_source_hash=source_hash, page_error=None,
-            **{f"page_{name}": value for name, value in page.model_dump().items()},
+            **{f"page_{name}": value for name, value in page.model_dump().items()}, **self._conditions(conditions),
         ))
 
     async def record_page_problem(self, job_id: int, status: str, error: str, checked_at: datetime) -> None:
@@ -211,9 +332,40 @@ class SqlAlchemyJobRepository(JobRepository):
             page_status=status, page_checked_at=checked_at, page_error=error,
         ))
 
+    async def list_condition_inputs(self) -> list[JobConditionsInputDTO]:
+        statement = (
+            select(Job.id, *PAGE_CONDITIONS.values(), *STORED_CONDITIONS.values())
+            .where(Job.page_fetched_at.is_not(None))
+            .order_by(Job.id)
+            .with_for_update()
+        )
+        result = await self._session.execute(statement)
+        return [
+            JobConditionsInputDTO(
+                job_id=row[Job.id],
+                raw=RawJobConditionsDTO(**{name: row[column] for name, column in PAGE_CONDITIONS.items()}),
+                stored=JobConditionsDTO(**{name: row[column] for name, column in STORED_CONDITIONS.items()}),
+            )
+            for row in result.mappings()
+        ]
+
+    async def set_conditions(self, conditions: Mapping[int, JobConditionsDTO]) -> None:
+        rows = [{"id": job_id, **self._conditions(values)} for job_id, values in conditions.items()]
+        if rows:
+            await self._session.execute(update(Job), rows)
+
+    @staticmethod
+    def _conditions(conditions: JobConditionsDTO) -> dict[str, object]:
+        """Column values for normalised conditions, with tuples as lists for the array columns."""
+        return {STORED_CONDITIONS[name].key: value for name, value in conditions.model_dump(mode="json").items()}
+
     @staticmethod
     def _content(job: ParsedJobDTO) -> dict[str, object]:
-        return job.model_dump() | {"quality_flags": list(job.quality_flags)}
+        """Column values for a parsed job; without a category, the stored one is kept."""
+        content = job.model_dump(exclude={"category"}) | {"quality_flags": list(job.quality_flags)}
+        if job.category:
+            content |= {"category": job.category, "category_source": "description", "category_feed_id": None}
+        return content
 
 
 def listed_condition(county_id: int | None = None) -> ColumnElement[bool]:
@@ -247,7 +399,41 @@ def filter_conditions(criteria: JobFilterCriteriaDTO) -> list[ColumnElement[bool
         conditions.append(func.upper(Job.category) == func.upper(criteria.category))
     if criteria.open_on is not None:
         conditions.append(open_condition(criteria.open_on))
+    return [*conditions, *condition_filters(criteria).values()]
+
+
+def condition_filters(criteria: JobConditionFiltersDTO) -> dict[str, ColumnElement[bool]]:
+    """Conditions for the condition filters that criteria sets, by filter name.
+
+    An unknown value is NULL and a comparison with NULL is never true, so a
+    job whose value is unknown matches none of them.
+    """
+    conditions: dict[str, ColumnElement[bool]] = {}
+    if criteria.max_experience_months is not None:
+        conditions["max_experience_months"] = Job.experience_months <= criteria.max_experience_months
+    if criteria.contract is not None:
+        conditions["contract"] = Job.contract == criteria.contract
+    if criteria.full_time is not None:
+        conditions["full_time"] = Job.full_time == criteria.full_time
+    if criteria.education is not None:
+        conditions["education"] = Job.education_levels.contains([criteria.education])
+    if criteria.accommodation is not None:
+        offered = Job.accommodation != "none"
+        conditions["accommodation"] = offered if criteria.accommodation else not_(offered)
+    if criteria.employment_tags is not None:
+        conditions["employment_tags"] = Job.employment_tags.contains(list(criteria.employment_tags))
+    if criteria.place is not None:
+        pattern = f"% {criteria.place} %"
+        # The page names the county after a comma: "VARAŽDIN, VARAŽDINSKA ŽUPANIJA".
+        conditions["place"] = or_(place_words(func.split_part(Job.page_work_place, ",", 1)).like(pattern),
+                                  place_words(Job.municipality).like(pattern))
     return conditions
+
+
+def place_words(place: ColumnElement[str | None]) -> ColumnElement[str | None]:
+    """The place's words folded as the search vector folds them, lowercase and each between spaces."""
+    folded = func.lower(func.translate(place, SEARCH_FOLD_FROM, SEARCH_FOLD_TO))
+    return " " + func.regexp_replace(folded, "[^[:alnum:]]+", " ", "g", type_=Text) + " "
 
 
 def effective_deadline() -> ColumnElement[date]:

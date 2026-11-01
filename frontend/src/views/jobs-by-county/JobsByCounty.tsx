@@ -1,4 +1,4 @@
-import { Card, ExpandButton, Warning } from '../../shared/Card'
+import { Card, ExpandButton, Notes } from '../../shared/Card'
 import { formatAds, formatWorkers } from '../../shared/format'
 import { useExpanded, useMcpApp } from '../../shared/mcp'
 import { CountyColumns } from './CountyColumns'
@@ -25,7 +25,7 @@ export function JobsByCounty() {
   return (
     <Card title={data.title} description={data.description}
       actions={(expanded || all.length > data.top) && <ExpandButton expanded={expanded} label={label} onClick={toggle} />}>
-      <Warning text={data.coverage?.warning} />
+      <Notes warning={data.coverage_note} note={data.unknown_note} />
       {counties.length ? (
         <>
           <CountyColumns counties={counties} metric={metric} />

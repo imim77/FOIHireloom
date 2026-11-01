@@ -22,6 +22,9 @@ export function sample(): JobsByCountyData {
   const data: JobsByCountyData = {
     metric: 'jobs', title: 'Broj oglasa po županijama', description: 'Pregled s probnim podacima',
     total_jobs: 7676, total_workers_needed: 15922, top: 7, counties, coverage: { warning: null },
+    active_filters: [{ argument: 'full_time', label: 'puno radno vrijeme' }],
+    coverage_note: 'Ličko-senjska županija: podaci su stariji od 6 sati, pa rezultat možda nije potpun.',
+    unknown_note: 'Još 312 oglasa možda odgovara, ali im nije poznato: radno vrijeme (312).',
   }
   if (new URLSearchParams(location.search).get('metric') === 'workers_needed') {
     data.metric = 'workers_needed'

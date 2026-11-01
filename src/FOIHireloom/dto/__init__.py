@@ -1,9 +1,11 @@
 from .base import ModelConfigBaseModel
+from .category_snapshot import CategoryCoverageDTO, CategoryInputDTO, CategorySnapshotDTO, CategorySnapshotFeedDTO
 from .ckan import CkanPackage, CkanResource
 from .county import CountyDefinitionDTO, CountyDTO
 from .hzz_feed import FeedResponseDTO
 from .hzz_job_page import ParsedJobPageDTO
 from .job import ParsedFeedDTO, ParsedJobDTO
+from .job_conditions import JobConditionsDTO, JobConditionsInputDTO, JobConditionsRunDTO, RawJobConditionsDTO
 from .job_market import (
     CountyMarketCountDTO,
     CountyShareDTO,
@@ -19,6 +21,7 @@ from .job_search import (
     CategoryDTO,
     CountyFeedCheckDTO,
     CoverageDTO,
+    JobConditionFiltersDTO,
     JobCountyDTO,
     JobCursorDTO,
     JobDetailsDTO,
@@ -32,14 +35,17 @@ from .job_search import (
     RegionFreshnessDTO,
 )
 from .job_sync import (
+    CategoryEvidenceDTO,
     FeedCheckDTO,
     FeedSyncResultDTO,
+    FilledCategoryDTO,
     JobSnapshotDTO,
     JobSyncResultDTO,
     MembershipSnapshotDTO,
     SyncRunOutcomeDTO,
 )
 from .source_feed import (
+    FeedCategoryMappingDTO,
     PlannedSourceDTO,
     RegistrationPlanDTO,
     RegistrationPreviewDTO,
@@ -50,7 +56,12 @@ from .source_feed import (
 )
 
 __all__ = [
+    "CategoryCoverageDTO",
     "CategoryDTO",
+    "CategoryEvidenceDTO",
+    "CategoryInputDTO",
+    "CategorySnapshotDTO",
+    "CategorySnapshotFeedDTO",
     "CkanPackage",
     "CkanResource",
     "CountyDTO",
@@ -59,9 +70,15 @@ __all__ = [
     "CountyMarketCountDTO",
     "CountyShareDTO",
     "CoverageDTO",
+    "FeedCategoryMappingDTO",
     "FeedCheckDTO",
     "FeedResponseDTO",
     "FeedSyncResultDTO",
+    "FilledCategoryDTO",
+    "JobConditionFiltersDTO",
+    "JobConditionsDTO",
+    "JobConditionsInputDTO",
+    "JobConditionsRunDTO",
     "JobCountyDTO",
     "JobCursorDTO",
     "JobDetailsDTO",
@@ -87,6 +104,7 @@ __all__ = [
     "ParsedJobDTO",
     "ParsedJobPageDTO",
     "PlannedSourceDTO",
+    "RawJobConditionsDTO",
     "RegionDTO",
     "RegionFreshnessDTO",
     "RegistrationPlanDTO",

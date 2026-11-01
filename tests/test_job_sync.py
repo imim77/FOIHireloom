@@ -10,12 +10,17 @@ from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
 from FOIHireloom.exceptions import NotFoundError
 from FOIHireloom.integrations.concrete.hzz_feed import HzzFeedClient
-from FOIHireloom.services import HzzFeedParser, JobSyncService
+from FOIHireloom.services import FeedCategoryVerifier, HzzFeedParser, JobSyncService
 
 
-def ad(web_sifra: str, title: str = "KUHAR/KUHARICA", deadline: str = "30.11.2026") -> str:
+CATERING = "UGOSTITELJI, RADNICI U TURIZMU"
+
+
+def ad(web_sifra: str, title: str = "KUHAR/KUHARICA", deadline: str = "30.11.2026",
+       category: str | None = CATERING) -> str:
     link = f"http://burzarada.hzz.hr/RadnoMjesto_Ispis.aspx?WebSifra={web_sifra}"
-    description = (f"Opis posla: {title}, Kategorija: UGOSTITELJI, RADNICI U TURIZMU, Rok za prijavu: {deadline}, "
+    category_field = f"Kategorija: {category}, " if category else ""
+    description = (f"Opis posla: {title}, {category_field}Rok za prijavu: {deadline}, "
                    "Mjesto rada: BJELOVAR, Općina: BJELOVAR, Županija: BJELOVARSKO-BILOGORSKA")
     return (f"<item><title>{title}</title><subject>{title}</subject><pubDate>27.10.2026</pubDate>"
             f"<description>{description}</description><link>{link}</link><guid>{link}</guid></item>")
@@ -223,3 +228,217 @@ class JobSyncTests(ModelTestCase):
         for ratio in (-0.1, 1.1, float("nan")):
             with self.subTest(ratio=ratio), self.assertRaises(ValueError):
                 JobSyncService(HzzFeedClient(self.http), HzzFeedParser(), SqlAlchemyUnitOfWorkFactory(self.sessions), ratio)
+
+    async def add_occupation_feed(self, number: int = 3) -> None:
+        feed = SourceFeed(ckan_resource_id=uuid4(), label="Zanimanje", scope="occupation",
+                          feed_url=f"http://burzarada.hzz.hr/rss/rsszup{number}.xml")
+        self.session.add(feed)
+        await self.session.commit()
+        self.feeds[number] = feed.id
+        self.status[number], self.etag[number] = 200, '"k1"'
+
+    async def test_occupation_feed_links_known_jobs_without_creating_or_changing_them(self) -> None:
+        await self.add_occupation_feed()
+        self.items[3] = [ad("1"), ad("10", title="KONOBAR/KONOBARICA"), ad("99")]
+        result = await self.service.sync_all()
+        occupation = result.feeds[-1]
+        self.assertEqual(occupation.feed_id, self.feeds[3])
+        self.assertEqual(
+            (occupation.status, occupation.items_seen, occupation.items_added, occupation.items_updated,
+             occupation.items_unchanged, occupation.items_unlinked),
+            ("succeeded", 3, 0, 0, 2, 1),
+        )
+        jobs = await self.jobs()
+        self.assertEqual(sorted(jobs), ["1", "10", "2", "3"])
+        self.assertEqual(jobs["10"].title, "KUHAR/KUHARICA")
+        self.assertEqual(await self.memberships(3), {"1": "present", "10": "present"})
+        run = (await self.runs(3))[-1]
+        self.assertEqual((run.items_seen, run.items_added, run.items_updated), (3, 0, 0))
+        feed = await self.feed(3)
+        self.assertEqual(feed.last_content_change_at, feed.last_success_at)
+
+        for etag in ('"k1"', '"k2"'):
+            with self.subTest(etag=etag):
+                self.etag[3] = etag
+                result = await self.service.sync_feed(self.feeds[3])
+                self.assertEqual(result.status, "not_modified" if etag == '"k1"' else "succeeded")
+                after = await self.jobs()
+                for key in ("1", "10"):
+                    self.assertEqual(after[key].last_seen_at, jobs[key].last_seen_at)
+                    self.assertEqual(after[key].content_changed_at, jobs[key].content_changed_at)
+
+    async def test_occupation_feed_links_a_job_once_a_county_feed_imports_it(self) -> None:
+        await self.add_occupation_feed()
+        self.items[3] = [ad("1"), ad("99")]
+        await self.service.sync_all()
+        self.assertEqual(await self.memberships(3), {"1": "present"})
+
+        self.items[1].append(ad("99"))
+        self.items[3] = [ad("99")]
+        self.etag[1], self.etag[3] = '"v2"', '"k2"'
+        result = await self.service.sync_all()
+        self.assertEqual((result.feeds[-1].items_unlinked, result.feeds[-1].items_missing), (0, 1))
+        self.assertEqual(await self.memberships(3), {"1": "missing", "99": "present"})
+        async with self.sessions.session() as reader:
+            self.assertEqual(await reader.scalar(select(func.count(Job.id)).where(Job.source_job_id == "99")), 1)
+
+    async def test_occupation_feed_download_verifies_its_category_mapping(self) -> None:
+        await self.add_occupation_feed()
+        self.items[3] = [ad("1"), ad("2", category=None), ad("99")]
+        result = await self.service.sync_all()
+        self.assertTrue(all(feed.category_mapping is None for feed in result.feeds[:-1]))
+        mapping = result.feeds[-1].category_mapping
+        self.assertEqual((mapping.category, mapping.status, mapping.matching_examples, mapping.contradicting_examples),
+                         (CATERING, "too_few_examples", 2, 0))
+        feed = await self.feed(3)
+        self.assertEqual((feed.mapped_category, feed.mapping_status), (CATERING, "too_few_examples"))
+        self.assertEqual(feed.mapping_verified_at, feed.last_success_at)
+        self.assertIsNone((await self.feed(1)).mapping_status)
+
+        verified_at = feed.mapping_verified_at
+        result = await self.service.sync_feed(self.feeds[3])
+        self.assertEqual((result.status, result.category_mapping), ("not_modified", None))
+        self.assertEqual((await self.feed(3)).mapping_verified_at, verified_at)
+
+        for items, expected in (
+            ([ad("1"), ad("2"), ad("99")], ("confirmed", 3, 0)),
+            ([ad("1"), ad("2"), ad("99"), ad("3", category="STRUČNJACI U PROMETU")], ("contradicted", 3, 1)),
+        ):
+            with self.subTest(expected=expected):
+                self.items[3], self.etag[3] = items, f'"{expected[0]}"'
+                result = await self.service.sync_feed(self.feeds[3])
+                feed = await self.feed(3)
+                self.assertEqual(
+                    (feed.mapped_category, feed.mapping_status, feed.mapping_matching_examples,
+                     feed.mapping_contradicting_examples), (CATERING, *expected),
+                )
+                self.assertGreater(feed.mapping_verified_at, verified_at)
+                self.assertEqual(result.category_mapping.status, expected[0])
+
+    async def test_unverified_occupation_feed_is_downloaded_in_full(self) -> None:
+        await self.add_occupation_feed()
+        self.items[3] = [ad("1")]
+        async with self.sessions.session() as writer:
+            feed = await writer.get(SourceFeed, self.feeds[3])
+            feed.etag = '"k1"'
+            await writer.commit()
+        await self.service.sync_all()
+        self.assertNotIn("if-none-match", self.requests[-1].headers)
+        self.assertEqual((await self.feed(3)).mapping_status, "too_few_examples")
+        result = await self.service.sync_feed(self.feeds[3])
+        self.assertEqual(self.requests[-1].headers["if-none-match"], '"k1"')
+        self.assertEqual(result.status, "not_modified")
+
+    async def test_min_examples_decides_when_a_mapping_is_confirmed(self) -> None:
+        await self.add_occupation_feed()
+        self.items[3] = [ad("1")]
+        service = JobSyncService(HzzFeedClient(self.http), HzzFeedParser(), SqlAlchemyUnitOfWorkFactory(self.sessions),
+                                 category_verifier=FeedCategoryVerifier(1))
+        result = await service.sync_feed(self.feeds[3])
+        self.assertEqual(result.category_mapping.status, "confirmed")
+
+    async def test_description_category_wins_and_empty_reimport_keeps_the_category(self) -> None:
+        await self.add_occupation_feed()
+        self.items[1], self.items[3] = [ad("1"), ad("2", category=None), ad("3")], []
+        await self.service.sync_all()
+        jobs = await self.jobs()
+        self.assertEqual((jobs["1"].category, jobs["1"].category_source, jobs["1"].category_feed_id),
+                         (CATERING, "description", None))
+        self.assertEqual((jobs["2"].category, jobs["2"].category_source), (None, None))
+        async with self.sessions.session() as writer:
+            filled = await writer.get(Job, jobs["3"].id)
+            filled.category, filled.category_source, filled.category_feed_id = "TEKSTILCI I KOŽARI", "feed", self.feeds[3]
+            await writer.commit()
+
+        self.items[1] = [ad("1", title="KONOBAR", category=None), ad("2", category="STRUČNJACI U PROMETU"),
+                         ad("3", title="KONOBAR", category=None)]
+        self.etag[1] = '"v2"'
+        result = await self.service.sync_feed(self.feeds[1])
+        self.assertEqual(result.items_updated, 3)
+        jobs = await self.jobs()
+        self.assertEqual((jobs["1"].title, jobs["1"].category, jobs["1"].category_source), ("KONOBAR", CATERING, "description"))
+        self.assertEqual((jobs["2"].category, jobs["2"].category_source), ("STRUČNJACI U PROMETU", "description"))
+        self.assertEqual((jobs["3"].category, jobs["3"].category_source, jobs["3"].category_feed_id),
+                         ("TEKSTILCI I KOŽARI", "feed", self.feeds[3]))
+
+        self.items[1][2] = ad("3")
+        self.etag[1] = '"v3"'
+        await self.service.sync_feed(self.feeds[1])
+        job = (await self.jobs())["3"]
+        self.assertEqual((job.category, job.category_source, job.category_feed_id), (CATERING, "description", None))
+
+    async def categories(self) -> dict[str, tuple]:
+        return {key: (job.category, job.category_source, job.category_feed_id) for key, job in (await self.jobs()).items()}
+
+    async def test_confirmed_mapping_fills_in_missing_categories_until_evidence_contradicts_it(self) -> None:
+        await self.add_occupation_feed()
+        self.items[1] = [ad("1"), ad("2", category=None), ad("3")]
+        self.items[2] = [ad("10"), ad("11", category=None)]
+        self.items[3] = [ad("1"), ad("2", category=None), ad("3"), ad("10"), ad("11", category=None)]
+        result = await self.service.sync_all()
+        occupation = result.feeds[-1]
+        self.assertEqual((occupation.categories_filled, occupation.categories_cleared, occupation.categories_conflicting),
+                         (2, 0, 0))
+        categories = await self.categories()
+        for key in ("2", "11"):
+            self.assertEqual(categories[key], (CATERING, "feed", self.feeds[3]))
+        self.assertEqual(categories["1"], (CATERING, "description", None))
+
+        # A later county import without a category keeps the filled-in one, and
+        # the next occupation download finds nothing to change.
+        self.items[1][1] = ad("2", title="KONOBAR", category=None)
+        self.etag[1], self.etag[3] = '"v2"', '"k2"'
+        await self.service.sync_feed(self.feeds[1])
+        self.assertEqual((await self.categories())["2"], (CATERING, "feed", self.feeds[3]))
+        result = await self.service.sync_feed(self.feeds[3])
+        self.assertEqual((result.categories_filled, result.categories_cleared), (0, 0))
+
+        # Leaving the feed keeps the category; a contradicted mapping clears it.
+        self.items[3] = [ad("1"), ad("3"), ad("10"), ad("11", category=None)]
+        self.etag[3] = '"k3"'
+        await self.service.sync_feed(self.feeds[3])
+        self.assertEqual((await self.categories())["2"], (CATERING, "feed", self.feeds[3]))
+        self.items[3].append(ad("12", category="STRUČNJACI U PROMETU"))
+        self.etag[3] = '"k4"'
+        result = await self.service.sync_feed(self.feeds[3])
+        self.assertEqual((result.category_mapping.status, result.categories_cleared), ("contradicted", 2))
+        categories = await self.categories()
+        self.assertEqual((categories["2"], categories["11"]), ((None, None, None),) * 2)
+        self.assertEqual(categories["1"], (CATERING, "description", None))
+
+    async def test_unchanged_occupation_feed_still_fills_in_categories(self) -> None:
+        await self.add_occupation_feed()
+        self.items[3] = [ad("1"), ad("2"), ad("3")]
+        await self.service.sync_all()
+        async with self.sessions.session() as writer:
+            job = await writer.scalar(select(Job).where(Job.source_job_id == "10"))
+            job.category = job.category_source = None
+            writer.add(JobFeedMembership(job_id=job.id, feed_id=self.feeds[3]))
+            await writer.commit()
+        result = await self.service.sync_feed(self.feeds[3])
+        self.assertEqual((result.status, result.categories_filled), ("not_modified", 1))
+        self.assertEqual((await self.categories())["10"], (CATERING, "feed", self.feeds[3]))
+
+    async def test_disagreeing_mappings_leave_the_category_unknown(self) -> None:
+        await self.add_occupation_feed(3)
+        await self.add_occupation_feed(4)
+        self.items[1] = [ad("1", category=None), ad("2", category=None), ad("3", category=None)]
+        self.items[2] = [ad("10", category=None)]
+        self.items[3] = [ad("1", category=None)] + [ad(f"3{n}") for n in range(3)]
+        self.items[4] = [ad("1", category=None), ad("2", category=None)] + [
+            ad(f"4{n}", category="STRUČNJACI U PROMETU") for n in range(3)
+        ]
+        result = await self.service.sync_all()
+        self.assertEqual([(feed.categories_filled, feed.categories_conflicting) for feed in result.feeds[-2:]],
+                         [(1, 0), (1, 1)])
+        categories = await self.categories()
+        self.assertEqual(categories["1"], (None, None, None))
+        self.assertEqual(categories["2"], ("STRUČNJACI U PROMETU", "feed", self.feeds[4]))
+        self.assertEqual(categories["3"], (None, None, None))
+
+        # Once the first feed stops agreeing with itself, the second one decides.
+        self.items[3].append(ad("39", category="TEKSTILCI I KOŽARI"))
+        self.etag[3] = '"k2"'
+        result = await self.service.sync_feed(self.feeds[3])
+        self.assertEqual((result.categories_filled, result.categories_conflicting), (1, 0))
+        self.assertEqual((await self.categories())["1"], ("STRUČNJACI U PROMETU", "feed", self.feeds[4]))

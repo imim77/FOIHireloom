@@ -8,7 +8,12 @@ from model_test_case import ModelTestCase
 
 from FOIHireloom.db.models import County, SourceFeed
 from FOIHireloom.db.session import SessionManager
-from FOIHireloom.dto.source_feed import SourceFeedCreateDTO, SourceFeedDTO, SourceFeedUpdateDTO
+from FOIHireloom.dto.source_feed import (
+    FeedCategoryMappingDTO,
+    SourceFeedCreateDTO,
+    SourceFeedDTO,
+    SourceFeedUpdateDTO,
+)
 from FOIHireloom.exceptions import NotFoundError
 from FOIHireloom.dao.concrete.sqla_source_feed import SqlAlchemySourceFeedRepository
 from FOIHireloom.dao.interfaces.source_feed import SourceFeedRepository
@@ -219,3 +224,72 @@ class SourceFeedRepositoryTests(ModelTestCase):
         for feed_id in (legacy.id, legacy.id + 1):
             with self.subTest(feed_id=feed_id), self.assertRaises(NotFoundError):
                 await self.repository.update(feed_id, SourceFeedUpdateDTO(**self.changes()))
+
+    def occupation_feed(self, **overrides: object) -> SourceFeed:
+        return self.feed(**({"scope": "occupation", "county_id": None, "label": "Zanimanje"} | overrides))
+
+    async def test_occupation_feeds_are_found_and_listed_after_county_feeds(self) -> None:
+        occupation, county, disabled = self.occupation_feed(), self.feed(), self.occupation_feed(enabled=False)
+        for feed in [occupation, county, disabled]:
+            await self.repository.add(feed)
+        await self.session.commit()
+        async with self.sessions.session() as reader:
+            repository = SqlAlchemySourceFeedRepository(reader)
+            self.assertEqual((await repository.get_by_id(occupation.id)).scope, "occupation")
+            self.assertIsNotNone(await repository.get_by_feed_url(occupation.feed_url))
+            self.assertIsNotNone(await repository.get_by_ckan_resource_id(disabled.ckan_resource_id))
+            self.assertEqual([feed.id for feed in await repository.list_enabled()], [county.id, occupation.id])
+
+    async def test_create_adds_occupation_feed_and_update_keeps_its_scope(self) -> None:
+        created = await self.repository.create(SourceFeedCreateDTO(**self.changes(scope="occupation", county_id=None)))
+        self.assertEqual((created.scope, created.county_id), ("occupation", None))
+        updated = await self.repository.update(created.id, SourceFeedUpdateDTO(
+            **self.changes(scope="occupation", county_id=None, label="Novi naziv"),
+        ))
+        self.assertEqual((updated.scope, updated.label), ("occupation", "Novi naziv"))
+        with self.assertRaisesRegex(ValueError, "scope"):
+            await self.repository.update(created.id, SourceFeedUpdateDTO(**self.changes()))
+
+    def test_create_dto_requires_a_county_only_for_county_feeds(self) -> None:
+        for overrides in ({"county_id": None}, {"scope": "occupation"}, {"scope": "eu", "county_id": None}):
+            with self.subTest(overrides=overrides), self.assertRaises(ValueError):
+                SourceFeedCreateDTO(**self.changes(**overrides))
+
+    async def test_category_mapping_is_replaced_and_cleared_with_the_validators(self) -> None:
+        feed = self.occupation_feed(etag='"v1"')
+        await self.repository.add(feed)
+        first, later = datetime(2026, 10, 30, tzinfo=timezone.utc), datetime(2026, 10, 31, tzinfo=timezone.utc)
+        await self.repository.record_category_mapping(feed.id, FeedCategoryMappingDTO(
+            category="STRUČNJACI U PROMETU", status="confirmed", matching_examples=383, contradicting_examples=0,
+        ), first)
+        await self.repository.record_category_mapping(feed.id, FeedCategoryMappingDTO(
+            category="STRUČNJACI U PROMETU", status="contradicted", matching_examples=383, contradicting_examples=1,
+        ), later)
+        self.assertEqual(
+            (feed.mapped_category, feed.mapping_status, feed.mapping_matching_examples,
+             feed.mapping_contradicting_examples, feed.mapping_verified_at),
+            ("STRUČNJACI U PROMETU", "contradicted", 383, 1, later),
+        )
+        self.assertEqual(SourceFeedDTO.model_validate(feed).mapping_verified_at, later)
+
+        changes = self.changes(scope="occupation", county_id=None, feed_url=feed.feed_url)
+        await self.repository.update(feed.id, SourceFeedUpdateDTO(**changes))
+        self.assertEqual(feed.mapping_status, "contradicted")
+        await self.repository.update(feed.id, SourceFeedUpdateDTO(**changes, reset_http_validators=True))
+        self.assertEqual(
+            (feed.etag, feed.mapped_category, feed.mapping_status, feed.mapping_matching_examples,
+             feed.mapping_contradicting_examples, feed.mapping_verified_at),
+            (None,) * 6,
+        )
+
+    async def test_category_mapping_needs_an_occupation_feed(self) -> None:
+        county = self.feed()
+        await self.repository.add(county)
+        mapping = FeedCategoryMappingDTO(
+            category=None, status="too_few_examples", matching_examples=0, contradicting_examples=0,
+        )
+        now = datetime.now(timezone.utc)
+        with self.assertRaisesRegex(ValueError, "occupation"):
+            await self.repository.record_category_mapping(county.id, mapping, now)
+        with self.assertRaises(NotFoundError):
+            await self.repository.record_category_mapping(county.id + 1, mapping, now)

@@ -40,6 +40,9 @@ SUMMARY = dict(id=7, source_job_id="1", title="KUHAR/KUHARICA", category="UGOSTI
                last_seen_at=SEEN)
 COVERAGE = CoverageDTO(data_status="stale", data_as_of=SEEN, stale_after_hours=6, affected_regions=(),
                        warning="Job data for the requested county was not updated in the last 6 hours.")
+NO_BREAKDOWNS = dict.fromkeys(("categories", "employers", "contracts", "employment_tags", "working_time",
+                               "experience_bands", "education_levels", "accommodation", "schedule_tags",
+                               "transport_allowance"), ())
 
 
 class FakeJobSearchService(JobSearchServiceInterface):
@@ -57,14 +60,16 @@ class FakeJobSearchService(JobSearchServiceInterface):
         self.filters.append(filters)
         self.raise_error()
         return JobCardsPageDTO(jobs=(JobCardDTO(**SUMMARY, workers_needed=2, employment_type="Na neodređeno"),),
-                               next_cursor="next", coverage=COVERAGE, today=SEEN.date())
+                               next_cursor="next", coverage=COVERAGE, today=SEEN.date(),
+                               unknown_conditions={"full_time": 1} if filters.full_time is not None else {},
+                               unknown_total=int(filters.full_time is not None))
 
     async def market_stats(self, filters: JobMarketFiltersDTO) -> JobMarketStatsDTO:
         self.market_filters.append(filters)
         self.raise_error()
-        return JobMarketStatsDTO(jobs=0, with_details=0, with_category=0, workers_needed=0, published_recently=0, closing_soon=0,
-                                 counties=(), categories=(), employers=(), employment_types=(), working_hours=(),
-                                 education=(), experience=(), accommodation=(), today=SEEN.date(), coverage=COVERAGE)
+        return JobMarketStatsDTO(jobs=0, with_details=0, with_category=0, category_from_description=0,
+                                 category_from_feed=0, workers_needed=0, published_recently=0, closing_soon=0,
+                                 counties=(), **NO_BREAKDOWNS, today=SEEN.date(), coverage=COVERAGE)
 
     async def get_job(self, job_id: int) -> JobDetailsDTO:
         self.raise_error()
@@ -169,14 +174,32 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.service.filters,
                          [JobSearchFiltersDTO(query="kuhar", county="istarska", limit=6, cursor="abc")])
         self.assertEqual((cards["title"], cards["description"], cards["next_cursor"], cards["today"]),
-                         ("Oglasi za „kuhar”", "Županija istarska · aktivni oglasi na dan 29. 10. 2026.", "next",
-                          "2026-10-29"))
+                         ("Oglasi za „kuhar”", "Aktivni oglasi na dan 29. 10. 2026.", "next", "2026-10-29"))
+        self.assertEqual(cards["active_filters"], [{"argument": "county", "label": "Istarska županija"}])
         self.assertEqual((cards["filters"]["query"], cards["filters"]["limit"], cards["filters"]["cursor"]),
                          ("kuhar", 6, None))
         job = cards["jobs"][0]
         self.assertEqual((job["display_title"], job["workers_needed"], job["employment_type"], job["education"]),
                          ("KUHAR/KUHARICA", 2, "Na neodređeno", None))
         self.assertEqual(cards["coverage"]["warning"], COVERAGE.warning)
+
+    async def test_condition_filters_reach_the_service_and_the_cards_keep_them_for_the_next_page(self) -> None:
+        conditions = {"max_experience_months": 0, "contract": "permanent", "full_time": True,
+                      "education": "secondary_4", "accommodation": False,
+                      "employment_tags": ["new_position", "retirees"], "place": "Varaždin"}
+        async with Client(self.server) as client:
+            await client.call_tool("search_jobs", conditions)
+            cards = (await client.call_tool("show_jobs", conditions | {"cursor": "abc"})).structured_content
+            # The cards view asks for more with the filters it was given and next_cursor.
+            await client.call_tool("show_jobs", cards["filters"] | {"cursor": cards["next_cursor"]})
+            await client.call_tool("job_market_stats", conditions)
+            await client.call_tool("show_jobs_by_county", conditions)
+        self.assertEqual(self.service.filters, [JobSearchFiltersDTO(**conditions),
+                                                JobSearchFiltersDTO(**conditions, limit=6, cursor="abc"),
+                                                JobSearchFiltersDTO(**conditions, limit=6, cursor="next")])
+        self.assertEqual(self.service.market_filters, [JobMarketFiltersDTO(**conditions)] * 2)
+        self.assertEqual({name: cards["filters"][name] for name in conditions}, conditions)
+        self.assertEqual((cards["unknown_conditions"], cards["unknown_total"]), ({"full_time": 1}, 1))
 
     async def test_job_market_stats_passes_filters_and_returns_coverage(self) -> None:
         async with Client(self.server) as client:
@@ -193,6 +216,12 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
                                     ("job_market_stats", {"top": 0}), ("job_market_stats", {"top": 51}),
                                     ("show_jobs_by_county", {"top": 0}), ("show_jobs_by_county", {"top": 22}),
                                     ("show_jobs_by_county", {"metric": "share"}),
+                                    ("search_jobs", {"contract": "temporary"}), ("search_jobs", {"place": "x" * 201}),
+                                    ("show_jobs", {"education": "doctorate"}), ("show_jobs", {"full_time": "often"}),
+                                    ("job_market_stats", {"employment_tags": ["remote"]}),
+                                    ("job_market_stats", {"max_experience_months": 601}),
+                                    ("show_jobs_by_county", {"max_experience_months": -1}),
+                                    ("show_jobs_by_county", {"accommodation": "hostel"}),
                                     ("get_job", {"job_id": 0}), ("get_job", {})):
                 with self.subTest(tool=tool, arguments=arguments), self.assertRaises(ToolError):
                     await client.call_tool(tool, arguments)

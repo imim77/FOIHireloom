@@ -7,6 +7,7 @@ from fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from FOIHireloom.dto.job_conditions import Contract, EducationLevel, EmploymentTag
 from FOIHireloom.dto.job_market import (
     DEFAULT_MARKET_TOP,
     MAX_MARKET_TOP,
@@ -16,6 +17,7 @@ from FOIHireloom.dto.job_market import (
     JobsByCountyDTO,
 )
 from FOIHireloom.dto.job_search import (
+    MAX_EXPERIENCE_MONTHS,
     MAX_PAGE_SIZE,
     MAX_QUERY_LENGTH,
     CategoryDTO,
@@ -36,6 +38,43 @@ from .tool_provider import ToolGroup
 JOB_SEARCH_SERVICE = "job_search_service"
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False)
+
+CATEGORY_DESCRIPTION = (
+    "Exact category name from list_categories; letter case is ignored. A job's category is stated in its "
+    "description or filled in from an HZZ occupation feed verified on its jobs. Jobs without one do not match, "
+    "so also use query when every job of an occupation matters."
+)
+# The condition filters, shared by the tools that choose jobs as search_jobs does.
+MaxExperienceMonths = Annotated[int | None, Field(
+    ge=0, le=MAX_EXPERIENCE_MONTHS,
+    description="Most experience in months the job may ask for; 0 finds jobs that need none ('Nije važno') and "
+                "trainee ads.",
+)]
+ContractFilter = Annotated[Contract | None, Field(
+    description="'permanent' (na neodređeno), 'fixed_term' (na određeno) or 'other' (other forms of work).",
+)]
+FullTime = Annotated[bool | None, Field(
+    description="true for full-time jobs, false for part-time ones (under 40 hours a week).",
+)]
+Education = Annotated[EducationLevel | None, Field(
+    description="The user's education level; finds jobs that accept it: 'primary_lower' (lower primary grades), "
+                "'primary' (primary school), 'secondary_3' (3-year secondary school), 'secondary_4' (4-year "
+                "secondary school), 'college' (viša or bachelor's) or 'university' (faculty, master's or doctorate).",
+)]
+Accommodation = Annotated[bool | None, Field(
+    description="true for jobs offering accommodation (shared, single or family), false for jobs offering none.",
+)]
+EmploymentTags = Annotated[tuple[EmploymentTag, ...] | None, Field(
+    description="Tags the job must all have: 'new_position', 'vacancy', 'replacement', 'increased_workload', "
+                "'seasonal', 'reappointment', 'trainee', 'retirees' (pensioners may apply) or 'disability' "
+                "(people with disabilities may apply).",
+)]
+Place = Annotated[str | None, Field(
+    max_length=MAX_QUERY_LENGTH,
+    description="Place of work in the nominative, e.g. 'Rijeka', not 'Rijeci'. Its words must appear as whole "
+                "words in the job page's place of work or the feed's municipality, ignoring case and diacritics, "
+                "so 'Varazdin' finds 'VARAŽDIN', 'Pula' finds 'PULA-POLA' and 'Zagreb' finds 'ZAGREB-DUBRAVA'.",
+)]
 
 
 class JobTools(ToolGroup):
@@ -63,10 +102,14 @@ class JobTools(ToolGroup):
             county: Annotated[str | None, Field(
                 description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
             )] = None,
-            category: Annotated[str | None, Field(
-                description="Exact category name from list_categories; letter case is ignored. Only about half "
-                            "of the jobs state a category, so prefer query to find an occupation.",
-            )] = None,
+            category: Annotated[str | None, Field(description=CATEGORY_DESCRIPTION)] = None,
+            max_experience_months: MaxExperienceMonths = None,
+            contract: ContractFilter = None,
+            full_time: FullTime = None,
+            education: Education = None,
+            accommodation: Accommodation = None,
+            employment_tags: EmploymentTags = None,
+            place: Place = None,
             include_expired: Annotated[bool, Field(
                 description="Also return jobs whose application deadline has passed.",
             )] = False,
@@ -90,16 +133,36 @@ class JobTools(ToolGroup):
             display_title labels jobs without a title. Show display_location
             as the job's location: it is the place of work from the job page
             when that has been read, otherwise the town from the feed or, when
-            HZZ gave none, the county. Use get_job for the full details, and
-            canonical_url to view or apply on the HZZ site.
+            HZZ gave none, the county. category_source says where category
+            came from: 'description' when the job's own description states
+            it, 'feed' when it was filled in from an HZZ occupation feed whose
+            category was verified on its jobs. Use get_job for the full
+            details, and canonical_url to view or apply on the HZZ site.
+
+            The condition filters (max_experience_months, contract,
+            full_time, education, accommodation, employment_tags and place)
+            use the values read from the job's HZZ page, and place also the
+            feed's municipality. A job whose value is unknown, because its
+            page was not read or does not state it, never matches.
+            unknown_total is the number of jobs left out only for unknown
+            values: they meet or might meet every condition filter.
+            unknown_conditions gives, per condition filter, how many of them
+            have an unknown value for it; a job can count under several.
+            Whenever unknown_total is not 0, tell the user how many jobs might
+            also match and which filters had unknown values, and never say
+            those jobs meet the conditions.
 
             coverage says how current the searched counties are. When
             coverage.warning is set, tell the user that results may be
             outdated or incomplete; few or no results then do not mean HZZ
             has no such jobs.
             """
-            filters = JobSearchFiltersDTO(query=query, county=county, category=category,
-                                          include_expired=include_expired, limit=limit, cursor=cursor)
+            filters = JobSearchFiltersDTO(
+                query=query, county=county, category=category, max_experience_months=max_experience_months,
+                contract=contract, full_time=full_time, education=education, accommodation=accommodation,
+                employment_tags=employment_tags, place=place, include_expired=include_expired, limit=limit,
+                cursor=cursor,
+            )
             return await self._call(service(ctx).search(filters))
 
         @server.tool(app=AppConfig(resource_uri=JOB_CARDS.uri), annotations=READ_ONLY)
@@ -112,10 +175,14 @@ class JobTools(ToolGroup):
             county: Annotated[str | None, Field(
                 description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
             )] = None,
-            category: Annotated[str | None, Field(
-                description="Exact category name from list_categories; letter case is ignored. Only about half "
-                            "of the jobs state a category, so prefer query to find an occupation.",
-            )] = None,
+            category: Annotated[str | None, Field(description=CATEGORY_DESCRIPTION)] = None,
+            max_experience_months: MaxExperienceMonths = None,
+            contract: ContractFilter = None,
+            full_time: FullTime = None,
+            education: Education = None,
+            accommodation: Accommodation = None,
+            employment_tags: EmploymentTags = None,
+            place: Place = None,
             include_expired: Annotated[bool, Field(
                 description="Also show jobs whose application deadline has passed.",
             )] = False,
@@ -134,14 +201,28 @@ class JobTools(ToolGroup):
             employer, the title, the place, the employment type, working
             hours, education, experience, workers sought, accommodation and
             the application deadline, with a link to the HZZ advertisement.
-            The user can load more cards there. Every host also gets the
-            data: the jobs as in search_jobs plus those job page values, which
-            are null until the job's HZZ page has been read. When
-            coverage.warning is set, tell the user the results may be
-            outdated or incomplete.
+            The user can load more cards there, and remove a filter, which
+            shows the cards found without it. Every host also gets the data:
+            the jobs as in search_jobs, category_source included, plus those
+            job page values as text, which are null until the job's HZZ page
+            has been read. conditions holds the same page's normalised
+            conditions, as the filters read them (codes as in the filter
+            arguments, experience_months, weekly_hours, trainee for trainee
+            ads, accommodation 'none', 'shared', 'single' or 'family'); it is
+            null until the page has been read, and a null value in it is
+            unknown, not "not required". Condition filters, unknown_total and
+            unknown_conditions work as in search_jobs; report unknown_total
+            whenever it is not 0. When coverage.warning is set, tell the user
+            the results may be outdated or incomplete. active_filters,
+            coverage_note and unknown_note are the Croatian wording the view
+            shows for the filters, coverage.warning and unknown_total.
             """
-            filters = JobSearchFiltersDTO(query=query, county=county, category=category,
-                                          include_expired=include_expired, limit=limit, cursor=cursor)
+            filters = JobSearchFiltersDTO(
+                query=query, county=county, category=category, max_experience_months=max_experience_months,
+                contract=contract, full_time=full_time, education=education, accommodation=accommodation,
+                employment_tags=employment_tags, place=place, include_expired=include_expired, limit=limit,
+                cursor=cursor,
+            )
             return job_cards.job_cards(await self._call(service(ctx).search_cards(filters)), filters)
 
         @server.tool(annotations=READ_ONLY)
@@ -154,15 +235,19 @@ class JobTools(ToolGroup):
             county: Annotated[str | None, Field(
                 description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
             )] = None,
-            category: Annotated[str | None, Field(
-                description="Exact category name from list_categories; letter case is ignored. Only about half "
-                            "of the jobs state a category, so prefer query to find an occupation.",
-            )] = None,
+            category: Annotated[str | None, Field(description=CATEGORY_DESCRIPTION)] = None,
+            max_experience_months: MaxExperienceMonths = None,
+            contract: ContractFilter = None,
+            full_time: FullTime = None,
+            education: Education = None,
+            accommodation: Accommodation = None,
+            employment_tags: EmploymentTags = None,
+            place: Place = None,
             include_expired: Annotated[bool, Field(
                 description="Also count jobs whose application deadline has passed.",
             )] = False,
             top: Annotated[int, Field(
-                ge=1, le=MAX_MARKET_TOP, description="Entries in the employers, working_hours and experience lists.",
+                ge=1, le=MAX_MARKET_TOP, description="Entries in the employers list.",
             )] = DEFAULT_MARKET_TOP,
         ) -> JobMarketStatsDTO:
             """Count the jobs search_jobs would find for the same filters, broken down for labour market questions.
@@ -175,23 +260,40 @@ class JobTools(ToolGroup):
             workers_needed per value, most common first.
 
             counties cover every matching job. categories cover only the
-            with_category jobs, about half, because HZZ often leaves the
-            category out; do not read a missing category as a different one.
-            employers, employment_types, working_hours, education, experience
-            and accommodation come from the job pages and cover only
-            with_details jobs; values a job does not state are left out. A job can list
-            several employment types (e.g. 'Na neodređeno' and 'novootvoreni
-            poslovi') and several education levels, so those counts may add
-            up to more than jobs. published_recently and closing_soon count
-            jobs published in the last window_days days, or closing within
-            the next window_days days, counted from today.
+            with_category jobs: category_from_description of them state it in
+            their own description, category_from_feed got it from an HZZ
+            occupation feed verified on its jobs. The rest have an unknown
+            category, not a different one; tell the user the actual coverage
+            (with_category of jobs) whenever you use categories.
+            The other breakdowns come from the job pages, so they cover at
+            most with_details jobs, and each counts only jobs whose value is
+            known: employers; contracts ('permanent', 'fixed_term', 'other');
+            employment_tags (codes as in the employment_tags argument);
+            working_time ('full_time', 'part_time'); experience_bands ('none'
+            for no experience or trainee ads, '1_to_12_months',
+            '13_to_36_months', 'over_36_months'); education_levels (each
+            level a job accepts, codes as in the education argument);
+            accommodation ('none', 'shared', 'single', 'family');
+            schedule_tags ('morning', 'afternoon', 'two_shifts',
+            'three_shifts', 'split' for split shifts, 'night',
+            'weekends_holidays'); transport_allowance ('full', 'partial',
+            'none'). A job can have several employment tags, education
+            levels and schedule tags, so those counts may add up to more than
+            jobs. published_recently and closing_soon count jobs published in
+            the last window_days days, or closing within the next window_days
+            days, counted from today. Condition filters, unknown_total and
+            unknown_conditions work as in search_jobs; report unknown_total
+            whenever it is not 0, as jobs that might also match.
 
             coverage says how current the counted counties are. When
             coverage.warning is set, tell the user the numbers may be
             outdated or incomplete.
             """
-            filters = JobMarketFiltersDTO(query=query, county=county, category=category,
-                                          include_expired=include_expired, top=top)
+            filters = JobMarketFiltersDTO(
+                query=query, county=county, category=category, max_experience_months=max_experience_months,
+                contract=contract, full_time=full_time, education=education, accommodation=accommodation,
+                employment_tags=employment_tags, place=place, include_expired=include_expired, top=top,
+            )
             return await self._call(service(ctx).market_stats(filters))
 
         @server.tool(app=AppConfig(resource_uri=JOBS_BY_COUNTY.uri), annotations=READ_ONLY)
@@ -201,10 +303,14 @@ class JobTools(ToolGroup):
                 max_length=MAX_QUERY_LENGTH,
                 description="Words chosen as for search_jobs, e.g. 'kuhar' or 'njemački'; leave out for all jobs.",
             )] = None,
-            category: Annotated[str | None, Field(
-                description="Exact category name from list_categories; letter case is ignored. Only about half "
-                            "of the jobs state a category, so prefer query to find an occupation.",
-            )] = None,
+            category: Annotated[str | None, Field(description=CATEGORY_DESCRIPTION)] = None,
+            max_experience_months: MaxExperienceMonths = None,
+            contract: ContractFilter = None,
+            full_time: FullTime = None,
+            education: Education = None,
+            accommodation: Accommodation = None,
+            employment_tags: EmploymentTags = None,
+            place: Place = None,
             include_expired: Annotated[bool, Field(
                 description="Also count jobs whose application deadline has passed.",
             )] = False,
@@ -227,12 +333,19 @@ class JobTools(ToolGroup):
             hover and select, with a button that opens every county full
             screen. Every host also gets the data: each county with matching
             jobs, ranked by metric, with jobs, workers_needed and share
-            (percent of total_jobs). When coverage.warning is set, tell the
-            user the numbers may be outdated or incomplete.
+            (percent of total_jobs). Condition filters, unknown_total and
+            unknown_conditions work as in search_jobs; report unknown_total
+            whenever it is not 0. When coverage.warning is set, tell the user
+            the numbers may be outdated or incomplete. active_filters,
+            coverage_note and unknown_note are as in show_jobs.
             """
-            filters = JobMarketFiltersDTO(query=query, category=category, include_expired=include_expired)
+            filters = JobMarketFiltersDTO(
+                query=query, category=category, max_experience_months=max_experience_months, contract=contract,
+                full_time=full_time, education=education, accommodation=accommodation,
+                employment_tags=employment_tags, place=place, include_expired=include_expired,
+            )
             stats = await self._call(service(ctx).market_stats(filters))
-            return jobs_by_county.jobs_by_county(stats, top, query, category, metric)
+            return jobs_by_county.jobs_by_county(stats, top, filters, metric)
 
         @server.tool(annotations=READ_ONLY)
         async def get_job(
@@ -269,8 +382,10 @@ class JobTools(ToolGroup):
         async def list_categories(ctx: Context) -> list[CategoryDTO]:
             """List job categories with the number of jobs search_jobs finds in each by default, most common first.
 
-            Only about half of the jobs state a category, so the counts do
-            not add up to all jobs; search by query to find an occupation.
+            A job's category is stated in its description or filled in from an
+            HZZ occupation feed verified on its jobs. Jobs without one are not
+            counted, so the counts may not add up to all jobs; also search by
+            query when every job of an occupation matters.
             """
             return list(await self._call(service(ctx).list_categories()))
 

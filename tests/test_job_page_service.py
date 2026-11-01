@@ -11,7 +11,7 @@ from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
 from FOIHireloom.integrations.concrete.hzz_job_page import HzzJobPageClient
-from FOIHireloom.services import HzzJobPageParser, JobPageService
+from FOIHireloom.services import HzzJobPageParser, JobConditionsNormalizer, JobPageService
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -60,8 +60,8 @@ class JobPageServiceTests(ModelTestCase):
         async def sleep(seconds: float) -> None:
             self.sleeps.append(seconds)
 
-        return JobPageService(HzzJobPageClient(self.http), HzzJobPageParser(), SqlAlchemyUnitOfWorkFactory(self.sessions),
-                              sleep=sleep, **options)
+        return JobPageService(HzzJobPageClient(self.http), HzzJobPageParser(), JobConditionsNormalizer(),
+                              SqlAlchemyUnitOfWorkFactory(self.sessions), sleep=sleep, **options)
 
     async def jobs(self) -> dict[str, Job]:
         async with self.sessions.session() as reader:
@@ -88,6 +88,21 @@ class JobPageServiceTests(ModelTestCase):
         result = await self.service().fetch_due(limit=10)
         self.assertEqual((self.requests, result.fetched, result.remaining), (["103"], 1, 0))
 
+    async def test_fetched_pages_store_their_normalised_conditions(self) -> None:
+        await self.service().fetch_due(limit=1)
+        jobs = await self.jobs()
+        job = jobs["104"]
+        self.assertEqual((job.page_employment_type, job.contract, job.employment_tags),
+                         ("Na neodređeno; upražnjeni poslovi; mogućnost zaposlenja osobe sa invaliditetom", "permanent",
+                          ["vacancy", "disability"]))
+        self.assertEqual(
+            (job.experience_months, job.trainee, job.full_time, job.weekly_hours, job.education_levels,
+             job.accommodation, job.schedule_tags, job.transport_allowance, job.conditions_unrecognised),
+            (0, False, True, None, ["secondary_4"], "none", ["two_shifts"], "full", []),
+        )
+        # A job whose page was not fetched has no normalised conditions.
+        self.assertEqual((jobs["101"].contract, jobs["101"].conditions_unrecognised), (None, []))
+
     async def test_error_pages_and_failures_are_recorded_and_keep_earlier_values(self) -> None:
         await self.service().fetch_due(limit=10)
         self.pages["104"] = "error"
@@ -99,6 +114,7 @@ class JobPageServiceTests(ModelTestCase):
         self.assertEqual((result.unavailable, result.failed, result.fetched), (1, 1, 0))
         jobs = await self.jobs()
         self.assertEqual((jobs["104"].page_status, jobs["104"].page_valid_until), ("unavailable", date(2026, 11, 6)))
+        self.assertEqual((jobs["104"].contract, jobs["104"].schedule_tags), ("permanent", ["two_shifts"]))
         self.assertIn("error page", jobs["104"].page_error)
         self.assertEqual((jobs["103"].page_status, jobs["103"].page_error),
                          ("failed", "HZZ job page returned HTTP 503."))

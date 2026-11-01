@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import Field
 
 from .base import ModelConfigBaseModel
-from .job_search import MAX_QUERY_LENGTH, CoverageDTO, JobFilterCriteriaDTO
+from .job_search import MAX_QUERY_LENGTH, ActiveFilterDTO, CoverageDTO, JobConditionFiltersDTO, JobFilterCriteriaDTO
 
 # What the jobs-by-county chart ranks and draws the counties by.
 type CountyMetric = Literal["jobs", "workers_needed"]
@@ -15,10 +15,10 @@ DEFAULT_MARKET_TOP = 10
 MAX_MARKET_TOP = 50
 
 
-class JobMarketFiltersDTO(ModelConfigBaseModel):
+class JobMarketFiltersDTO(JobConditionFiltersDTO):
     """The jobs to count, chosen as JobSearchFiltersDTO chooses jobs to list.
 
-    top is the length of the employer, working hours and experience breakdowns.
+    top is the length of the employers breakdown.
     """
 
     query: str | None = Field(default=None, max_length=MAX_QUERY_LENGTH)
@@ -31,8 +31,7 @@ class JobMarketFiltersDTO(ModelConfigBaseModel):
 class JobMarketCriteriaDTO(JobFilterCriteriaDTO):
     """Filters plus the day the time windows start from and the length of long breakdowns.
 
-    top limits the employer, working hours and experience breakdowns; the
-    others have few values and are complete.
+    top limits the employers breakdown; the others have few values and are complete.
     """
 
     today: date
@@ -54,13 +53,21 @@ class CountyMarketCountDTO(MarketCountDTO):
 class JobMarketAggregatesDTO(ModelConfigBaseModel):
     """Counts over the jobs matching JobMarketCriteriaDTO.
 
-    categories cover only the with_category jobs: the category comes from the
-    feed's description suffix, which HZZ cuts off in about half of the jobs.
-    Fields read from the job page (workers_needed, employers, employment_types,
-    working_hours, education, experience, accommodation) cover only the
-    with_details jobs whose page was read. A job can list several employment
-    types and education levels, so those counts may add up to more than jobs.
-    Values a job does not state are left out of the breakdowns.
+    categories cover only the with_category jobs, the sum of
+    category_from_description (stated in the job's own description) and
+    category_from_feed (filled in from an HZZ occupation feed whose category
+    was verified on its jobs); the other jobs have no known category.
+    workers_needed and employers are read from the job page and cover only
+    the with_details jobs whose page was read. The other breakdowns count the
+    page's normalised conditions, codes as in JobConditionsDTO, each over
+    the jobs whose value is known: contracts, employment_tags, working_time
+    ("full_time" or "part_time"), experience_bands ("none" is 0 months and
+    includes trainee ads, then "1_to_12_months", "13_to_36_months" and
+    "over_36_months"), education_levels (a job counts once per level it
+    accepts), accommodation, schedule_tags and transport_allowance. A job can
+    have several employment tags, education levels and schedule tags, so
+    those counts may add up to more than jobs. Values a job does not state
+    are left out of the breakdowns.
     published_recently and closing_soon count jobs published, or whose
     deadline falls, within MARKET_WINDOW_DAYS days of today.
     """
@@ -68,28 +75,36 @@ class JobMarketAggregatesDTO(ModelConfigBaseModel):
     jobs: int
     with_details: int
     with_category: int
+    category_from_description: int
+    category_from_feed: int
     workers_needed: int
     published_recently: int
     closing_soon: int
     counties: tuple[CountyMarketCountDTO, ...]
     categories: tuple[MarketCountDTO, ...]
     employers: tuple[MarketCountDTO, ...]
-    employment_types: tuple[MarketCountDTO, ...]
-    working_hours: tuple[MarketCountDTO, ...]
-    education: tuple[MarketCountDTO, ...]
-    experience: tuple[MarketCountDTO, ...]
+    contracts: tuple[MarketCountDTO, ...]
+    employment_tags: tuple[MarketCountDTO, ...]
+    working_time: tuple[MarketCountDTO, ...]
+    experience_bands: tuple[MarketCountDTO, ...]
+    education_levels: tuple[MarketCountDTO, ...]
     accommodation: tuple[MarketCountDTO, ...]
+    schedule_tags: tuple[MarketCountDTO, ...]
+    transport_allowance: tuple[MarketCountDTO, ...]
 
 
 class JobMarketStatsDTO(JobMarketAggregatesDTO):
     """Market statistics as of today (Europe/Zagreb) with the freshness of the counties they cover.
 
     When coverage is not fresh, the counts may be outdated or incomplete.
+    unknown_conditions and unknown_total are as in JobSearchPageDTO.
     """
 
     today: date
     window_days: int = MARKET_WINDOW_DAYS
     coverage: CoverageDTO
+    unknown_conditions: dict[str, int] = {}
+    unknown_total: int = 0
 
 
 class CountyShareDTO(ModelConfigBaseModel):
@@ -108,6 +123,9 @@ class JobsByCountyDTO(ModelConfigBaseModel):
 
     Counties are ranked by metric, highest first; the chart draws that value
     as columns, shows the first top counties and lets the user expand it to all.
+    unknown_conditions and unknown_total are as in JobSearchPageDTO.
+    description names the query, the active_filters and the day; the
+    filters are as in JobCardsDTO, and so are coverage_note and unknown_note.
     """
 
     metric: CountyMetric
@@ -119,3 +137,8 @@ class JobsByCountyDTO(ModelConfigBaseModel):
     top: int
     counties: tuple[CountyShareDTO, ...]
     coverage: CoverageDTO
+    unknown_conditions: dict[str, int] = {}
+    unknown_total: int = 0
+    active_filters: tuple[ActiveFilterDTO, ...]
+    coverage_note: str | None
+    unknown_note: str | None

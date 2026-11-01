@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 from model_test_case import ModelTestCase
 
-from FOIHireloom.db.models import Employer, Job
+from FOIHireloom.db.models import Employer, Job, SourceFeed
 
 
 class JobModelTests(ModelTestCase):
@@ -85,3 +85,62 @@ class JobModelTests(ModelTestCase):
             async with self.session.begin_nested():
                 await self.session.delete(employer)
                 await self.session.flush()
+
+    async def test_category_records_its_source_and_filled_in_ones_their_feed(self) -> None:
+        feed = SourceFeed(ckan_resource_id=uuid4(), label="Zanimanje", scope="occupation",
+                          feed_url="https://example.com/kat.xml")
+        self.session.add(feed)
+        await self.session.flush()
+        for values in (
+            {},
+            {"category": "STRUČNJACI U PROMETU", "category_source": "description"},
+            {"category": "STRUČNJACI U PROMETU", "category_source": "feed", "category_feed_id": feed.id},
+        ):
+            with self.subTest(values=values):
+                self.session.add(self.job(**values))
+                await self.session.flush()
+        for values in (
+            {"category": "STRUČNJACI U PROMETU"},
+            {"category_source": "description"},
+            {"category": "STRUČNJACI U PROMETU", "category_source": "feed"},
+            {"category": "STRUČNJACI U PROMETU", "category_source": "description", "category_feed_id": feed.id},
+            {"category": "STRUČNJACI U PROMETU", "category_source": "opis"},
+            {"category_feed_id": feed.id},
+            {"category": "STRUČNJACI U PROMETU", "category_source": "feed", "category_feed_id": feed.id + 1},
+        ):
+            with self.subTest(values=values):
+                await self.assert_rejected(self.job(**values))
+
+    async def test_normalised_conditions_use_known_codes_and_need_a_fetched_page(self) -> None:
+        now = datetime.now(timezone.utc)
+        fetched = {"page_status": "fetched", "page_checked_at": now, "page_fetched_at": now, "page_source_hash": "h"}
+        self.session.add(self.job(
+            **fetched, experience_months=0, trainee=True, contract="fixed_term", employment_tags=["seasonal", "trainee"],
+            full_time=False, weekly_hours=20, education_levels=["primary", "secondary_3"], accommodation="none",
+            schedule_tags=["night"], transport_allowance="partial", conditions_unrecognised=["work_schedule"],
+        ))
+        self.session.add(self.job(**fetched, experience_months=18, trainee=False, employment_tags=[]))
+        await self.session.flush()
+        for values in (
+            {"contract": "permanent"},
+            {"conditions_unrecognised": ["experience"]},
+            {"page_status": "unavailable", "page_checked_at": now, "education_levels": ["university"]},
+        ):
+            with self.subTest(values=values):
+                await self.assert_rejected(self.job(**values))
+        for values in (
+            {"contract": "seasonal"},
+            {"employment_tags": ["vacancy", "volunteer"]},
+            {"education_levels": ["doctorate"]},
+            {"accommodation": "hostel"},
+            {"schedule_tags": ["evening"]},
+            {"transport_allowance": "yes"},
+            {"conditions_unrecognised": ["title"]},
+            {"experience_months": -1, "trainee": False},
+            {"experience_months": 6, "trainee": True},
+            {"experience_months": 6},
+            {"trainee": False},
+            {"weekly_hours": 0},
+        ):
+            with self.subTest(values=values):
+                await self.assert_rejected(self.job(**fetched, **values))

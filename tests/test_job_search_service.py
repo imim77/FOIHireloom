@@ -10,6 +10,7 @@ from model_test_case import ModelTestCase
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
+from FOIHireloom.dto.job_conditions import JobConditionsDTO
 from FOIHireloom.dto.job_market import JobMarketFiltersDTO
 from FOIHireloom.dto.job_search import JobSearchCriteriaDTO, JobSearchFiltersDTO, JobSummaryDTO
 from FOIHireloom.exceptions import InvalidJobSearchError, NotFoundError
@@ -56,7 +57,8 @@ class JobSearchServiceTests(ModelTestCase):
                            quality_flags=["description_truncated"]), {"zg": "present"}),
         ):
             job = Job(provider="hzz", source_job_id=key, canonical_url=f"https://example.com/{key}",
-                      content_hash=key, **values)
+                      content_hash=key, **values,
+                      category_source="description" if "category" in values else None)
             self.session.add(job)
             await self.session.flush()
             self.ids[key] = job.id
@@ -348,16 +350,42 @@ class JobSearchServiceTests(ModelTestCase):
         # Before its page is read a job has none of them.
         self.assertEqual((cook.workers_needed, cook.employment_type, cook.accommodation), (None, None, None))
 
+    async def test_cards_carry_the_category_source_and_the_stored_conditions_of_a_read_page(self) -> None:
+        await self.set_page("driver", page_employment_type="Na određeno; sezonski", page_working_hours="20 sati tjedno",
+                            page_experience="1 godina; ključna kompetencija", experience_months=None, trainee=None,
+                            contract="fixed_term", employment_tags=["seasonal"], full_time=False, weekly_hours=20,
+                            education_levels=["secondary_3", "secondary_4"], accommodation="shared",
+                            conditions_unrecognised=["experience"])
+        cards = await self.service.search_cards(JobSearchFiltersDTO(limit=2))
+        driver, cook = cards.jobs
+        self.assertEqual(driver.conditions, JobConditionsDTO(
+            contract="fixed_term", employment_tags=("seasonal",), full_time=False, weekly_hours=20,
+            education_levels=("secondary_3", "secondary_4"), accommodation="shared", unrecognised=("experience",),
+        ))
+        # The page text stays for hosts that show it as it is.
+        self.assertEqual((driver.employment_type, driver.experience),
+                         ("Na određeno; sezonski", "1 godina; ključna kompetencija"))
+        # A page that has not been read has no stored conditions, not unknown ones.
+        self.assertIsNone(cook.conditions)
+        self.assertEqual((driver.category_source, cook.category_source), (None, "description"))
+        await self.session.execute(update(Job).where(Job.id == self.ids["driver"]).values(
+            category="VOZAČI", category_source="feed", category_feed_id=self.feed_ids["zg"]))
+        await self.session.commit()
+        page = await self.service.search(JobSearchFiltersDTO(limit=1))
+        self.assertEqual((page.jobs[0].category, page.jobs[0].category_source), ("VOZAČI", "feed"))
+
     async def test_market_stats_count_what_search_finds(self) -> None:
         await self.set_page("cook", page_employer_name="HOTEL d.o.o.", page_workers_needed=3,
-                            page_employment_type="Na neodređeno; sezonski")
+                            page_employment_type="Na neodređeno; sezonski", contract="permanent",
+                            employment_tags=["seasonal"])
         stats = await self.service.market_stats(JobMarketFiltersDTO())
         self.assertEqual(stats.jobs, len(await self.keys()))
         self.assertEqual((stats.today, stats.window_days, stats.with_details, stats.workers_needed), (self.today, 7, 1, 3))
         self.assertEqual([(county.code, county.jobs) for county in stats.counties],
                          [("bjelovarsko-bilogorska", 2), ("grad-zagreb", 2)])
-        self.assertEqual([(item.name, item.jobs) for item in stats.employment_types],
-                         [("Na neodređeno", 1), ("sezonski", 1)])
+        self.assertEqual([(item.name, item.jobs) for item in stats.contracts + stats.employment_tags],
+                         [("permanent", 1), ("seasonal", 1)])
+        self.assertEqual((stats.unknown_conditions, stats.unknown_total), ({}, 0))
         # Istria has no feed, so coverage reports it as a search would.
         self.assertEqual(stats.coverage, (await self.service.search(JobSearchFiltersDTO())).coverage)
         for filters in ({"query": "kuharice"}, {"category": HOSPITALITY.lower()}, {"include_expired": True},

@@ -26,7 +26,7 @@ class JobSyncCommand:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Import job advertisements from registered HZZ county feeds.")
+    parser = argparse.ArgumentParser(description="Import job advertisements from registered HZZ county feeds and link occupation feeds.")
     parser.add_argument("--feed-id", type=int, help="Sync only this source feed, even if it is disabled.")
     args = parser.parse_args(argv)
     try:

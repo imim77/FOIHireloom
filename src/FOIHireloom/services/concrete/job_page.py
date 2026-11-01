@@ -3,12 +3,14 @@ from collections.abc import Awaitable, Callable
 from datetime import timedelta
 
 from FOIHireloom.db.uow.base import UnitOfWork
+from FOIHireloom.dto.job_conditions import RawJobConditionsDTO
 from FOIHireloom.dto.job_page import JobPageFetchResultDTO
 from FOIHireloom.exceptions import HzzJobPageError, HzzJobPageUnavailableError
 from FOIHireloom.integrations.interfaces.hzz_job_page import HzzJobPageClientInterface
 from FOIHireloom.services.interfaces.job_page import JobPageServiceInterface
 
 from .hzz_job_page_parser import HzzJobPageParser
+from .job_conditions import JobConditionsNormalizer
 
 ERROR_SUMMARY_LIMIT = 500
 
@@ -18,13 +20,15 @@ class JobPageService(JobPageServiceInterface):
 
     An error page only marks the check 'unavailable'; it is not evidence that
     the job closed, and the fields fetched earlier stay. Unavailable and
-    failed pages are retried after retry_after.
+    failed pages are retried after retry_after. A fetched page's conditions
+    are normalised and stored with it.
     """
 
     def __init__(
         self,
         client: HzzJobPageClientInterface,
         parser: HzzJobPageParser,
+        normalizer: JobConditionsNormalizer,
         uow_factory: Callable[[], UnitOfWork],
         delay_seconds: float = 1.0,
         retry_after: timedelta = timedelta(hours=24),
@@ -35,6 +39,7 @@ class JobPageService(JobPageServiceInterface):
             raise ValueError("Delay must not be negative; retry time and failure limit must be positive.")
         self._client = client
         self._parser = parser
+        self._normalizer = normalizer
         self._uow_factory = uow_factory
         self._delay_seconds = delay_seconds
         self._retry_after = retry_after
@@ -62,7 +67,8 @@ class JobPageService(JobPageServiceInterface):
             async with self._uow_factory() as work:
                 checked_at = await work.transaction_time()
                 if page is not None:
-                    await work.jobs.record_page(target.id, page, target.content_hash, checked_at)
+                    conditions = self._normalizer.normalize(RawJobConditionsDTO.model_validate(page))
+                    await work.jobs.record_page(target.id, page, conditions, target.content_hash, checked_at)
                 else:
                     summary = (str(error) or type(error).__name__)[:ERROR_SUMMARY_LIMIT]
                     await work.jobs.record_page_problem(target.id, status, summary, checked_at)
