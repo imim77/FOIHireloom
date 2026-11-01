@@ -114,7 +114,8 @@ function JobHead({ job, app }: { job: ComparedJob; app: App | null }) {
             </svg>
           </button>
         </div>
-        <span className="job-name">{title}</span>
+        {/* "Kuhar/kuharica" may break after the slash in a narrow column. */}
+        <span className="job-name">{title.replaceAll('/', '/​')}</span>
         <span className="job-employer">{employer}</span>
         {place && <span className="job-where">{place}</span>}
       </div>
