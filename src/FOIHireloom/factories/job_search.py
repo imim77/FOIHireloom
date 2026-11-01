@@ -3,7 +3,13 @@ from datetime import timedelta
 
 from FOIHireloom.config.settings import Settings
 from FOIHireloom.db.uow.base import UnitOfWork
-from FOIHireloom.services import CroatianCountyCatalog, JobSearchService, JobSearchServiceInterface
+from FOIHireloom.services import (
+    CroatianCountyCatalog,
+    JobComparator,
+    JobConditionMatcher,
+    JobSearchService,
+    JobSearchServiceInterface,
+)
 
 
 class JobSearchServiceFactory:
@@ -14,4 +20,4 @@ class JobSearchServiceFactory:
 
     def create(self, uow_factory: Callable[[], UnitOfWork]) -> JobSearchServiceInterface:
         stale_after = timedelta(hours=self._settings.HZZ_STALE_AFTER_HOURS)
-        return JobSearchService(uow_factory, CroatianCountyCatalog(), stale_after)
+        return JobSearchService(uow_factory, CroatianCountyCatalog(), stale_after, JobComparator(JobConditionMatcher()))

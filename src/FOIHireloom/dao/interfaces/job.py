@@ -29,6 +29,10 @@ class JobRepository(ABC):
         """Return the job with this database ID, or None if it is absent."""
 
     @abstractmethod
+    async def list_by_ids(self, job_ids: Collection[int]) -> list[Job]:
+        """Return the jobs with these database IDs, listed or not, in no particular order; absent IDs are skipped."""
+
+    @abstractmethod
     async def get_by_source_job_id(self, provider: str, source_job_id: str) -> Job | None:
         """Look up a source's job ID within its provider's namespace."""
 

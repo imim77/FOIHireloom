@@ -3,7 +3,7 @@ import logging
 import os
 import socket
 import unittest
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, date, datetime
 from unittest import mock
@@ -16,6 +16,13 @@ from pydantic import ValidationError
 from FOIHireloom.api.apps.views import JOB_CARDS, JOBS_BY_COUNTY
 from FOIHireloom.api.mcp_server import McpServer
 from FOIHireloom.config.settings import Settings
+from FOIHireloom.dto.job_comparison import (
+    ComparedJobDTO,
+    ComparisonCellDTO,
+    ComparisonRowDTO,
+    JobComparisonConditionsDTO,
+    JobComparisonDTO,
+)
 from FOIHireloom.dto.job_market import JobMarketFiltersDTO, JobMarketStatsDTO
 from FOIHireloom.dto.job_search import (
     CategoryDTO,
@@ -49,6 +56,7 @@ class FakeJobSearchService(JobSearchServiceInterface):
     def __init__(self) -> None:
         self.filters: list[JobSearchFiltersDTO] = []
         self.market_filters: list[JobMarketFiltersDTO] = []
+        self.comparisons: list[tuple[list[int], JobComparisonConditionsDTO | None]] = []
         self.error: Exception | None = None
 
     async def search(self, filters: JobSearchFiltersDTO) -> JobSearchPageDTO:
@@ -75,6 +83,26 @@ class FakeJobSearchService(JobSearchServiceInterface):
         self.raise_error()
         return JobDetailsDTO(**SUMMARY | {"id": job_id}, description_text="Rad u kuhinji.",
                              availability_status="unknown", first_seen_at=SEEN, content_changed_at=SEEN)
+
+    async def compare_jobs(
+        self, job_ids: Sequence[int], conditions: JobComparisonConditionsDTO | None = None,
+    ) -> JobComparisonDTO:
+        self.comparisons.append((list(job_ids), conditions))
+        self.raise_error()
+        experience = (conditions or JobComparisonConditionsDTO()).max_experience_months
+        return JobComparisonDTO(
+            today=SEEN.date(),
+            jobs=tuple(ComparedJobDTO(id=job_id, display_title="KUHAR/KUHARICA", employer_name=None,
+                                      county_name="Grad Zagreb", display_location="ZAGREB",
+                                      canonical_url=SUMMARY["canonical_url"], details_status="pending", category=None,
+                                      category_source=None, conditions=None) for job_id in job_ids),
+            rows=(ComparisonRowDTO(aspect="experience", differs=False, condition=experience, cells=tuple(
+                ComparisonCellDTO(job_id=job_id, value=None, evidence=None,
+                                  verdict=None if experience is None else "unknown",
+                                  reason=None if experience is None else "the job's HZZ page has not been read yet")
+                for job_id in job_ids)),),
+            conditions=conditions,
+        )
 
     async def list_regions(self) -> tuple[RegionDTO, ...]:
         self.raise_error()
@@ -109,7 +137,7 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self.open_services, 1)
         self.assertEqual(self.open_services, 0)
         self.assertEqual(set(tools), {"search_jobs", "show_jobs", "job_market_stats", "show_jobs_by_county", "get_job",
-                                      "list_regions", "list_categories"})
+                                      "compare_jobs", "list_regions", "list_categories"})
         for tool in tools.values():
             with self.subTest(tool=tool.name):
                 self.assertTrue(tool.annotations.readOnlyHint)
@@ -119,6 +147,70 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("ctx", tools["search_jobs"].inputSchema["properties"])
         self.assertEqual(tools["search_jobs"].inputSchema["properties"]["limit"]["maximum"], 20)
         self.assertEqual(tools["job_market_stats"].inputSchema["properties"]["top"]["maximum"], 50)
+        # A plain tool for now: no MCP App view.
+        self.assertNotIn("ui", tools["compare_jobs"].meta or {})
+
+    async def test_compare_jobs_takes_two_or_three_ids_and_the_users_conditions(self) -> None:
+        async with Client(self.server) as client:
+            tool = next(tool for tool in await client.list_tools() if tool.name == "compare_jobs")
+        schema = tool.inputSchema
+        self.assertEqual(schema["required"], ["job_ids"])
+        self.assertEqual(set(schema["properties"]), {"job_ids", "max_experience_months", "contract", "full_time",
+                                                     "education", "accommodation"})
+        job_ids = schema["properties"]["job_ids"]
+        self.assertEqual((job_ids["type"], job_ids["minItems"], job_ids["maxItems"], job_ids["items"]["minimum"]),
+                         ("array", 2, 3, 1))
+        enums = {name: next(option["enum"] for option in schema["properties"][name]["anyOf"] if "enum" in option)
+                 for name in ("contract", "education")}
+        self.assertEqual(enums, {"contract": ["permanent", "fixed_term", "other"],
+                                 "education": ["primary_lower", "primary", "secondary_3", "secondary_4", "college",
+                                               "university"]})
+        experience = schema["properties"]["max_experience_months"]
+        self.assertEqual((experience["anyOf"][0]["minimum"], experience["anyOf"][0]["maximum"]), (0, 600))
+        # The conditions describe the user, not a filter on the jobs.
+        self.assertTrue(experience["description"].startswith("The user's experience in months"))
+        self.assertIn("the user needs accommodation", schema["properties"]["accommodation"]["description"])
+        self.assertIn("never that the employer will accept the user", " ".join(tool.description.split()))
+        self.assertTrue(tool.annotations.readOnlyHint and tool.annotations.idempotentHint)
+
+    async def test_compare_jobs_passes_ids_in_order_and_the_conditions(self) -> None:
+        conditions = {"max_experience_months": 0, "contract": "permanent", "full_time": True,
+                      "education": "secondary_4", "accommodation": True}
+        async with Client(self.server) as client:
+            compared = (await client.call_tool("compare_jobs", {"job_ids": [9, 7, 8]} | conditions)).structured_content
+            plain = (await client.call_tool("compare_jobs", {"job_ids": [8, 7]})).structured_content
+            # Leaving out conditions and passing them as null are the same: no conditions.
+            nulls = dict.fromkeys(conditions)
+            await client.call_tool("compare_jobs", {"job_ids": [7, 8]} | nulls)
+        self.assertEqual(self.service.comparisons, [([9, 7, 8], JobComparisonConditionsDTO(**conditions)),
+                                                    ([8, 7], None), ([7, 8], None)])
+        self.assertEqual([job["id"] for job in compared["jobs"]], [9, 7, 8])
+        self.assertEqual((compared["today"], compared["conditions"]), ("2026-10-29", conditions))
+        row = compared["rows"][0]
+        self.assertEqual((row["aspect"], row["condition"], [cell["verdict"] for cell in row["cells"]]),
+                         ("experience", 0, ["unknown"] * 3))
+        self.assertEqual((plain["conditions"], plain["rows"][0]["cells"][0]["verdict"]), (None, None))
+
+    async def test_compare_jobs_rejects_wrong_counts_before_the_service_and_keeps_its_errors(self) -> None:
+        async with Client(self.server) as client:
+            # Fewer than two, more than three and impossible ids fail on the input schema.
+            for arguments in ({"job_ids": [7]}, {"job_ids": [7, 8, 9, 10]}, {"job_ids": []}, {"job_ids": [7, 0]},
+                              {}, {"job_ids": [7, 8], "contract": "temporary"},
+                              {"job_ids": [7, 8], "max_experience_months": -1}):
+                with self.subTest(arguments=arguments), self.assertRaises(ToolError):
+                    await client.call_tool("compare_jobs", arguments)
+            self.assertEqual(self.service.comparisons, [])
+            # Repeated and missing ids are the service's to reject.
+            for error, message in (
+                (InvalidJobSearchError("Choose different jobs to compare; given more than once: 7."),
+                 "Choose different jobs to compare; given more than once: 7."),
+                (NotFoundError("job", "99"), "Job 99 not found."),
+                (PersistenceError("connection to 10.0.0.5 refused"), "Job data is temporarily unavailable"),
+            ):
+                self.service.error = error
+                with self.subTest(error=error), self.assertRaisesRegex(ToolError, message) as raised:
+                    await client.call_tool("compare_jobs", {"job_ids": [7, 99]})
+                self.assertNotIn("10.0.0.5", str(raised.exception))
 
     async def test_search_jobs_passes_filters_and_returns_structured_page(self) -> None:
         async with Client(self.server) as client:
@@ -290,7 +382,7 @@ class McpHttpTransportTests(unittest.IsolatedAsyncioTestCase):
     async def test_tools_and_health_are_served_over_http(self) -> None:
         base = await self.serve(MCP_PATH="/tools")
         async with Client(f"{base}/tools") as client:
-            self.assertEqual(len(await client.list_tools()), 7)
+            self.assertEqual(len(await client.list_tools()), 8)
             page = (await client.call_tool("search_jobs", {"query": "kuhar"})).structured_content
         self.assertEqual(page["jobs"][0]["title"], "KUHAR/KUHARICA")
         async with httpx.AsyncClient() as http:

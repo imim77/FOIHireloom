@@ -21,7 +21,26 @@ type DataStatus = Literal["fresh", "stale", "unavailable"]
 type DetailsStatus = Literal["pending", "fetched", "unavailable", "failed"]
 
 
-class JobConditionFiltersDTO(ModelConfigBaseModel):
+class CandidateConditionsDTO(ModelConfigBaseModel):
+    """What a person states about their experience and education and the job they want; None leaves one out.
+
+    A job meets max_experience_months, the person's experience, when it asks
+    for at most that; "Nije važno" and trainee ads ask for 0. It meets
+    contract and full_time when its own are the same. education is the
+    person's level, met by a job that accepts it. accommodation True is met
+    by a job offering any accommodation, False by one offering none. A job
+    whose value is unknown, because its HZZ page was not read or does not
+    state it, meets none of them.
+    """
+
+    max_experience_months: int | None = Field(default=None, ge=0, le=MAX_EXPERIENCE_MONTHS)
+    contract: Contract | None = None
+    full_time: bool | None = None
+    education: EducationLevel | None = None
+    accommodation: bool | None = None
+
+
+class JobConditionFiltersDTO(CandidateConditionsDTO):
     """Filters on a job's normalised conditions and place of work; None leaves one out.
 
     A job whose value is unknown, because its HZZ page was not read or does
@@ -35,11 +54,6 @@ class JobConditionFiltersDTO(ModelConfigBaseModel):
     diacritics: "Pula" finds "PULA-POLA" and "Zagreb" "ZAGREB-DUBRAVA".
     """
 
-    max_experience_months: int | None = Field(default=None, ge=0, le=MAX_EXPERIENCE_MONTHS)
-    contract: Contract | None = None
-    full_time: bool | None = None
-    education: EducationLevel | None = None
-    accommodation: bool | None = None
     employment_tags: tuple[EmploymentTag, ...] | None = None
     place: str | None = Field(default=None, max_length=MAX_QUERY_LENGTH)
 

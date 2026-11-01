@@ -7,6 +7,12 @@ from fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from FOIHireloom.dto.job_comparison import (
+    MAX_COMPARED_JOBS,
+    MIN_COMPARED_JOBS,
+    JobComparisonConditionsDTO,
+    JobComparisonDTO,
+)
 from FOIHireloom.dto.job_conditions import Contract, EducationLevel, EmploymentTag
 from FOIHireloom.dto.job_market import (
     DEFAULT_MARKET_TOP,
@@ -138,6 +144,7 @@ class JobTools(ToolGroup):
             it, 'feed' when it was filled in from an HZZ occupation feed whose
             category was verified on its jobs. Use get_job for the full
             details, and canonical_url to view or apply on the HZZ site.
+            To compare 2 or 3 found jobs, pass their ids to compare_jobs.
 
             The condition filters (max_experience_months, contract,
             full_time, education, accommodation, employment_tags and place)
@@ -202,7 +209,8 @@ class JobTools(ToolGroup):
             hours, education, experience, workers sought, accommodation and
             the application deadline, with a link to the HZZ advertisement.
             The user can load more cards there, and remove a filter, which
-            shows the cards found without it. Every host also gets the data:
+            shows the cards found without it. To compare 2 or 3 of the jobs,
+            pass their ids to compare_jobs. Every host also gets the data:
             the jobs as in search_jobs, category_source included, plus those
             job page values as text, which are null until the job's HZZ page
             has been read. conditions holds the same page's normalised
@@ -367,6 +375,79 @@ class JobTools(ToolGroup):
             'unavailable' means its presence_status may be out of date.
             """
             return await self._call(service(ctx).get_job(job_id))
+
+        @server.tool(annotations=READ_ONLY)
+        async def compare_jobs(
+            ctx: Context,
+            job_ids: Annotated[list[Annotated[int, Field(ge=1, le=2**63 - 1)]], Field(
+                min_length=MIN_COMPARED_JOBS, max_length=MAX_COMPARED_JOBS,
+                description="ids of the 2 or 3 jobs to compare, each once, from earlier search_jobs or show_jobs "
+                            "results, in the order to show them.",
+            )],
+            max_experience_months: Annotated[MaxExperienceMonths, Field(
+                description="The user's experience in months. A job meets it when it asks for at most that; with 0 "
+                            "only jobs that need none ('Nije važno') and trainee ads do.",
+            )] = None,
+            contract: Annotated[ContractFilter, Field(
+                description="The contract the user wants: 'permanent' (na neodređeno), 'fixed_term' (na određeno) "
+                            "or 'other' (other forms of work).",
+            )] = None,
+            full_time: Annotated[FullTime, Field(
+                description="true when the user wants a full-time job, false when they want a part-time one "
+                            "(under 40 hours a week).",
+            )] = None,
+            education: Annotated[Education, Field(
+                description="The user's education level; a job meets it when it accepts that level: 'primary_lower' "
+                            "(lower primary grades), 'primary' (primary school), 'secondary_3' (3-year secondary "
+                            "school), 'secondary_4' (4-year secondary school), 'college' (viša or bachelor's) or "
+                            "'university' (faculty, master's or doctorate).",
+            )] = None,
+            accommodation: Annotated[Accommodation, Field(
+                description="true when the user needs accommodation, met by jobs offering any (shared, single or "
+                            "family); false when the user wants a job that offers none.",
+            )] = None,
+        ) -> JobComparisonDTO:
+            """Compare 2 or 3 jobs the user picked side by side, against the conditions the user stated.
+
+            Use it when the user wants to compare particular jobs, e.g. "compare
+            the first and the third". Take job_ids from earlier search_jobs or
+            show_jobs results in this conversation, in the order the user named
+            them: the selection lives only in the conversation, as there are
+            no accounts or saved lists. Expired jobs, jobs no longer listed and
+            jobs whose HZZ page was not read are compared too.
+
+            jobs names each job as its card does, in the given order. rows
+            hold one aspect each, in the order experience, education,
+            contract, working_time, accommodation and deadline, with a cell
+            per job in the jobs' order. A cell's value is a short English
+            summary of what the job states, null when it is unknown; evidence
+            is the job page's own text for the aspect, null when the page was
+            not read or does not state it, and for the deadline the date and
+            whether it came from the job page or the HZZ feed. differs is true
+            when the jobs' values are not all equal, an unknown value
+            differing from a known one; point out the rows that differ. today
+            is the day in Croatia the deadlines are counted from.
+
+            Pass only the conditions the user actually stated about themselves
+            or the job they want; never guess or infer one, and leave the rest
+            out. A row's condition is then the user's value, and each of its
+            cells has a verdict with a reason: 'match' when the job's stated
+            condition meets the user's, 'no_match' when it is known and does
+            not, 'unknown' when the job does not state it or its page was not
+            read. Report 'unknown' as unknown, never as met. A verdict only
+            says whether what the advertisement states meets what the user
+            said, never that the employer will accept the user, so do not
+            claim that. Quote the evidence when you explain a verdict. The
+            deadline has no verdict. Send the user to each job's
+            canonical_url to read the full advertisement or apply.
+            """
+            conditions = JobComparisonConditionsDTO(
+                max_experience_months=max_experience_months, contract=contract, full_time=full_time,
+                education=education, accommodation=accommodation,
+            )
+            # The service compares without conditions when none is set; pass that as None.
+            stated = conditions if conditions.model_dump(exclude_none=True) else None
+            return await self._call(service(ctx).compare_jobs(job_ids, stated))
 
         @server.tool(annotations=READ_ONLY)
         async def list_regions(ctx: Context) -> list[RegionDTO]:

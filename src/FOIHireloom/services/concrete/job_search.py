@@ -8,7 +8,15 @@ from pydantic import ValidationError
 from FOIHireloom.db.models import Job
 from FOIHireloom.db.models.job import SEARCH_FOLD_FROM, SEARCH_FOLD_TO
 from FOIHireloom.db.uow.base import UnitOfWork
-from FOIHireloom.dto.job_conditions import JobConditionsDTO
+from FOIHireloom.dto.job_comparison import (
+    MAX_COMPARED_JOBS,
+    MIN_COMPARED_JOBS,
+    ComparedJobDTO,
+    JobComparisonConditionsDTO,
+    JobComparisonDTO,
+    JobComparisonInputDTO,
+)
+from FOIHireloom.dto.job_conditions import JobConditionsDTO, RawJobConditionsDTO
 from FOIHireloom.dto.job_market import JobMarketCriteriaDTO, JobMarketFiltersDTO, JobMarketStatsDTO
 from FOIHireloom.dto.job_search import (
     SEARCH_TERM,
@@ -35,6 +43,7 @@ from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 
 from .croatian_counties import CroatianCountyCatalog
 from .croatian_stem import stem
+from .job_comparison import JobComparator, JobConditionMatcher
 
 # HZZ deadlines are Croatian calendar days and stay open until the end of the day.
 LOCAL_TIME_ZONE = ZoneInfo("Europe/Zagreb")
@@ -43,6 +52,8 @@ SEARCH_FOLD = str.maketrans(SEARCH_FOLD_FROM, SEARCH_FOLD_TO)
 # Counties named in a coverage warning before the rest are only counted.
 WARNING_REGION_LIMIT = 5
 INVALID_CURSOR = "The cursor is not valid; start the search again without it."
+# Job IDs are bigint identities.
+MAX_JOB_ID = 2**63 - 1
 
 
 class JobSearchService(JobSearchServiceInterface):
@@ -59,12 +70,14 @@ class JobSearchService(JobSearchServiceInterface):
         uow_factory: Callable[[], UnitOfWork],
         counties: CroatianCountyCatalog,
         stale_after: timedelta = timedelta(hours=6),
+        comparator: JobComparator | None = None,
     ) -> None:
         if stale_after <= timedelta(0):
             raise ValueError("stale_after must be positive.")
         self._uow_factory = uow_factory
         self._counties = counties
         self._stale_after = stale_after
+        self._comparator = comparator or JobComparator(JobConditionMatcher())
 
     async def search(self, filters: JobSearchFiltersDTO) -> JobSearchPageDTO:
         jobs, next_cursor, coverage, _, unknown = await self._search(filters, self._summary)
@@ -165,6 +178,46 @@ class JobSearchService(JobSearchServiceInterface):
                     for listing in listings
                 ),
             })
+
+    async def compare_jobs(
+        self, job_ids: Sequence[int], conditions: JobComparisonConditionsDTO | None = None,
+    ) -> JobComparisonDTO:
+        ids = tuple(job_ids)
+        if not MIN_COMPARED_JOBS <= len(ids) <= MAX_COMPARED_JOBS:
+            raise InvalidJobSearchError(
+                f"Choose {MIN_COMPARED_JOBS} or {MAX_COMPARED_JOBS} jobs to compare, not {len(ids)}.")
+        if repeated := sorted({job_id for job_id in ids if ids.count(job_id) > 1}):
+            raise InvalidJobSearchError(
+                f"Choose different jobs to compare; given more than once: {', '.join(map(str, repeated))}.")
+        if conditions is not None and not conditions.model_dump(exclude_none=True):
+            conditions = None
+        async with self._uow_factory() as work:
+            today = self._local_date(await work.transaction_time())
+            # An ID outside the identity column's range cannot name a job.
+            found = await work.jobs.list_by_ids([job_id for job_id in ids if 1 <= job_id <= MAX_JOB_ID])
+            jobs = {job.id: job for job in found}
+            if missing := [str(job_id) for job_id in ids if job_id not in jobs]:
+                raise NotFoundError("job" if len(missing) == 1 else "jobs", ", ".join(missing))
+            counties = self._first_county(await work.job_feed_memberships.list_counties(ids))
+            compared = [self._comparison_input(jobs[job_id], today, counties.get(job_id)) for job_id in ids]
+        return JobComparisonDTO(
+            today=today,
+            jobs=tuple(
+                ComparedJobDTO(**job.summary.model_dump(include=set(ComparedJobDTO.model_fields)),
+                               conditions=job.conditions)
+                for job in compared
+            ),
+            rows=self._comparator.rows(compared, today, conditions),
+            conditions=conditions,
+        )
+
+    def _comparison_input(self, job: Job, today: date, county: JobCountyDTO | None) -> JobComparisonInputDTO:
+        """A job's summary, stored conditions and, once its page is read, the page's condition text."""
+        conditions = self._stored_conditions(job)
+        page = None if conditions is None else RawJobConditionsDTO(**{
+            name: getattr(job, f"page_{name}") for name in RawJobConditionsDTO.model_fields
+        })
+        return JobComparisonInputDTO(summary=self._summary(job, today, county, None), conditions=conditions, page=page)
 
     async def list_regions(self) -> tuple[RegionDTO, ...]:
         async with self._uow_factory() as work:
@@ -300,8 +353,12 @@ class JobSearchService(JobSearchServiceInterface):
 
     @staticmethod
     def _stored_conditions(job: Job) -> JobConditionsDTO | None:
-        """The normalised conditions stored with the job page; None while the page has not been read."""
-        if job.page_status != "fetched":
+        """The normalised conditions stored with the job page; None while no page has been read.
+
+        A page read once keeps its conditions when a later fetch fails, and the
+        search filters still use them, so this goes by page_fetched_at, not page_status.
+        """
+        if job.page_fetched_at is None:
             return None
         return JobConditionsDTO(**{
             name: getattr(job, "conditions_unrecognised" if name == "unrecognised" else name)
