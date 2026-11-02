@@ -12,6 +12,8 @@ from FOIHireloom.dto.job import ParsedJobDTO
 from FOIHireloom.dto.job_conditions import JobConditionsDTO, JobConditionsInputDTO, RawJobConditionsDTO
 from FOIHireloom.dto.job_market import (
     MARKET_WINDOW_DAYS,
+    CountyJobCountsRowDTO,
+    CountyJobCriteriaDTO,
     CountyMarketCountDTO,
     JobMarketAggregatesDTO,
     JobMarketCriteriaDTO,
@@ -193,6 +195,39 @@ class SqlAlchemyJobRepository(JobRepository):
             .limit(limit)
         )
         return tuple(MarketCountDTO.model_validate(row) for row in (await self._session.execute(statement)).all())
+
+    async def county_job_counts(self, criteria: CountyJobCriteriaDTO) -> list[CountyJobCountsRowDTO]:
+        found = (
+            select(Job.id, Job.page_workers_needed.label("workers"), Job.contract,
+                   effective_deadline().label("deadline"))
+            .where(*filter_conditions(criteria))
+            .cte("found")
+        )
+        # A job listed by two feeds of one county counts once there.
+        placed = (
+            select(JobFeedMembership.job_id, SourceFeed.county_id)
+            .join(SourceFeed)
+            .where(JobFeedMembership.presence_status == "present", SourceFeed.scope == "county",
+                   SourceFeed.county_id.in_(criteria.county_ids), JobFeedMembership.job_id.in_(select(found.c.id)))
+            .distinct()
+            .subquery()
+        )
+        window_end = criteria.today + timedelta(days=MARKET_WINDOW_DAYS - 1)
+        statement = (
+            select(
+                placed.c.county_id,
+                func.count().label("jobs"),
+                func.count(found.c.workers).label("with_workers_needed"),
+                func.coalesce(func.sum(found.c.workers), 0).label("workers_needed"),
+                func.count(found.c.contract).label("with_contract"),
+                func.count().filter(found.c.contract == "permanent").label("permanent"),
+                func.count().filter(found.c.deadline.between(criteria.today, window_end)).label("closing_soon"),
+            )
+            .select_from(placed)
+            .join(found, found.c.id == placed.c.job_id)
+            .group_by(placed.c.county_id)
+        )
+        return [CountyJobCountsRowDTO.model_validate(row) for row in (await self._session.execute(statement)).all()]
 
     async def list_categories(self, open_on: date) -> list[CategoryDTO]:
         open_jobs = func.count().label("open_jobs")

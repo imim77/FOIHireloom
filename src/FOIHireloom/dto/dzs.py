@@ -121,3 +121,33 @@ class DzsImportResultDTO(ModelConfigBaseModel):
     values_updated: int | None = None
     values_unchanged: int | None = None
     errors: tuple[str, ...] = ()
+
+
+class DzsStoredValueDTO(ModelConfigBaseModel):
+    """A stored county value as the indicators read it; value is None exactly when missing_reason is set."""
+
+    county_id: int
+    indicator: DzsIndicator
+    period: date
+    sex: DzsSex
+    value: Decimal | None
+    missing_reason: DzsMissingReason | None
+    is_provisional: bool
+    source: DzsValueSource
+
+
+class DzsImportFileRefDTO(ModelConfigBaseModel):
+    """Where an import's file came from: location is the URL, or a local path as given to the command."""
+
+    role: DzsFileRole
+    location: str
+    fetched_at: datetime
+    last_modified: datetime | None = None
+
+
+class DzsImportProvenanceDTO(ModelConfigBaseModel):
+    """The latest succeeded DZS import: when it finished and the files it read."""
+
+    import_id: int
+    finished_at: datetime
+    files: tuple[DzsImportFileRefDTO, ...]

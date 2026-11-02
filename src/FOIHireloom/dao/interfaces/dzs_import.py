@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 
 from FOIHireloom.db.models import DzsImport
-from FOIHireloom.dto.dzs import DzsImportOutcomeDTO
+from FOIHireloom.dto.dzs import DzsImportOutcomeDTO, DzsImportProvenanceDTO
 
 
 class DzsImportRepository(ABC):
@@ -15,6 +15,10 @@ class DzsImportRepository(ABC):
     @abstractmethod
     async def get_by_id(self, import_id: int) -> DzsImport | None:
         """Return the run with its files loaded, or None if absent."""
+
+    @abstractmethod
+    async def get_latest_succeeded(self) -> DzsImportProvenanceDTO | None:
+        """Return the succeeded import that finished last, with its files, or None if none has succeeded."""
 
     @abstractmethod
     async def start(self) -> int:

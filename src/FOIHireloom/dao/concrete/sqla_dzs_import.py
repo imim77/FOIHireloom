@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from FOIHireloom.dao.interfaces.dzs_import import DzsImportRepository
 from FOIHireloom.db.models import DzsImport, DzsImportFile
-from FOIHireloom.dto.dzs import DzsImportOutcomeDTO
+from FOIHireloom.dto.dzs import DzsImportFileRefDTO, DzsImportOutcomeDTO, DzsImportProvenanceDTO
 from FOIHireloom.exceptions import NotFoundError
 
 
@@ -17,6 +17,27 @@ class SqlAlchemyDzsImportRepository(DzsImportRepository):
     async def get_by_id(self, import_id: int) -> DzsImport | None:
         statement = select(DzsImport).where(DzsImport.id == import_id).options(selectinload(DzsImport.files))
         return await self._session.scalar(statement)
+
+    async def get_latest_succeeded(self) -> DzsImportProvenanceDTO | None:
+        statement = (
+            select(DzsImport)
+            .where(DzsImport.status == "succeeded")
+            .order_by(DzsImport.finished_at.desc(), DzsImport.id.desc())
+            .limit(1)
+            .options(selectinload(DzsImport.files))
+        )
+        run = await self._session.scalar(statement)
+        if run is None:
+            return None
+        return DzsImportProvenanceDTO(
+            import_id=run.id,
+            finished_at=run.finished_at,
+            files=tuple(
+                DzsImportFileRefDTO(role=file.role, location=file.location, fetched_at=file.fetched_at,
+                                    last_modified=file.source_last_modified_at)
+                for file in run.files
+            ),
+        )
 
     async def start(self) -> int:
         run = DzsImport()
