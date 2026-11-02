@@ -5,8 +5,10 @@ from fastmcp.exceptions import ToolError
 
 from test_county_indicators import CountyDataTestCase
 
+from FOIHireloom.api.apps.views import COUNTY_COMPARISON, UNEMPLOYMENT_HISTORY
 from FOIHireloom.api.mcp_server import INSTRUCTIONS, McpServer
 from FOIHireloom.config.settings import Settings
+from FOIHireloom.dto.county_indicators import CountyComparisonDTO, UnemploymentHistoryDTO
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
 from FOIHireloom.services import (
@@ -114,3 +116,49 @@ class CountyToolsTests(CountyDataTestCase):
         self.assertEqual((county["change_pp"], county["same_month_previous_year"]["period"]), (-0.6, "2025-09-01"))
         self.assertIn("not a seasonal adjustment", " ".join(history["notes"]))
         self.assertEqual([file["role"] for file in history["dzs"]["files"]], ["t1", "workbook"])
+
+    async def test_show_tools_are_mcp_apps_with_the_data_tools_arguments_and_results(self) -> None:
+        await self.add_dzs()
+        views = {"show_county_comparison": ("compare_counties", COUNTY_COMPARISON, CountyComparisonDTO,
+                                            {"counties": ["varazdinska", "medimurska"], "query": "kuhar"}),
+                 "show_unemployment_history": ("unemployment_history", UNEMPLOYMENT_HISTORY, UnemploymentHistoryDTO,
+                                               {"counties": ["varazdinska"], "months": 24})}
+        async with Client(self.server) as client:
+            tools = {tool.name: tool for tool in await client.list_tools()}
+            resources = {str(resource.uri): resource for resource in await client.list_resources()}
+            results = {}
+            for name, (data_tool, _, _, arguments) in views.items():
+                uri = tools[name].meta["ui"]["resourceUri"]
+                results[name] = (uri, (await client.read_resource(uri))[0].text,
+                                 (await client.call_tool(name, arguments)).structured_content,
+                                 (await client.call_tool(data_tool, arguments)).structured_content)
+            with self.assertRaisesRegex(ToolError, "Unknown county: Atlantida"):
+                await client.call_tool("show_county_comparison", {"counties": ["varazdinska", "Atlantida"]})
+            with self.assertRaises(ToolError):
+                await client.call_tool("show_unemployment_history", {"counties": ["varazdinska"], "months": 25})
+        for name, (data_tool, view, dto, _) in views.items():
+            uri, page, shown, data = results[name]
+            tool = tools[name]
+            with self.subTest(tool=name):
+                self.assertRegex(uri, rf"^ui://foihireloom/{view.name}-[0-9a-f]{{12}}\.html$")
+                self.assertEqual(resources[uri].mimeType, "text/html;profile=mcp-app")
+                self.assertEqual(page, view.page())
+                self.assertEqual(tool.inputSchema, tools[data_tool].inputSchema)
+                self.assertTrue(tool.annotations.readOnlyHint)
+                self.assertNotIn("ui", tools[data_tool].meta or {})
+                self.assertIn(name, INSTRUCTIONS)
+                self.assertIn(name, " ".join(tools[data_tool].description.split()))
+                # Every host gets the data tool's result; the view adds its Croatian wording.
+                self.assertEqual(dto.model_validate(shown), dto.model_validate(data))
+        comparison = results["show_county_comparison"][2]
+        self.assertEqual((comparison["title"], comparison["description"], comparison["counties"][1]["short_name"]),
+                         ("Usporedba županija", f"Upit „kuhar” · aktivni oglasi na dan {self.today:%d. %m. %Y.}",
+                          "Međimurska"))
+        self.assertEqual(comparison["counties"][1]["unemployed_per_worker"]["unavailable_label"],
+                         "nijedan aktivni oglas ne navodi broj traženih radnika")
+        self.assertEqual(comparison["counties"][0]["unemployed_per_worker"]["value"], 360.0)
+        self.assertIsNone(comparison["counties"][0]["unemployed_per_worker"]["unavailable_label"])
+        history = results["show_unemployment_history"][2]
+        self.assertEqual((history["title"], history["description"]),
+                         ("Stopa registrirane nezaposlenosti", "Po mjesecima, listopad 2024. – rujan 2026."))
+        self.assertEqual(history["counties"][0]["change_pp"], -0.6)
