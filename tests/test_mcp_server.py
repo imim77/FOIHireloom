@@ -144,7 +144,8 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self.open_services, 1)
         self.assertEqual(self.open_services, 0)
         self.assertEqual(set(tools), {"search_jobs", "show_jobs", "job_market_stats", "show_jobs_by_county", "get_job",
-                                      "compare_jobs", "show_job_comparison", "list_regions", "list_categories"})
+                                      "compare_jobs", "show_job_comparison", "list_regions", "list_categories",
+                                      "compare_counties", "unemployment_history"})
         for tool in tools.values():
             with self.subTest(tool=tool.name):
                 self.assertTrue(tool.annotations.readOnlyHint)
@@ -441,7 +442,7 @@ class McpHttpTransportTests(unittest.IsolatedAsyncioTestCase):
     async def test_tools_and_health_are_served_over_http(self) -> None:
         base = await self.serve(MCP_PATH="/tools")
         async with Client(f"{base}/tools") as client:
-            self.assertEqual(len(await client.list_tools()), 9)
+            self.assertEqual(len(await client.list_tools()), 11)
             page = (await client.call_tool("search_jobs", {"query": "kuhar"})).structured_content
         self.assertEqual(page["jobs"][0]["title"], "KUHAR/KUHARICA")
         async with httpx.AsyncClient() as http:

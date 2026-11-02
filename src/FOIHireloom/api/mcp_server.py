@@ -10,10 +10,12 @@ from starlette.responses import JSONResponse, Response
 
 from FOIHireloom.config.settings import Settings
 from FOIHireloom.services.dependency import DependencyService
+from FOIHireloom.services.interfaces.county_indicators import CountyIndicatorServiceInterface
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 
 from .app_views import AppViews
 from .apps.views import BUILD_HINT, stale_sources
+from .county_tools import COUNTY_INDICATOR_SERVICE, CountyIndicatorTools
 from .job_tools import JOB_SEARCH_SERVICE, JobTools
 
 INSTRUCTIONS = (
@@ -26,19 +28,23 @@ INSTRUCTIONS = (
     "jobs are. To compare 2 or 3 jobs the user picked, pass their ids to "
     "show_job_comparison to show the user a comparison table, or to compare_jobs "
     "when only the data is needed; pass only the conditions the user stated. "
+    "To compare counties by job ads and DZS registered unemployment use compare_counties, and "
+    "unemployment_history for the DZS unemployment rate over the last 12 to 24 months; their indicators "
+    "describe each county as a whole, and HZZ and DZS data refer to different dates, so name both. "
     "When a result carries a coverage warning, pass it on to the "
     "user. Send users to canonical_url to read the full advertisement or apply."
 )
 
 type JobSearchServiceOpener = Callable[[], AbstractAsyncContextManager[JobSearchServiceInterface]]
+type CountyIndicatorServiceOpener = Callable[[], AbstractAsyncContextManager[CountyIndicatorServiceInterface]]
 
 
 class McpServer:
-    """FastMCP server whose tools share one search service while it runs.
+    """FastMCP server whose tools share one search service and one county indicator service while it runs.
 
-    The service, and its database engine, opens when the server starts and
-    closes when it stops. Pass job_search_service to supply another one, for
-    example in tests. Settings choose the transport: stdio, or Streamable
+    The services, and their database engines, open when the server starts
+    and close when it stops. Pass job_search_service or
+    county_indicator_service to supply another one, for example in tests. Settings choose the transport: stdio, or Streamable
     HTTP with a /health route for hosting platforms.
     """
 
@@ -47,20 +53,23 @@ class McpServer:
         settings: Settings | None = None,
         *,
         job_search_service: JobSearchServiceOpener | None = None,
+        county_indicator_service: CountyIndicatorServiceOpener | None = None,
     ) -> None:
         self._settings = settings or Settings()
-        self._job_search_service = job_search_service or DependencyService(self._settings).job_search_service
+        dependencies = DependencyService(self._settings)
+        self._job_search_service = job_search_service or dependencies.job_search_service
+        self._county_indicator_service = county_indicator_service or dependencies.county_indicator_service
         # Unexpected errors reach the client without details; tools raise ToolError for the rest.
         self.server = FastMCP("FOIHireloom", instructions=INSTRUCTIONS, lifespan=self._lifespan,
                               mask_error_details=True)
-        for group in (JobTools(), AppViews()):
+        for group in (JobTools(), CountyIndicatorTools(), AppViews()):
             group.register(self.server)
         self.server.custom_route("/health", methods=["GET"], include_in_schema=False)(self._health)
 
     @asynccontextmanager
     async def _lifespan(self, server: FastMCP) -> AsyncIterator[dict[str, Any]]:
-        async with self._job_search_service() as service:
-            yield {JOB_SEARCH_SERVICE: service}
+        async with self._job_search_service() as search, self._county_indicator_service() as indicators:
+            yield {JOB_SEARCH_SERVICE: search, COUNTY_INDICATOR_SERVICE: indicators}
 
     @staticmethod
     async def _health(request: Request) -> Response:

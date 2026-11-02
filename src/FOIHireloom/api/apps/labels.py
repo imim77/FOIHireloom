@@ -6,7 +6,7 @@ in the view.
 
 from datetime import date
 
-from FOIHireloom.dto.job_market import JobMarketFiltersDTO
+from FOIHireloom.dto.job_market import JobCountFiltersDTO
 from FOIHireloom.dto.job_search import ActiveFilterDTO, CoverageDTO, JobSearchFiltersDTO
 from FOIHireloom.services.concrete.croatian_counties import CroatianCountyCatalog
 
@@ -82,15 +82,16 @@ def day(today: date, include_expired: bool) -> str:
     return f"{'svi' if include_expired else 'aktivni'} oglasi na dan {date_label(today)}"
 
 
-def active_filters(filters: JobSearchFiltersDTO | JobMarketFiltersDTO) -> tuple[ActiveFilterDTO, ...]:
+def active_filters(filters: JobSearchFiltersDTO | JobCountFiltersDTO) -> tuple[ActiveFilterDTO, ...]:
     """A label for each filter that is set, except the query, in the order of the tool arguments.
 
     A blank county, category or place and no employment tags are no filter;
-    include_expired is one only when True.
+    include_expired is one only when True. Filters without a county, as a
+    county comparison has, get no county label.
     """
     tags = [name for tag, name in EMPLOYMENT_TAGS.items() if tag in (filters.employment_tags or ())]
     labels: dict[str, str | None] = {
-        "county": county_label(county) if (county := (filters.county or "").strip()) else None,
+        "county": county_label(county) if (county := (getattr(filters, "county", None) or "").strip()) else None,
         "category": f"kategorija {category}" if (category := (filters.category or "").strip()) else None,
         "max_experience_months": experience(filters.max_experience_months),
         "contract": CONTRACTS[filters.contract] if filters.contract else None,
