@@ -1,0 +1,92 @@
+/* The rate lines, their legend and a tile per county. Series colours follow the county's place in the request, never
+   its rank; the order (orange, blue, aqua, yellow, magenta, green) passes the colour-blind checks for adjacent pairs
+   on the card in both themes. Light orange, aqua, yellow and magenta are under 3:1 on white, so every line is also
+   named in the legend, at its end and in its tile. */
+:root {
+  --series-1: #eb6834;
+  --series-2: #2a78d6;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+}
+:root[data-theme="dark"] {
+  --series-1: #d95926;
+  --series-2: #3987e5;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+}
+.s1 { --series: var(--series-1); }
+.s2 { --series: var(--series-2); }
+.s3 { --series: var(--series-3); }
+.s4 { --series: var(--series-4); }
+.s5 { --series: var(--series-5); }
+.s6 { --series: var(--series-6); }
+
+.history { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding: 0; list-style: none; font-size: 12px;
+  font-weight: 500; line-height: 1.25; color: var(--fg-loud); }
+.legend li { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { flex: none; width: 12px; height: 3px; border-radius: 2px; background: var(--series); }
+.key { width: 28px; height: 12px; }
+.key-band { fill: var(--surface-subdued); }
+.key-dashed, .key-solid { stroke: var(--fg-soft); stroke-width: 2; stroke-linecap: round; }
+.key-dashed { stroke-dasharray: 4 3; }
+
+.rate-lines { min-width: 0; }
+.plot-box { position: relative; width: 100%; border-radius: 12px; outline: none; }
+.plot-box:focus-visible { box-shadow: var(--focus); }
+.plot-box svg { display: block; overflow: visible; font-family: inherit; }
+.grid line { stroke: var(--border); stroke-width: 1; }
+.grid text, .month { font-size: 11px; fill: var(--fg-soft); font-variant-numeric: tabular-nums; }
+.band rect { opacity: 1; }
+.hatch-line { stroke: var(--surface-disable); stroke-width: 1.5; opacity: 0.45; }
+.band-label { font-size: 11px; font-weight: 500; fill: var(--fg-soft); }
+.line { fill: none; stroke: var(--series); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.line.dashed { stroke-dasharray: 5 4; }
+.dot { fill: var(--series); }
+/* A 2px ring in the card's colour keeps a dot apart from the lines it sits on. */
+.ring { fill: var(--series); stroke: var(--card); stroke-width: 2; }
+.end text { font-size: 12px; font-weight: 600; fill: var(--fg-loud); font-variant-numeric: tabular-nums; }
+.end .end-name { font-weight: 500; fill: var(--fg-soft); }
+.crosshair line { stroke: var(--fg-soft); stroke-width: 1; stroke-dasharray: 2 3; }
+.hit { fill: transparent; cursor: crosshair; }
+
+.tooltip {
+  position: absolute; top: 8px; z-index: 2; min-width: 160px; padding: 8px 10px; border-radius: 10px;
+  background: var(--card); border: 1px solid var(--border); box-shadow: 0 6px 20px rgb(0 0 0 / 0.12);
+  pointer-events: none; font-size: 12px; line-height: 1.35;
+}
+.tooltip p { margin: 0; }
+.tooltip-month { display: flex; align-items: center; gap: 6px; margin-bottom: 4px !important; font-weight: 600; }
+.tooltip-row { display: flex; align-items: center; gap: 6px; }
+.tooltip-name { flex: 1; color: var(--fg-soft); }
+.tooltip-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+.tooltip-missing { font-style: italic; color: var(--fg-soft); }
+
+/* A tile per county on the grey of the sunken surface, as many in a row as fit. */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.tile { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px; border-radius: 14px;
+  background: var(--surface-sunken); }
+.tile p { margin: 0; }
+.tile-name { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+.tile-latest { display: flex; flex-direction: column; gap: 6px; }
+.tile-latest .soft { display: flex; align-items: center; gap: 6px; }
+.tile-missing, .tile-before { font-size: 13px; }
+.tile-missing { font-style: italic; color: var(--fg-soft); }
+.tile-before { color: var(--fg-soft); font-variant-numeric: tabular-nums; }
+.tile-change { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.change {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 12px;
+  font-weight: 600; line-height: 1.4; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.change svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round;
+  stroke-linejoin: round; }
+/* Fewer registered unemployed is green, more is the warning colour; each also has its arrow and sign. */
+.change.down { background: var(--green-tint); color: var(--green-on-tint); }
+.change.up { background: var(--warning-bg); color: var(--warning-fg); }
+.change.same, .change.none { background: var(--surface-subdued); color: var(--fg-soft); }
+.tile-change .soft, .tile > .soft { font-weight: 400; line-height: 1.35; }
