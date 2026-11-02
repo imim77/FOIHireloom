@@ -151,6 +151,8 @@ class DzsFiles:
 
 
 def save(sheets: dict[str, Iterable[Iterable[Any]]]) -> bytes:
+    """Return the sheets as XLSX bytes. The archive embeds save times, so compare
+    hashes with the bytes actually used, never with a second call."""
     workbook = Workbook()
     workbook.remove(workbook.active)
     for name, rows in sheets.items():

@@ -38,6 +38,8 @@ class DzsImportTests(ModelTestCase):
         self.files = DzsFiles()
         self.status = {T1_URL: 200, WORKBOOK_URL: 200}
         self.requests: list[httpx.Request] = []
+        # The bytes last served per URL; each save embeds timestamps, so a rebuilt file can differ.
+        self.served: dict[str, bytes] = {}
         self.http = httpx.AsyncClient(transport=httpx.MockTransport(self.respond))
         self.addAsyncCleanup(self.http.aclose)
         self.sessions = SessionManager(self.engine)
@@ -52,6 +54,7 @@ class DzsImportTests(ModelTestCase):
         if self.status[url] != 200:
             return httpx.Response(self.status[url])
         content = self.files.t1_bytes() if url == T1_URL else self.files.workbook_bytes()
+        self.served[url] = content
         return httpx.Response(200, content=content, headers={
             "ETag": f'"{hashlib.sha256(content).hexdigest()[:8]}"', "Last-Modified": "Wed, 28 Oct 2026 10:00:47 GMT",
         })
@@ -85,7 +88,9 @@ class DzsImportTests(ModelTestCase):
         self.assertEqual((run.id, run.status, run.values_inserted, run.error_summary), (result.import_id, "succeeded", VALUES, None))
         self.assertEqual([(f.role, f.location, f.sheets) for f in run.files],
                          [("t1", T1_URL, ["T1"]), ("workbook", WORKBOOK_URL, ["9.4.13.", "9.4.14."])])
-        self.assertEqual(run.files[1].sha256, hashlib.sha256(self.files.workbook_bytes()).hexdigest())
+        self.assertEqual([(f.sha256, f.size_bytes) for f in run.files],
+                         [(hashlib.sha256(self.served[url]).hexdigest(), len(self.served[url]))
+                          for url in (T1_URL, WORKBOOK_URL)])
         self.assertEqual(run.files[0].source_last_modified_at, datetime(2026, 10, 28, 10, 0, 47, tzinfo=timezone.utc))
         self.assertEqual(run.files[0].etag, result.files[0].etag)
         self.assertEqual([s.source for s in result.series], ["t1", "workbook_9_4_13", "workbook_9_4_14"])
@@ -199,14 +204,16 @@ class DzsImportTests(ModelTestCase):
         service = DzsImportService(DzsClient(self.http), self.parser, None, CroatianCountyCatalog())
         with tempfile.TemporaryDirectory() as directory:
             t1, workbook = Path(directory) / "t1.xlsx", Path(directory) / "workbook.xlsx"
-            t1.write_bytes(self.files.t1_bytes())
-            workbook.write_bytes(self.files.workbook_bytes())
+            written = self.files.t1_bytes(), self.files.workbook_bytes()
+            t1.write_bytes(written[0])
+            workbook.write_bytes(written[1])
             local = DzsSourceDTO(location=str(t1), local=True), DzsSourceDTO(location=str(workbook), local=True)
             result = await service.validate_release(*local)
             self.assertEqual((result.status, result.dry_run, result.import_id, result.values_inserted, result.errors),
                              ("validated", True, None, None, ()))
-            self.assertEqual([(f.location, f.size_bytes, f.etag) for f in result.files],
-                             [(str(t1), t1.stat().st_size, None), (str(workbook), workbook.stat().st_size, None)])
+            self.assertEqual([(f.location, f.sha256, f.size_bytes, f.etag) for f in result.files],
+                             [(str(path), hashlib.sha256(content).hexdigest(), len(content), None)
+                              for path, content in zip((t1, workbook), written)])
             self.assertEqual(sum(s.values for s in result.series), VALUES)
             self.assertEqual(self.requests, [])
 
