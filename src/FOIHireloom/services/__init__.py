@@ -3,6 +3,8 @@
 from .concrete import (
     CategorySnapshotService,
     CroatianCountyCatalog,
+    DzsImportService,
+    DzsReleaseParser,
     FeedCategoryVerifier,
     HzzFeedParser,
     HzzJobPageParser,
@@ -18,6 +20,7 @@ from .concrete import (
 )
 from .interfaces import (
     CategorySnapshotServiceInterface,
+    DzsImportServiceInterface,
     JobConditionsServiceInterface,
     JobPageServiceInterface,
     JobSearchServiceInterface,
@@ -29,6 +32,9 @@ __all__ = [
     "CategorySnapshotService",
     "CategorySnapshotServiceInterface",
     "CroatianCountyCatalog",
+    "DzsImportService",
+    "DzsImportServiceInterface",
+    "DzsReleaseParser",
     "FeedCategoryVerifier",
     "HzzFeedParser",
     "HzzJobPageParser",

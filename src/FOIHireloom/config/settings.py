@@ -40,6 +40,17 @@ class Settings(BaseSettings):
     HZZ_PAGE_RETRY_HOURS: float = Field(default=24.0, gt=0, allow_inf_nan=False)
     HZZ_PAGE_MAX_CONSECUTIVE_FAILURES: int = Field(default=5, ge=1)
 
+    # DZS release RAD-2026-2-6/3 (table T1) and the county workbook it links;
+    # the workbook is rewritten at the same URL for each release.
+    DZS_T1_URL: str = Field(
+        default="https://podaci.dzs.hr/media/ulbjlyex/rad-2026-2-6_3_tablice-hr.xlsx", min_length=1
+    )
+    DZS_WORKBOOK_URL: str = Field(
+        default="https://podaci.dzs.hr/media/xpkfrkth/zaposlenost-i-place-pregled-po-zupanijama.xlsx", min_length=1
+    )
+    DZS_TIMEOUT: float = Field(default=30.0, gt=0, allow_inf_nan=False)
+    DZS_MAX_BYTES: int = Field(default=20 * 1024 * 1024, gt=0)
+
     MCP_TRANSPORT: Literal["stdio", "http"] = "stdio"
     MCP_HOST: str = Field(default="127.0.0.1", min_length=1)
     MCP_PORT: int = Field(default=8000, ge=1, le=65535)

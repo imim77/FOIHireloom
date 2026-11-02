@@ -67,6 +67,13 @@ class DzsReleaseDTO(ModelConfigBaseModel):
     series: tuple[DzsSeriesDTO, ...]
 
 
+class DzsSourceDTO(ModelConfigBaseModel):
+    """Where to obtain a file: a URL, or a local path when local is True."""
+
+    location: str
+    local: bool = False
+
+
 class DzsFileResponseDTO(ModelConfigBaseModel):
     """The bytes of one downloaded or local DZS file with its HTTP validators, if any."""
 

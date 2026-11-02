@@ -72,6 +72,8 @@ SERIES_SHEETS = (
                 "unemployment_rate", frozenset({"total", "men", "women"})),
 )
 SOURCE_ORDER = ("t1", *(sheet.source for sheet in SERIES_SHEETS))
+# The sheets read from each file, by file role.
+SHEETS = {"t1": (T1_SHEET,), "workbook": tuple(sheet.name for sheet in SERIES_SHEETS)}
 
 
 def squash(value: Any) -> str:
@@ -144,9 +146,9 @@ class DzsReleaseParser:
         problems: list[str] = []
         t1_values: list[DzsValueDTO] = []
         series: dict[str, list[DzsValueDTO]] = {}
-        if sheets := self._load(t1, "T1 file", (T1_SHEET,), problems):
+        if sheets := self._load(t1, "T1 file", SHEETS["t1"], problems):
             t1_values = self._parse_t1(sheets[T1_SHEET])
-        if sheets := self._load(workbook, "Workbook", tuple(spec.name for spec in SERIES_SHEETS), problems):
+        if sheets := self._load(workbook, "Workbook", SHEETS["workbook"], problems):
             series = {spec.source: self._parse_series(sheets[spec.name], spec) for spec in SERIES_SHEETS}
         if not problems:
             self._check_t1(t1_values, problems)
