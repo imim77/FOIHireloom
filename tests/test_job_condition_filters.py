@@ -34,9 +34,9 @@ class JobConditionFilterTests(ModelTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
         self.today = await self.session.scalar(text("SELECT (now() AT TIME ZONE 'Europe/Zagreb')::date"))
-        counties = {code: County(code=code, name=name) for code, name in (
-            ("varazdinska", "Varaždinska županija"), ("istarska", "Istarska županija"),
-            ("grad-zagreb", "Grad Zagreb"))}
+        counties = {code: County(code=code, iso_code=iso_code, name=name) for code, iso_code, name in (
+            ("varazdinska", "HR-05", "Varaždinska županija"), ("istarska", "HR-18", "Istarska županija"),
+            ("grad-zagreb", "HR-21", "Grad Zagreb"))}
         self.session.add_all(counties.values())
         await self.session.flush()
         self.county_ids = {code: county.id for code, county in counties.items()}

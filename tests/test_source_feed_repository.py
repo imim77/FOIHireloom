@@ -22,7 +22,7 @@ from FOIHireloom.dao.interfaces.source_feed import SourceFeedRepository
 class SourceFeedRepositoryTests(ModelTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
-        self.county = County(code="zagreb", name="Grad Zagreb")
+        self.county = County(code="zagreb", iso_code="HR-21", name="Grad Zagreb")
         self.session.add(self.county)
         await self.session.commit()
         self.county_id = self.county.id

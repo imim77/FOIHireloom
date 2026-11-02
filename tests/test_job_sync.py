@@ -29,7 +29,7 @@ def ad(web_sifra: str, title: str = "KUHAR/KUHARICA", deadline: str = "30.11.202
 class JobSyncTests(ModelTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
-        county = County(code="bjelovarsko-bilogorska", name="Bjelovarsko-bilogorska županija")
+        county = County(code="bjelovarsko-bilogorska", iso_code="HR-07", name="Bjelovarsko-bilogorska županija")
         self.session.add(county)
         await self.session.flush()
         self.feeds = {}

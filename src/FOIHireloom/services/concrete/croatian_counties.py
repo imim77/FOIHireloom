@@ -4,32 +4,36 @@ from FOIHireloom.dto.county import CountyDefinitionDTO
 
 
 class CroatianCountyCatalog:
-    """Stable application codes; RSS resource numbering is not a county code."""
+    """Stable application codes; RSS resource numbering is not a county code.
+
+    iso_code is the county's ISO 3166-2:HR code, which links other sources,
+    such as DZS tables, to the same county.
+    """
 
     definitions = tuple(
-        CountyDefinitionDTO(code=code, name=name)
-        for code, name in (
-            ("bjelovarsko-bilogorska", "Bjelovarsko-bilogorska županija"),
-            ("brodsko-posavska", "Brodsko-posavska županija"),
-            ("dubrovacko-neretvanska", "Dubrovačko-neretvanska županija"),
-            ("grad-zagreb", "Grad Zagreb"),
-            ("istarska", "Istarska županija"),
-            ("karlovacka", "Karlovačka županija"),
-            ("koprivnicko-krizevacka", "Koprivničko-križevačka županija"),
-            ("krapinsko-zagorska", "Krapinsko-zagorska županija"),
-            ("licko-senjska", "Ličko-senjska županija"),
-            ("medimurska", "Međimurska županija"),
-            ("osjecko-baranjska", "Osječko-baranjska županija"),
-            ("pozesko-slavonska", "Požeško-slavonska županija"),
-            ("primorsko-goranska", "Primorsko-goranska županija"),
-            ("sisacko-moslavacka", "Sisačko-moslavačka županija"),
-            ("splitsko-dalmatinska", "Splitsko-dalmatinska županija"),
-            ("sibensko-kninska", "Šibensko-kninska županija"),
-            ("varazdinska", "Varaždinska županija"),
-            ("viroviticko-podravska", "Virovitičko-podravska županija"),
-            ("vukovarsko-srijemska", "Vukovarsko-srijemska županija"),
-            ("zadarska", "Zadarska županija"),
-            ("zagrebacka", "Zagrebačka županija"),
+        CountyDefinitionDTO(code=code, iso_code=iso_code, name=name)
+        for code, iso_code, name in (
+            ("bjelovarsko-bilogorska", "HR-07", "Bjelovarsko-bilogorska županija"),
+            ("brodsko-posavska", "HR-12", "Brodsko-posavska županija"),
+            ("dubrovacko-neretvanska", "HR-19", "Dubrovačko-neretvanska županija"),
+            ("grad-zagreb", "HR-21", "Grad Zagreb"),
+            ("istarska", "HR-18", "Istarska županija"),
+            ("karlovacka", "HR-04", "Karlovačka županija"),
+            ("koprivnicko-krizevacka", "HR-06", "Koprivničko-križevačka županija"),
+            ("krapinsko-zagorska", "HR-02", "Krapinsko-zagorska županija"),
+            ("licko-senjska", "HR-09", "Ličko-senjska županija"),
+            ("medimurska", "HR-20", "Međimurska županija"),
+            ("osjecko-baranjska", "HR-14", "Osječko-baranjska županija"),
+            ("pozesko-slavonska", "HR-11", "Požeško-slavonska županija"),
+            ("primorsko-goranska", "HR-08", "Primorsko-goranska županija"),
+            ("sisacko-moslavacka", "HR-03", "Sisačko-moslavačka županija"),
+            ("splitsko-dalmatinska", "HR-17", "Splitsko-dalmatinska županija"),
+            ("sibensko-kninska", "HR-15", "Šibensko-kninska županija"),
+            ("varazdinska", "HR-05", "Varaždinska županija"),
+            ("viroviticko-podravska", "HR-10", "Virovitičko-podravska županija"),
+            ("vukovarsko-srijemska", "HR-16", "Vukovarsko-srijemska županija"),
+            ("zadarska", "HR-13", "Zadarska županija"),
+            ("zagrebacka", "HR-01", "Zagrebačka županija"),
         )
     )
 

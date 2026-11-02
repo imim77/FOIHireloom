@@ -31,7 +31,7 @@ class SourceFeedModelTests(ModelTestCase):
         await self.assert_rejected(self.feed(scope="unknown"))
 
     async def test_county_relationship_and_restricted_delete(self) -> None:
-        county = County(code="zagreb", name="Grad Zagreb")
+        county = County(code="zagreb", iso_code="HR-21", name="Grad Zagreb")
         feed = self.feed(scope="county", county=county)
         self.session.add(feed)
         await self.session.flush()
@@ -65,7 +65,7 @@ class SourceFeedModelTests(ModelTestCase):
         self.session.add(feed)
         await self.session.flush()
         self.assertIsNone(feed.county_id)
-        county = County(code="zagreb", name="Grad Zagreb")
+        county = County(code="zagreb", iso_code="HR-21", name="Grad Zagreb")
         self.session.add(county)
         await self.session.flush()
         await self.assert_rejected(self.feed(scope="occupation", county_id=county.id))
@@ -88,7 +88,7 @@ class SourceFeedModelTests(ModelTestCase):
                 feed = self.feed(scope="occupation", **values)
                 self.session.add(feed)
                 await self.session.flush()
-        county = County(code="zagreb", name="Grad Zagreb")
+        county = County(code="zagreb", iso_code="HR-21", name="Grad Zagreb")
         self.session.add(county)
         await self.session.flush()
         for values in (

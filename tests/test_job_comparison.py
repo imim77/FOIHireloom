@@ -35,7 +35,7 @@ class JobComparisonTests(ModelTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
         self.today = await self.session.scalar(text("SELECT (now() AT TIME ZONE 'Europe/Zagreb')::date"))
-        county = County(code="varazdinska", name="Varaždinska županija")
+        county = County(code="varazdinska", iso_code="HR-05", name="Varaždinska županija")
         self.session.add(county)
         await self.session.flush()
         feed = SourceFeed(county_id=county.id, ckan_resource_id=uuid4(), label="varazdinska", scope="county",

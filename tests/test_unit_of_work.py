@@ -29,7 +29,7 @@ class UnitOfWorkTests(ModelTestCase):
 
     def feed(self) -> SourceFeed:
         return SourceFeed(
-            county=County(code="zagreb", name="Grad Zagreb"),
+            county=County(code="zagreb", iso_code="HR-21", name="Grad Zagreb"),
             ckan_resource_id=uuid4(),
             label="Poslovi u Gradu Zagrebu",
             feed_url=f"https://example.com/{uuid4()}.xml",

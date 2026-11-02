@@ -57,7 +57,11 @@ class SqlAlchemyCountyRepository(CountyRepository):
         self._session.add(county)
         await self._session.flush()
 
+    async def list_all(self) -> list[CountyDTO]:
+        result = await self._session.scalars(select(County).order_by(County.iso_code))
+        return [CountyDTO.model_validate(county) for county in result]
+
     async def create(self, county: CountyDefinitionDTO) -> CountyDTO:
-        entity = County(code=county.code, name=county.name)
+        entity = County(code=county.code, iso_code=county.iso_code, name=county.name)
         await self.add(entity)
         return CountyDTO.model_validate(entity)

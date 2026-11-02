@@ -59,7 +59,7 @@ def run_main(service: FixedService, *argv: str) -> tuple[int, str, str]:
 class CategorySnapshotTests(ModelTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
-        county = County(code="grad-zagreb", name="Grad Zagreb")
+        county = County(code="grad-zagreb", iso_code="HR-21", name="Grad Zagreb")
         self.session.add(county)
         await self.session.flush()
         verified = {"mapping_verified_at": func.now(), "mapping_contradicting_examples": 0}
