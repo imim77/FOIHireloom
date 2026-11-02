@@ -1,0 +1,76 @@
+/* The two moments the data refers to, side by side; one under the other in a narrow frame. */
+.moments { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin: 0; }
+.moment { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 10px 12px; border-radius: 12px;
+  background: var(--surface-sunken); }
+.moment dt { font-size: 12px; font-weight: 500; color: var(--fg-soft); }
+.moment dd { margin: 0; }
+.moment-value { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14px; font-weight: 600;
+  line-height: 1.3; font-variant-numeric: tabular-nums; }
+.moment .soft { font-weight: 400; line-height: 1.35; }
+
+/* The table on the card's white panel: a column per county and a row per figure. A narrow frame scrolls the table
+   sideways inside its own box, never the page, with the row names kept in place (as in the job comparison). */
+.compare-scroll {
+  --aspect: 160px;
+  /* Four counties fit in a 760px frame. */
+  --column: 144px;
+  container-type: inline-size;
+  overflow-x: auto; overscroll-behavior-x: contain; max-width: 100%; border-radius: 12px;
+  /* A shadow at the right edge while more columns are hidden there: the card-coloured cover scrolls with the table
+     and hides the shadow at its end. */
+  background:
+    linear-gradient(to left, var(--card) 40%, transparent) right / 32px 100% no-repeat local,
+    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.14), transparent) right / 14px 100% no-repeat scroll;
+}
+.compare-scroll:focus-visible { outline: none; box-shadow: var(--focus); }
+.compare-scroll.expanded { --aspect: 200px; --column: 200px; }
+/* A narrow frame (about 400px) still fits two counties; the others scroll in. */
+@container (max-width: 520px) {
+  .compare { --aspect: 108px; --column: 120px; }
+  .compare th, .compare td { padding: 9px 8px; }
+}
+
+.compare {
+  hyphens: auto; overflow-wrap: break-word;
+  width: 100%; min-width: calc(var(--aspect) + var(--counties) * var(--column)); table-layout: fixed;
+  border-collapse: separate; border-spacing: 0; font-size: 13px; line-height: 1.35; color: var(--fg-loud);
+}
+.compare th, .compare td { padding: 10px 12px; text-align: left; vertical-align: top; font-weight: inherit; }
+.compare .corner, .compare .aspect { width: var(--aspect); }
+/* The row names stay while the counties scroll under them; they need their own background for that. */
+.compare .corner, .compare .aspect {
+  position: sticky; left: 0; z-index: 1; background: var(--card); box-shadow: inset -1px 0 0 var(--border);
+}
+.compare tbody tr:not(.section) > * { border-top: 1px solid var(--border); }
+
+.county-head-inner { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.county-name { font-size: 15px; font-weight: 700; line-height: 1.25; }
+.county-total { font-size: 12px; color: var(--fg-soft); }
+
+/* A group's heading runs over the whole table; its text stays at the left edge while the table scrolls. */
+.compare .section > th { padding: 18px 0 8px; }
+.section-inner { position: sticky; left: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px;
+  width: max-content; max-width: min(100cqw, 100%); padding: 0 12px; }
+.section-name { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
+.section-hint { font-size: 12px; color: var(--fg-soft); }
+/* The indicators describe each county as a whole, not the filtered ads: a grey band sets them apart. */
+.compare tbody.indicators tr:not(.section) > * { background: var(--surface-sunken); border-top-color: var(--card); }
+.compare tbody.indicators .section-name { color: var(--orange-500); }
+
+.aspect-inner { font-weight: 600; min-width: 0; }
+.cell-inner { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.cell-text { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 14px; font-weight: 600;
+  font-variant-numeric: tabular-nums; }
+/* Notes break between words only: a split month ("ru-jan") reads badly. */
+.cell-note { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 12px; color: var(--fg-soft);
+  font-variant-numeric: tabular-nums; hyphens: manual; }
+/* An unavailable value: what it is not, in place of a number, and why under it. */
+.cell.unavailable .cell-text { font-size: 13px; font-weight: 500; font-style: italic; color: var(--fg-soft); }
+.cell.unavailable .cell-note { color: var(--warning-fg); }
+
+/* The highest and the lowest of an indicator row; neither is better, so both look the same. */
+.extreme {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; font-style: normal;
+  color: var(--fg-soft); white-space: nowrap;
+}
+.extreme::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 999px; background: var(--orange-500); }
