@@ -107,12 +107,12 @@ class CountyIndicatorTools(ToolGroup):
             include_expired: CountyIncludeExpired = False,
             period: Period = None,
         ) -> CountyComparisonDTO:
-            """Compare 2 to 6 Croatian counties by HZZ job ads and DZS registered unemployment.
+            """Return the data of a comparison of 2 to 6 Croatian counties, without a view.
 
-            Use it for questions such as "compare demand for cooks in
-            Varaždinska and Međimurska" or "where are the most unemployed per
-            sought worker" when only the data is needed; to show the user the
-            comparison, use show_county_comparison. Per county:
+            When the user asks to compare counties, call show_county_comparison
+            instead: it returns the same data and also shows it. Use this tool
+            only when you need the numbers without showing them, e.g. to choose
+            counties before showing a comparison. Per county:
             filtered_jobs counts the HZZ ads matching the job filters, which
             work as in job_market_stats: jobs, workers_needed with
             workers_needed_coverage (ads stating the number out of all; an
@@ -174,9 +174,9 @@ class CountyIndicatorTools(ToolGroup):
         ) -> CountyComparisonViewDTO:
             """Show the user 2 to 6 Croatian counties side by side by HZZ job ads and DZS registered unemployment.
 
-            Use it when the user wants to see a county comparison, e.g.
-            "compare demand for cooks in Varaždinska and Međimurska"; use
-            compare_counties when only the data is needed. Hosts that support
+            Use it whenever the user asks to compare counties, e.g. "compare
+            demand for cooks in Varaždinska and Međimurska" or "where are the
+            most unemployed per sought worker". Hosts that support
             MCP Apps draw a column per county with the ads matching the
             filters, the DZS values with their reference months and the two
             county-wide indicators, each unavailable value with its reason,
@@ -203,11 +203,12 @@ class CountyIndicatorTools(ToolGroup):
             months: HistoryMonths = DEFAULT_HISTORY_MONTHS,
             sex: HistorySex = "total",
         ) -> UnemploymentHistoryDTO:
-            """Show how the registered unemployment rate of 1 to 6 counties changed month by month (DZS).
+            """Return the monthly registered unemployment rate of 1 to 6 counties (DZS), without a view.
 
-            Use it for questions such as "how did unemployment in Varaždinska
-            change over the last year" when only the data is needed; to show
-            the user a chart, use show_unemployment_history. Each county's
+            When the user asks how unemployment changed, call
+            show_unemployment_history instead: it returns the same data and
+            also draws a chart. Use this tool only when you need the numbers
+            without showing them. Each county's
             series runs from first_period to last_period (first days of the
             months), oldest first; each point has the rate in percent with
             one decimal and is_provisional. A null rate has
@@ -232,9 +233,9 @@ class CountyIndicatorTools(ToolGroup):
         ) -> UnemploymentHistoryViewDTO:
             """Show the user a line chart of the monthly registered unemployment rate of 1 to 6 counties (DZS).
 
-            Use it when the user wants to see how unemployment changed, e.g.
-            "how did unemployment in Varaždinska change over the last year";
-            use unemployment_history when only the data is needed. Hosts that
+            Use it whenever the user asks how unemployment changed, e.g. "how
+            did unemployment in Varaždinska change over the last year". Hosts
+            that
             support MCP Apps draw a line per county, with provisional months
             dashed and missing months as gaps, and per county the latest
             rate, the same month a year earlier and the change in percentage
