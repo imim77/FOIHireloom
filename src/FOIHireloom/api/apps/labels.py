@@ -6,6 +6,7 @@ in the view.
 
 from datetime import date
 
+from FOIHireloom.dto.county_indicators import SourceDTO, SourceLinkDTO, UnavailableReason
 from FOIHireloom.dto.job_market import JobCountFiltersDTO
 from FOIHireloom.dto.job_search import ActiveFilterDTO, CoverageDTO, JobSearchFiltersDTO
 from FOIHireloom.services.concrete.croatian_counties import CroatianCountyCatalog
@@ -47,6 +48,25 @@ COUNTIES = CroatianCountyCatalog()
 COUNTY_NAMES = {county.code: county.name for county in COUNTIES.definitions}
 # Counties named in a coverage note before the rest are only counted.
 NOTE_REGION_LIMIT = 3
+MONTHS = ("siječanj", "veljača", "ožujak", "travanj", "svibanj", "lipanj", "srpanj", "kolovoz", "rujan", "listopad",
+          "studeni", "prosinac")
+# The sources by the names CountyIndicatorService gives them.
+SOURCE_NAMES = {
+    "HZZ": "HZZ, burza rada (oglasi)",
+    "DZS release table T1": "DZS, priopćenje o zaposlenosti (tablica T1)",
+    "DZS county workbook": "DZS, pregled po županijama (listovi 9.4.13 i 9.4.14)",
+}
+# Why a DZS value, an indicator or a change is unavailable, by its unavailable_reason; the views and county_comparison
+# word dzs_value_missing and zero_denominator more precisely when they know the month or the indicator.
+UNAVAILABLE_REASONS: dict[UnavailableReason, str] = {
+    "no_dzs_data": "DZS podaci nisu uvezeni",
+    "no_common_period": "nijedan mjesec nema DZS podatak za sve odabrane županije",
+    "dzs_value_missing": "DZS nema podatak za taj mjesec",
+    "no_hzz_data": "HZZ oglasi za županiju nisu učitani",
+    "no_known_workers": "nijedan aktivni oglas ne navodi broj traženih radnika",
+    "zero_denominator": "nazivnik je 0",
+}
+PROVISIONAL_NOTE = "DZS podaci za mjesece 2026. su privremeni i mogu se revidirati."
 
 
 def plural(count: float, one: str, few: str, many: str) -> str:
@@ -75,6 +95,21 @@ def sentence(text: str) -> str:
 def date_label(value: date) -> str:
     """"30. 10. 2026.", as the views write a day."""
     return f"{value:%d. %m. %Y.}"
+
+
+def month_label(value: date, accusative: bool = False) -> str:
+    """"rujan 2026.", or after "za" in the accusative, which only changes veljača: "za veljaču 2026."."""
+    name = MONTHS[value.month - 1]
+    return f"{'veljaču' if accusative and value.month == 2 else name} {value.year}."
+
+
+def source_links(sources: tuple[SourceDTO, ...]) -> tuple[SourceLinkDTO, ...]:
+    """The sources in Croatian, in their order; a local file has no link and says so."""
+    return tuple(
+        SourceLinkDTO(label=SOURCE_NAMES.get(source.name, source.name) + ("" if source.url else " (lokalna datoteka)"),
+                      url=source.url)
+        for source in sources
+    )
 
 
 def day(today: date, include_expired: bool) -> str:

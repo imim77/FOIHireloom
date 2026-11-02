@@ -276,3 +276,77 @@ class UnemploymentHistoryDTO(ModelConfigBaseModel):
     dzs: DzsImportProvenanceDTO | None
     sources: tuple[SourceDTO, ...]
     notes: tuple[str, ...]
+
+
+class SourceLinkDTO(ModelConfigBaseModel):
+    """A source as a view names it in Croatian; url is None for a local file."""
+
+    label: str
+    url: str | None
+
+
+class DzsCountyValueViewDTO(DzsCountyValueDTO):
+    """A DZS value with why it is unavailable in Croatian, e.g. "DZS nema podatak za rujan 2025."; None when known."""
+
+    unavailable_label: str | None
+
+
+class CountyIndicatorViewDTO(CountyIndicatorDTO):
+    """An indicator with why it is unavailable in Croatian, e.g. "nijedan aktivni oglas ne navodi broj traženih
+    radnika"; None when known."""
+
+    unavailable_label: str | None
+
+
+class ComparedCountyViewDTO(ComparedCountyDTO):
+    """A compared county with its short name ("Varaždinska") and Croatian reasons for unavailable values."""
+
+    short_name: str
+    unemployed: DzsCountyValueViewDTO
+    active_population: DzsCountyValueViewDTO
+    unemployment_rate: DzsCountyValueViewDTO
+    unemployed_per_worker: CountyIndicatorViewDTO
+    jobs_per_1000_active: CountyIndicatorViewDTO
+
+
+class CountyComparisonViewDTO(CountyComparisonDTO):
+    """A county comparison for the county comparison view, with the Croatian wording it shows; the English fields stay.
+
+    description names the query and the day the ads are counted on; the
+    other filters are active_filters. coverage_note is hzz_coverage.warning
+    in Croatian, None when every county is fresh. source_links name the
+    sources, view_notes say the limits in Croatian and disclaimer that the
+    indicators describe HZZ ads and registered unemployment only.
+    """
+
+    title: str
+    description: str
+    counties: tuple[ComparedCountyViewDTO, ...]
+    coverage_note: str | None
+    source_links: tuple[SourceLinkDTO, ...]
+    view_notes: tuple[str, ...]
+    disclaimer: str
+
+
+class CountyUnemploymentHistoryViewDTO(CountyUnemploymentHistoryDTO):
+    """A county's series with its short name and why change_pp is unavailable in Croatian, None when it is known."""
+
+    short_name: str
+    change_unavailable_label: str | None
+
+
+class UnemploymentHistoryViewDTO(UnemploymentHistoryDTO):
+    """Unemployment history for the unemployment history view, with the Croatian wording it shows.
+
+    title names whose rate it is, description the months shown.
+    unavailable_label says in Croatian why there is no series, None when
+    there is one. source_links and view_notes are as in
+    CountyComparisonViewDTO.
+    """
+
+    title: str
+    description: str
+    counties: tuple[CountyUnemploymentHistoryViewDTO, ...]
+    unavailable_label: str | None
+    source_links: tuple[SourceLinkDTO, ...]
+    view_notes: tuple[str, ...]
