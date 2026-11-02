@@ -80,6 +80,7 @@ HistoryMonths = Annotated[int, Field(
                 "for every requested county.",
 )]
 HistorySex = Annotated[DzsSex, Field(description="Whose unemployment rate: 'total', 'women' or 'men'.")]
+DATA_ONLY = AppConfig(visibility=["app"])
 
 
 class CountyIndicatorTools(ToolGroup):
@@ -88,10 +89,15 @@ class CountyIndicatorTools(ToolGroup):
     Tools only translate arguments and errors; CountyIndicatorService holds
     the rules. The server's lifespan must provide the service under
     COUNTY_INDICATOR_SERVICE.
+
+    The data-only tools are visible to apps, not to the model: Claude picked
+    compare_counties over show_county_comparison even when told otherwise,
+    and the show_ tools return the same data. Hosts without MCP Apps ignore
+    visibility and list both.
     """
 
     def register(self, server: FastMCP) -> None:
-        @server.tool(annotations=READ_ONLY)
+        @server.tool(app=DATA_ONLY, annotations=READ_ONLY)
         async def compare_counties(
             ctx: Context,
             counties: ComparedCounties,
@@ -196,7 +202,7 @@ class CountyIndicatorTools(ToolGroup):
             )
             return county_comparison.county_comparison(await self._compare(ctx, counties, filters, period))
 
-        @server.tool(annotations=READ_ONLY)
+        @server.tool(app=DATA_ONLY, annotations=READ_ONLY)
         async def unemployment_history(
             ctx: Context,
             counties: HistoryCounties,

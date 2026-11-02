@@ -145,7 +145,9 @@ class CountyToolsTests(CountyDataTestCase):
                 self.assertEqual(page, view.page())
                 self.assertEqual(tool.inputSchema, tools[data_tool].inputSchema)
                 self.assertTrue(tool.annotations.readOnlyHint)
-                self.assertNotIn("ui", tools[data_tool].meta or {})
+                # The model sees only the show_ tool; apps may still call the data tool.
+                self.assertEqual(tools[data_tool].meta["ui"], {"visibility": ["app"]})
+                self.assertNotIn("visibility", tool.meta["ui"])
                 self.assertIn(name, INSTRUCTIONS)
                 self.assertIn(name, " ".join(tools[data_tool].description.split()))
                 # Every host gets the data tool's result; the view adds its Croatian wording.
