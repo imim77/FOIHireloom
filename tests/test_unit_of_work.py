@@ -201,6 +201,10 @@ class UnitOfWorkTests(ModelTestCase):
             with self.assertRaisesRegex(RuntimeError, "active"):
                 _ = work.sync_runs
             with self.assertRaisesRegex(RuntimeError, "active"):
+                _ = work.dzs_imports
+            with self.assertRaisesRegex(RuntimeError, "active"):
+                _ = work.dzs_indicator_values
+            with self.assertRaisesRegex(RuntimeError, "active"):
                 await work.commit()
             with self.assertRaisesRegex(RuntimeError, "active"):
                 await work.rollback()
@@ -230,6 +234,7 @@ class UnitOfWorkTests(ModelTestCase):
             previous_memberships = work.job_feed_memberships
             previous_source_feeds = work.source_feeds
             previous_sync_runs = work.sync_runs
+            previous_dzs = (work.dzs_imports, work.dzs_indicator_values)
             discarded = self.job()
             await work.jobs.add(discarded)
             discarded_id = discarded.id
@@ -240,6 +245,8 @@ class UnitOfWorkTests(ModelTestCase):
             self.assertIsNot(work.job_feed_memberships, previous_memberships)
             self.assertIsNot(work.source_feeds, previous_source_feeds)
             self.assertIsNot(work.sync_runs, previous_sync_runs)
+            self.assertIsNot(work.dzs_imports, previous_dzs[0])
+            self.assertIsNot(work.dzs_indicator_values, previous_dzs[1])
             self.assertIsNone(await work.jobs.get_by_id(discarded_id))
             committed = self.job()
             await work.jobs.add(committed)

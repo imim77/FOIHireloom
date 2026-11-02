@@ -9,12 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from FOIHireloom.db.session import AsyncDBContextManager, SessionManager
 from FOIHireloom.dao.interfaces.county import CountyRepository
 from FOIHireloom.dao.concrete.sqla_county import SqlAlchemyCountyRepository
+from FOIHireloom.dao.concrete.sqla_dzs_import import SqlAlchemyDzsImportRepository
+from FOIHireloom.dao.concrete.sqla_dzs_indicator_value import SqlAlchemyDzsIndicatorValueRepository
 from FOIHireloom.dao.concrete.sqla_job import SqlAlchemyJobRepository
 from FOIHireloom.dao.concrete.sqla_job_feed_membership import (
     SqlAlchemyJobFeedMembershipRepository,
 )
 from FOIHireloom.dao.concrete.sqla_source_feed import SqlAlchemySourceFeedRepository
 from FOIHireloom.dao.concrete.sqla_sync_run import SqlAlchemySyncRunRepository
+from FOIHireloom.dao.interfaces.dzs_import import DzsImportRepository
+from FOIHireloom.dao.interfaces.dzs_indicator_value import DzsIndicatorValueRepository
 from FOIHireloom.dao.interfaces.job import JobRepository
 from FOIHireloom.dao.interfaces.job_feed_membership import JobFeedMembershipRepository
 from FOIHireloom.dao.interfaces.source_feed import SourceFeedRepository
@@ -42,6 +46,8 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self._context: AsyncDBContextManager | None = None
         self._session: AsyncSession | None = None
         self._counties: CountyRepository | None = None
+        self._dzs_imports: DzsImportRepository | None = None
+        self._dzs_indicator_values: DzsIndicatorValueRepository | None = None
         self._jobs: JobRepository | None = None
         self._job_feed_memberships: JobFeedMembershipRepository | None = None
         self._source_feeds: SourceFeedRepository | None = None
@@ -52,6 +58,18 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         if self._counties is None:
             raise RuntimeError("County repository requires an active Unit of Work.")
         return self._counties
+
+    @property
+    def dzs_imports(self) -> DzsImportRepository:
+        if self._dzs_imports is None:
+            raise RuntimeError("DZS import repository requires an active Unit of Work.")
+        return self._dzs_imports
+
+    @property
+    def dzs_indicator_values(self) -> DzsIndicatorValueRepository:
+        if self._dzs_indicator_values is None:
+            raise RuntimeError("DZS indicator value repository requires an active Unit of Work.")
+        return self._dzs_indicator_values
 
     @property
     def jobs(self) -> JobRepository:
@@ -86,6 +104,8 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         try:
             self._session = await context.__aenter__()
             self._counties = SqlAlchemyCountyRepository(self._session)
+            self._dzs_imports = SqlAlchemyDzsImportRepository(self._session)
+            self._dzs_indicator_values = SqlAlchemyDzsIndicatorValueRepository(self._session)
             self._jobs = SqlAlchemyJobRepository(self._session)
             self._job_feed_memberships = SqlAlchemyJobFeedMembershipRepository(self._session)
             self._source_feeds = SqlAlchemySourceFeedRepository(self._session)
@@ -142,6 +162,8 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
 
     def _clear_context(self) -> None:
         self._counties = None
+        self._dzs_imports = None
+        self._dzs_indicator_values = None
         self._jobs = None
         self._job_feed_memberships = None
         self._source_feeds = None
