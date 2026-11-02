@@ -2,10 +2,12 @@
 
 from .concrete import (
     CategorySnapshotService,
+    CountyIndicatorService,
     CroatianCountyCatalog,
     DzsImportService,
     DzsReleaseParser,
     FeedCategoryVerifier,
+    FeedCoverage,
     HzzFeedParser,
     HzzJobPageParser,
     JobComparator,
@@ -20,6 +22,7 @@ from .concrete import (
 )
 from .interfaces import (
     CategorySnapshotServiceInterface,
+    CountyIndicatorServiceInterface,
     DzsImportServiceInterface,
     JobConditionsServiceInterface,
     JobPageServiceInterface,
@@ -31,11 +34,14 @@ from .interfaces import (
 __all__ = [
     "CategorySnapshotService",
     "CategorySnapshotServiceInterface",
+    "CountyIndicatorService",
+    "CountyIndicatorServiceInterface",
     "CroatianCountyCatalog",
     "DzsImportService",
     "DzsImportServiceInterface",
     "DzsReleaseParser",
     "FeedCategoryVerifier",
+    "FeedCoverage",
     "HzzFeedParser",
     "HzzJobPageParser",
     "JobComparator",

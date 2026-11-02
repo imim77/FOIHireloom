@@ -35,6 +35,12 @@ class InvalidJobSearchError(FOIHireloomException):
     code = "invalid_job_search"
 
 
+class InvalidIndicatorRequestError(FOIHireloomException):
+    """The counties, month or other arguments of a county comparison or history cannot be used as given."""
+
+    code = "invalid_indicator_request"
+
+
 class SourceFeedRegistrationError(FOIHireloomException):
     """The metadata cannot be registered without ambiguity or conflicting data."""
 

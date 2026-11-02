@@ -10,6 +10,7 @@ from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
 from FOIHireloom.exceptions import PersistenceError
 from FOIHireloom.factories.category_snapshot import CategorySnapshotServiceFactory
+from FOIHireloom.factories.county_indicators import CountyIndicatorServiceFactory
 from FOIHireloom.factories.dzs_import import DzsImportServiceFactory
 from FOIHireloom.factories.job_conditions import JobConditionsServiceFactory
 from FOIHireloom.factories.job_page import JobPageServiceFactory
@@ -17,6 +18,7 @@ from FOIHireloom.factories.job_search import JobSearchServiceFactory
 from FOIHireloom.factories.job_sync import JobSyncServiceFactory
 from FOIHireloom.factories.source_feed_registration import SourceFeedRegistrationServiceFactory
 from FOIHireloom.services.interfaces.category_snapshot import CategorySnapshotServiceInterface
+from FOIHireloom.services.interfaces.county_indicators import CountyIndicatorServiceInterface
 from FOIHireloom.services.interfaces.dzs_import import DzsImportServiceInterface
 from FOIHireloom.services.interfaces.job_conditions import JobConditionsServiceInterface
 from FOIHireloom.services.interfaces.job_page import JobPageServiceInterface
@@ -86,6 +88,12 @@ class DependencyService:
         """Yield a read-only search service; keep it open for as long as requests arrive."""
         async with self._unit_of_work_factory() as uow_factory:
             yield JobSearchServiceFactory(self._settings).create(uow_factory)
+
+    @asynccontextmanager
+    async def county_indicator_service(self) -> AsyncIterator[CountyIndicatorServiceInterface]:
+        """Yield a read-only county indicator service; keep it open for as long as requests arrive."""
+        async with self._unit_of_work_factory() as uow_factory:
+            yield CountyIndicatorServiceFactory(self._settings).create(uow_factory)
 
     @asynccontextmanager
     async def category_snapshot_service(self) -> AsyncIterator[CategorySnapshotServiceInterface]:
