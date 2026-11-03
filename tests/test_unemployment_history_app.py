@@ -88,6 +88,7 @@ class UnemploymentHistoryAppTests(unittest.TestCase):
     def test_built_page_draws_the_lines_and_marks_provisional_months_and_gaps(self) -> None:
         html = UNEMPLOYMENT_HISTORY.page()
         for expected in ("privremeni podaci", "prekid: nema podatka", "nema podatka", "promjena nije dostupna",
-                         "prema istom mjesecu prošle godine", "stroke-dasharray", "DZS podaci uvezeni"):
+                         "prema istom mjesecu prošle godine", "stroke-dasharray", "DZS podaci uvezeni",
+                         "unemployment-growth-chart", "Odabrani mjesec"):
             with self.subTest(expected=expected):
                 self.assertIn(expected, html)

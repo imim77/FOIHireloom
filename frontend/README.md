@@ -17,5 +17,34 @@ server. The page URI changes with its content, so hosts load the new version.
 `dist/sources.json` records a hash of every source; the tests fail and the server warns when a source changed after
 the last build.
 
+Chart verification (Node.js 22.6+):
+
+```bash
+npm test                      # data adapter, missing values, provisional segments and curve bounds
+npm run lint
+npm run build
+npx playwright install chromium  # once, for browser tests
+npm run test:browser           # production page in an MCP Apps iframe; mouse, keyboard, touch and themes
+```
+
+The unemployment chart adapts the supplied `RevenueGrowthChart` to monthly DZS rates. Its stat tiles follow the
+inspected month; the annual comparison tiles stay anchored to the server's latest month. Missing values remain
+gaps, provisional segments stay dashed, and all 1–6 counties share consistent colours. The tool still returns
+12–24 months. To save screenshots while testing, set `CHART_ARTIFACT_DIR` to an output directory.
+Optionally set `CHART_LIVE_DATA_FILE` to a saved `show_unemployment_history` structured JSON response to verify its
+rates against the rendered nodes as well.
+
 To add a view: create `src/views/<name>.html` and `src/views/<name>/`, add an `AppView` to `VIEWS` in
 `api/apps/views.py`, and point its tool at it with `AppConfig(resource_uri=VIEW.uri)`.
+
+The accommodation comparison at `/accommodation-comparison.html` adapts the supplied `PortfolioAllocationChart`.
+`show_accommodation_comparison` accepts county, query, category and the other job-condition filters, excluding
+the accommodation filter itself, so the population always includes all three statuses. It partitions matching
+ads into offered (shared/single/family), explicitly not offered, and unknown. The stored shares use all matching
+ads. Legend buttons can temporarily hide groups; the view then names its visible denominator and offers a reset.
+Mouse, touch and keyboard selection expose the count and share in the ring's centre. Zero groups stay in the
+legend, and the last visible positive group cannot be hidden. The preview uses the real local response for
+Varaždinska and query `kuhar` (2/7/1 ads), with its freshness warning.
+
+Build before starting a fresh MCP server. A process already running and a connector with cached tool metadata
+need to load the new server version to expose the new tool; this is separate from the local browser preview.

@@ -10,7 +10,7 @@ import { fadeIn, useChartEntrance } from '../../shared/chart-motion'
 import { formatDay, formatMonth, formatPoints, formatRate, plural } from '../../shared/format'
 import { useMcpApp } from '../../shared/mcp'
 import { Sources } from '../../shared/Sources'
-import { RateLines } from './RateLines'
+import { UnemploymentGrowthChart } from './UnemploymentGrowthChart'
 import { sample } from './sample'
 import type { CountyHistory, UnemploymentHistoryData } from './types'
 import './unemployment-history.css'
@@ -38,8 +38,6 @@ export function UnemploymentHistory() {
 /** Mounted once the data is there, so its entrance plays with the data. */
 function History({ data, app }: { data: UnemploymentHistoryData; app: App | null }) {
   const root = useRef<HTMLDivElement>(null)
-  const gaps = data.counties.some((county) => county.series.some((point) => point.rate === null))
-  const provisional = data.counties.some((county) => county.series.some((point) => point.is_provisional))
 
   useChartEntrance(root, (timeline) => {
     const items = [...root.current!.querySelectorAll<HTMLElement>('[data-slot="legend"] > li')]
@@ -56,30 +54,7 @@ function History({ data, app }: { data: UnemploymentHistoryData; app: App | null
 
   return (
     <div className="history" ref={root}>
-      <ul className="legend" data-slot="legend" aria-label="Legenda">
-        {data.counties.map((county, index) => (
-          <li key={county.code}><span className={`swatch s${index + 1}`} />{county.short_name}</li>
-        ))}
-        {provisional && (
-          <li>
-            <svg className="key" viewBox="0 0 28 12" aria-hidden="true">
-              <rect x="0" y="0" width="28" height="12" rx="3" className="key-band" />
-              <line x1="2" y1="6" x2="26" y2="6" className="key-dashed" />
-            </svg>
-            privremeni podaci
-          </li>
-        )}
-        {gaps && (
-          <li>
-            <svg className="key" viewBox="0 0 28 12" aria-hidden="true">
-              <line x1="1" y1="6" x2="9" y2="6" className="key-solid" />
-              <line x1="19" y1="6" x2="27" y2="6" className="key-solid" />
-            </svg>
-            prekid: nema podatka
-          </li>
-        )}
-      </ul>
-      <RateLines counties={data.counties} />
+      <UnemploymentGrowthChart counties={data.counties} />
       <div className="tiles">
         {data.counties.map((county, index) => <Tile key={county.code} county={county} index={index} />)}
       </div>

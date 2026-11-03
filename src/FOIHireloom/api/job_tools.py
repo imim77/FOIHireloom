@@ -15,6 +15,7 @@ from FOIHireloom.dto.job_comparison import (
     JobComparisonViewDTO,
 )
 from FOIHireloom.dto.job_conditions import Contract, EducationLevel, EmploymentTag
+from FOIHireloom.dto.accommodation_comparison import AccommodationComparisonDTO
 from FOIHireloom.dto.job_market import (
     DEFAULT_MARKET_TOP,
     MAX_MARKET_TOP,
@@ -37,8 +38,8 @@ from FOIHireloom.dto.job_search import (
 from FOIHireloom.exceptions import InvalidJobSearchError, NotFoundError, PersistenceError
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 
-from .apps import job_cards, job_comparison, jobs_by_county
-from .apps.views import JOB_CARDS, JOB_COMPARISON, JOBS_BY_COUNTY
+from .apps import accommodation_comparison, job_cards, job_comparison, jobs_by_county
+from .apps.views import ACCOMMODATION_COMPARISON, JOB_CARDS, JOB_COMPARISON, JOBS_BY_COUNTY
 from .tool_provider import ToolGroup
 
 # Key of the search service in the server's lifespan context.
@@ -155,6 +156,11 @@ class JobTools(ToolGroup):
         ) -> JobSearchPageDTO:
             """Search Croatian Employment Service (HZZ) job advertisements, newest first.
 
+            For 'Koliko oglasa nudi smještaj, a koliko ne?' or accommodation
+            percentages, call show_accommodation_comparison directly. Do not
+            count a search page or infer accommodation from free text for
+            these aggregate questions. This tool lists individual ads.
+
             Returns jobs still listed in an HZZ county feed. With a query,
             jobs whose title contains every query word come first
             (title_match true), then jobs that match only elsewhere, such as
@@ -233,6 +239,10 @@ class JobTools(ToolGroup):
         ) -> JobCardsDTO:
             """Show the user the jobs search_jobs would find as cards, newest first.
 
+            For accommodation counts or shares, use show_accommodation_comparison
+            directly; it counts all matching ads and displays the distribution.
+            Use these cards when the user wants to browse individual jobs.
+
             Use it when the user wants to see or browse jobs, not just read
             about them. Hosts that support MCP Apps draw a card per job: the
             employer, the title, the place, the employment type, working
@@ -290,11 +300,15 @@ class JobTools(ToolGroup):
                 ge=1, le=MAX_MARKET_TOP, description="Entries in the employers list.",
             )] = DEFAULT_MARKET_TOP,
         ) -> JobMarketStatsDTO:
-            """Count the jobs search_jobs would find for the same filters, broken down for labour market questions.
+            """General labour-market counts; for accommodation counts or shares use show_accommodation_comparison.
 
             Use it for questions such as where most jobs of a kind are, which
             employers hire most, or what share is permanent; use search_jobs
-            to list the jobs themselves. jobs is the number of matching jobs
+            to list the jobs themselves. For accommodation counts, shares or
+            distribution (smještaj / bez smještaja / nepoznato), automatically
+            use show_accommodation_comparison even if the user does not request
+            a chart, a comparison or a named tool. It displays the chart and returns
+            the counts together. jobs is the number of matching jobs
             and workers_needed the positions their HZZ pages state, so one job
             can seek several workers. Each breakdown entry gives jobs and
             workers_needed per value, most common first.
@@ -335,6 +349,50 @@ class JobTools(ToolGroup):
                 employment_tags=employment_tags, place=place, include_expired=include_expired, top=top,
             )
             return await self._call(service(ctx).market_stats(filters))
+
+        @server.tool(app=AppConfig(resource_uri=ACCOMMODATION_COMPARISON.uri), annotations=READ_ONLY)
+        async def show_accommodation_comparison(
+            ctx: Context,
+            query: Annotated[str | None, Field(max_length=MAX_QUERY_LENGTH,
+                description="Words as for search_jobs, e.g. 'kuhar'; leave out for all occupations.")] = None,
+            county: Annotated[str | None, Field(
+                description="County code or name from list_regions; leave out for all counties.")] = None,
+            category: Annotated[str | None, Field(description=CATEGORY_DESCRIPTION)] = None,
+            max_experience_months: MaxExperienceMonths = None,
+            contract: ContractFilter = None,
+            full_time: FullTime = None,
+            education: Education = None,
+            employment_tags: EmploymentTags = None,
+            place: Place = None,
+            include_expired: Annotated[bool, Field(description="Also include ads whose deadline has passed.")] = False,
+        ) -> AccommodationComparisonDTO:
+            """Koliko oglasa nudi smještaj, a koliko ne? Vraća brojeve i postotke te odmah prikazuje graf.
+
+            Odaberi ovaj alat za pitanja o broju, udjelu ili raspodjeli oglasa prema smještaju.
+            Korisnik ne mora spomenuti graf, usporedbu ni naziv alata.
+            Primjeri: 'Koliko oglasa za kuhare u Varaždinskoj županiji nudi smještaj, a koliko ne?',
+            'Koliki udio poslova u Istri ima smještaj?', 'Usporedi oglase sa smještajem i bez njega'.
+            Za prvi primjer pozovi query='kuhar', county='varazdinska'. Pozovi izravno, bez prethodnog
+            search_jobs, ručnog brojanja oglasa ili biranja nekoliko primjera za show_job_comparison.
+
+            Obuhvaća sve oglase za zadane filtre i prikazuje tri skupine: nudi smještaj (shared,
+            single, family), izričito nema smještaja (none), podatak nepoznat. Nepoznato nikad ne
+            pribrajaj skupini bez smještaja niti nagađaj iz slobodnog teksta. Udjeli se računaju od
+            svih pronađenih oglasa, ne radnih mjesta. Nema filtra accommodation jer se uspoređuju
+            sve tri skupine. Prenesi coverage_note i unknown_note. Query pretražuje tekst, a category
+            obuhvaća samo oglase poznate kategorije. Skrivanje skupine u legendi ne mijenja izvorne
+            brojeve. Vraća podatke i na hostu bez MCP Apps podrške.
+
+            Za 'Pronađi mi posao kuhara sa smještajem' koristi show_jobs s accommodation=True;
+            ovaj alat služi pitanjima o broju i udjelima, a show_job_comparison odabranim oglasima.
+            """
+            filters = JobMarketFiltersDTO(
+                query=query, county=county, category=category, max_experience_months=max_experience_months,
+                contract=contract, full_time=full_time, education=education, employment_tags=employment_tags,
+                place=place, include_expired=include_expired,
+            )
+            stats = await self._call(service(ctx).market_stats(filters))
+            return accommodation_comparison.accommodation_comparison(stats, filters)
 
         @server.tool(app=AppConfig(resource_uri=JOBS_BY_COUNTY.uri), annotations=READ_ONLY)
         async def show_jobs_by_county(
@@ -426,7 +484,10 @@ class JobTools(ToolGroup):
             job_ids from earlier search_jobs or show_jobs results in this
             conversation, in the order the user named them: the selection
             lives only in the conversation, as there are no accounts or saved
-            lists. Expired jobs, jobs no longer listed and jobs whose HZZ page
+            lists. Do not select example jobs on the user's behalf for a
+            market-wide comparison. For counts or shares of ads with, without
+            or with unknown accommodation, use show_accommodation_comparison.
+            Expired jobs, jobs no longer listed and jobs whose HZZ page
             was not read are compared too.
 
             jobs names each job as its card does, in the given order, with
@@ -477,10 +538,16 @@ class JobTools(ToolGroup):
             education: UserEducation = None,
             accommodation: UserAccommodation = None,
         ) -> JobComparisonViewDTO:
-            """Show the user 2 or 3 jobs they picked side by side, against the conditions the user stated.
+            """Display a table comparing 2 or 3 specific job ads explicitly selected by the user.
 
-            Use it when the user wants to see the comparison, e.g. after
-            picking jobs on the cards; use compare_jobs when only the data is
+            Use only when the user identified the particular ads, e.g. 'compare
+            the first and third' or after picking jobs on the cards. Take
+            job_ids from those selected ads; do not choose 2 or 3 examples on
+            the user's behalf. A request to compare counts or percentages of
+            ads offering accommodation, not offering it and having unknown data
+            ('usporedba oglasa sa smještajem i bez smještaja') belongs to
+            show_accommodation_comparison, which displays the aggregate donut
+            chart for the entire matching population; use compare_jobs when only the data is
             needed. Hosts that support MCP Apps draw a table with a column per
             job and a row per aspect (experience, education, contract,
             working time, accommodation, deadline), the job page's own words

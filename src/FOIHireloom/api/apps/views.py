@@ -40,8 +40,9 @@ JOB_COMPARISON = AppView("job-comparison", "Job comparison page for show_job_com
 
 COUNTY_COMPARISON = AppView("county-comparison", "County comparison page for show_county_comparison.")
 UNEMPLOYMENT_HISTORY = AppView("unemployment-history", "Unemployment rate chart page for show_unemployment_history.")
+ACCOMMODATION_COMPARISON = AppView("accommodation-comparison", "Accommodation comparison donut for job ads.")
 
-VIEWS = (JOBS_BY_COUNTY, JOB_CARDS, JOB_COMPARISON, COUNTY_COMPARISON, UNEMPLOYMENT_HISTORY)
+VIEWS = (JOBS_BY_COUNTY, JOB_CARDS, JOB_COMPARISON, COUNTY_COMPARISON, UNEMPLOYMENT_HISTORY, ACCOMMODATION_COMPARISON)
 
 
 def stale_sources(frontend: Path = FRONTEND) -> list[str]:
