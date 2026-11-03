@@ -21,7 +21,7 @@ class JobToolsDatabaseTests(ModelTestCase):
 
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
-        county = County(code="grad-zagreb", name="Grad Zagreb")
+        county = County(code="grad-zagreb", iso_code="HR-21", name="Grad Zagreb")
         self.session.add(county)
         await self.session.flush()
         feed = SourceFeed(county_id=county.id, ckan_resource_id=uuid4(), label="ZG", scope="county",

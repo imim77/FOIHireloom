@@ -1,5 +1,7 @@
 from .base import Base
 from .county import County
+from .dzs_import import DzsImport, DzsImportFile
+from .dzs_indicator_value import DzsIndicatorValue
 from .employer import Employer
 from .employer_web_document import EmployerWebDocument
 from .job import Job
@@ -12,6 +14,9 @@ from .web_document import WebDocument
 __all__ = [
     "Base",
     "County",
+    "DzsImport",
+    "DzsImportFile",
+    "DzsIndicatorValue",
     "Employer",
     "EmployerWebDocument",
     "Job",

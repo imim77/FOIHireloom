@@ -7,6 +7,7 @@
 import { animate, stagger, utils } from 'animejs'
 import { useRef } from 'react'
 import { fadeIn, finish, releaseStyles, useChartEntrance } from '../../shared/chart-motion'
+import { FEED_CATEGORY } from '../../shared/text'
 import { age, type DetailKind, details, sentenceCase } from './job-format'
 import type { JobCard } from './types'
 
@@ -23,8 +24,13 @@ export interface CardActions {
   ask: ((job: JobCard) => void) | null
 }
 
-// The tooltip of a category the job's description does not state.
-const FEED_CATEGORY = 'Skupina zanimanja dopunjena iz HZZ-ova feeda po zanimanju'
+// Picking the card for a comparison; null when the host takes no messages from the view.
+export interface CardCompare {
+  checked: boolean
+  // Already as many cards picked as a comparison takes.
+  disabled: boolean
+  onChange: () => void
+}
 
 const OPEN_ICON = ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5']
 const ASK_ICON = ['M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z', 'M8.5 12h.01', 'M12 12h.01', 'M15.5 12h.01']
@@ -65,11 +71,12 @@ function Action({ label, icon, onClick }: { label: string; icon: string[]; onCli
 }
 
 /** order is the card's place among the cards that came in together, which delays its entrance. */
-export function JobCardView({ job, today, order, actions }: {
+export function JobCardView({ job, today, order, actions, compare }: {
   job: JobCard
   today: string
   order: number
   actions: CardActions
+  compare: CardCompare | null
 }) {
   const published = age(job, today)
   const items = details(job)
@@ -111,6 +118,14 @@ export function JobCardView({ job, today, order, actions }: {
             </li>
           )}
         </ul>
+        {compare && (
+          <label className={`compare-toggle${compare.checked ? ' checked' : ''}`}
+            title={compare.disabled ? 'Usporediti se mogu najviše 3 oglasa' : undefined}>
+            <input type="checkbox" checked={compare.checked} disabled={compare.disabled} onChange={compare.onChange}
+              aria-label={`Usporedi oglas ${title}`} />
+            <span aria-hidden="true">Usporedi</span>
+          </label>
+        )}
         <Action label="Otvori oglas na HZZ-u" icon={OPEN_ICON} onClick={() => actions.open(job)} />
         {actions.ask && <Action label="Pitaj o ovom oglasu" icon={ASK_ICON} onClick={() => actions.ask?.(job)} />}
       </div>

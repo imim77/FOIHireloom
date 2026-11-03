@@ -24,11 +24,11 @@ class JobSearchServiceTests(ModelTestCase):
         await super().asyncSetUp()
         self.today = await self.session.scalar(text("SELECT (now() AT TIME ZONE 'Europe/Zagreb')::date"))
         counties = {
-            code: County(code=code, name=name)
-            for code, name in (
-                ("bjelovarsko-bilogorska", "Bjelovarsko-bilogorska županija"),
-                ("grad-zagreb", "Grad Zagreb"),
-                ("istarska", "Istarska županija"),
+            code: County(code=code, iso_code=iso_code, name=name)
+            for code, iso_code, name in (
+                ("bjelovarsko-bilogorska", "HR-07", "Bjelovarsko-bilogorska županija"),
+                ("grad-zagreb", "HR-21", "Grad Zagreb"),
+                ("istarska", "HR-18", "Istarska županija"),
             )
         }
         self.session.add_all(counties.values())

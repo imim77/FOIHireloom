@@ -129,6 +129,8 @@ class SourceFeedRegistrationService(SourceFeedRegistrationServiceInterface):
                 added += 1
             elif self._planner.catalog.match(county.name) != definition:
                 raise SourceFeedRegistrationError(f"County name conflicts with code {definition.code!r}.")
+            elif county.iso_code != definition.iso_code:
+                raise SourceFeedRegistrationError(f"County ISO code conflicts with code {definition.code!r}.")
             counties[definition.code] = county.id
         return counties, added
 

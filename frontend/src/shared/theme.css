@@ -61,6 +61,39 @@ body { margin: 0; background: transparent; font-family: Inter, ui-sans-serif, sy
 .notes { display: flex; flex-direction: column; gap: 8px; animation: fade-in 400ms ease-out; }
 .note { margin: 0; padding: 0 12px; font-size: 12px; line-height: 1.4; color: var(--fg-soft); }
 .empty { margin: 0; font-size: 14px; color: var(--fg-soft); }
+/* The filters as chips under the header (job cards, county comparison); one removed shows the result without it. */
+.filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.filter {
+  display: inline-flex; align-items: center; gap: 2px; min-width: 0; max-width: 100%; padding: 4px 10px;
+  border-radius: 999px; font-size: 12px; font-weight: 500; line-height: 1.25; background: var(--surface-subdued);
+  color: var(--fg-loud); animation: fade-in 400ms ease-out;
+}
+.filter span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* With a remove button the chip's right padding is the button's. */
+.filter:has(.filter-remove) { padding-right: 2px; }
+.filter-remove {
+  display: grid; place-items: center; flex: none; width: 20px; height: 20px; padding: 0; border: 0;
+  border-radius: 999px; background: none; color: var(--fg-soft); cursor: pointer;
+}
+.filter-remove svg { width: 12px; height: 12px; }
+.filter-remove:hover:not(:disabled) { background: var(--card); color: var(--fg-loud); }
+.filter-remove:focus-visible { outline: none; box-shadow: var(--focus); }
+.filter-remove:disabled { cursor: progress; }
+@media (prefers-reduced-motion: reduce) { .filter { animation: none; } }
+
+/* The sources under a result, each a link the host opens, and facts such as when the data was read. */
+.sources { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0 12px; font-size: 12px; line-height: 1.4;
+  color: var(--fg-soft); }
+.link { display: inline; padding: 0; border: 0; background: none; font: inherit; color: var(--fg-loud);
+  text-decoration: underline; text-decoration-color: var(--surface-disable); text-underline-offset: 2px;
+  cursor: pointer; text-align: left; }
+.link:hover { text-decoration-color: currentColor; }
+.link:focus-visible { outline: none; border-radius: 4px; box-shadow: var(--focus); }
+/* A DZS value of 2026, which DZS may still revise. */
+.provisional {
+  display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 500; line-height: 1.4;
+  white-space: nowrap; color: var(--fg-soft); outline: 1px dashed var(--fg-soft); outline-offset: -1px;
+}
 
 /* Elements that come with new data fade in. */
 @keyframes fade-in { from { opacity: 0; transform: translateY(4px); } }

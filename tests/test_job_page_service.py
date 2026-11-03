@@ -19,7 +19,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 class JobPageServiceTests(ModelTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
-        county = County(code="istarska", name="Istarska županija")
+        county = County(code="istarska", iso_code="HR-18", name="Istarska županija")
         self.session.add(county)
         await self.session.flush()
         feed = SourceFeed(county_id=county.id, ckan_resource_id=uuid4(), label="IS", scope="county",

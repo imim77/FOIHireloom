@@ -1,0 +1,79 @@
+/* The comparison table on the card's white panel: a column per job, a row per aspect. A narrow frame scrolls the
+   table sideways inside its own box, never the page, with the aspect column kept in place. */
+.compare-scroll {
+  --aspect: 132px;
+  /* Three jobs fit in a 700px frame. */
+  --column: 168px;
+  container-type: inline-size;
+  overflow-x: auto; overscroll-behavior-x: contain; max-width: 100%; border-radius: 12px;
+  /* A shadow at the right edge while more columns are hidden there: the card-coloured cover scrolls with the table
+     and hides the shadow at its end. */
+  background:
+    linear-gradient(to left, var(--card) 40%, transparent) right / 32px 100% no-repeat local,
+    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.14), transparent) right / 14px 100% no-repeat scroll;
+}
+.compare-scroll:focus-visible { outline: none; box-shadow: var(--focus); }
+/* Full screen the columns get more room before the table scrolls. */
+.compare-scroll.expanded { --aspect: 168px; --column: 240px; }
+/* A narrow frame (about 400px) still fits two jobs; a third scrolls in. */
+@container (max-width: 520px) {
+  .compare { --aspect: 100px; --column: 128px; }
+  .compare th, .compare td { padding: 10px 8px; }
+}
+
+.compare {
+  /* Long words break between syllables, not anywhere. */
+  hyphens: auto; overflow-wrap: break-word;
+  width: 100%; min-width: calc(var(--aspect) + var(--jobs) * var(--column)); table-layout: fixed;
+  border-collapse: separate; border-spacing: 0; font-size: 13px; line-height: 1.35; color: var(--fg-loud);
+}
+.compare th, .compare td { padding: 12px; text-align: left; vertical-align: top; font-weight: inherit; }
+.compare .corner, .compare .aspect { width: var(--aspect); }
+/* The aspect column stays while the jobs scroll under it; it needs its own background for that. */
+.compare .corner, .compare .aspect {
+  position: sticky; left: 0; z-index: 1; background: var(--card); box-shadow: inset -1px 0 0 var(--border);
+}
+.compare tbody th, .compare tbody td { border-top: 1px solid var(--border); }
+
+/* A job's heading: its category and the HZZ link, then the title, the employer and where. */
+.job-head-inner { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.job-head-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; min-height: 28px; margin-bottom: 4px; }
+.job-head-top .icon-button { width: 28px; height: 28px; border-radius: 8px; }
+.job-head-top .icon-button svg { width: 14px; height: 14px; }
+.job-head .label {
+  min-width: 0; padding: 3px 7px; border-radius: 6px; font-size: 11px; font-weight: 500; line-height: 1.25;
+  background: var(--surface-subdued); color: var(--fg-loud);
+}
+/* A category filled in from an HZZ occupation feed, not stated in the job's description: dashed, as on the cards. */
+.job-head .label.feed { background: var(--card); outline: 1px dashed var(--fg-soft); outline-offset: -1px; cursor: help; }
+.job-name { font-size: 15px; font-weight: 700; line-height: 1.25; }
+.job-employer { font-size: 12px; font-weight: 500; }
+.job-where { font-size: 12px; color: var(--fg-soft); }
+
+/* The aspect, the user's condition for it and whether the jobs differ in it. */
+.aspect-inner { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.aspect-name { font-weight: 600; }
+.aspect-you { font-size: 12px; color: var(--fg-soft); }
+.aspect-differs {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; color: var(--fg-soft);
+  white-space: nowrap;
+}
+.aspect-differs::before {
+  content: ""; flex: none; width: 6px; height: 6px; border-radius: 999px; background: var(--orange-500);
+}
+
+.cell-inner { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.cell-text { }
+.cell-note { font-size: 12px; color: var(--fg-soft); }
+/* Why a value is unknown, in place of the page's words. */
+.cell.unknown .cell-text { color: var(--fg-soft); font-style: italic; }
+.cell.expired .cell-text { color: var(--warning-fg); font-weight: 500; }
+/* Rows where every job states the same are quieter, so the differences stand out. */
+.compare tr.same .cell-text { color: var(--fg-soft); }
+
+.verdict {
+  padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; line-height: 1.4; white-space: nowrap;
+}
+.verdict.match { background: var(--green-tint); color: var(--green-on-tint); }
+.verdict.no_match { background: var(--warning-bg); color: var(--warning-fg); }
+.verdict.unknown { background: var(--surface-subdued); color: var(--fg-soft); }

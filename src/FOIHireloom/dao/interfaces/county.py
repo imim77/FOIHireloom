@@ -29,6 +29,10 @@ class CountyRepository(ABC):
         """
 
     @abstractmethod
+    async def list_all(self) -> list[CountyDTO]:
+        """Return every stored county, by ISO code."""
+
+    @abstractmethod
     async def add(self, county: County) -> None:
         """Add and flush without committing; database errors propagate."""
 

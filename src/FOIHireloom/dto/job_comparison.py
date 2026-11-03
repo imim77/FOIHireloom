@@ -14,6 +14,13 @@ type ComparisonAspect = Literal["experience", "education", "contract", "working_
 # value is not known. A verdict is about what the job page states, never about whether the employer would accept
 # the person.
 type ConditionVerdict = Literal["match", "no_match", "unknown"]
+# Why a job's value for a condition aspect is unknown. page_not_read, page_unavailable and page_failed: the job page
+# was never read, because it is still pending, HZZ returned an error page, or fetching it failed; not_stated: the read
+# page does not state it; unreadable: the page states it in words that were not recognised; contract_not_stated: the
+# page states the type of employment (e.g. "Novootvoreni poslovi") but not the contract.
+type UnknownReason = Literal[
+    "page_not_read", "page_unavailable", "page_failed", "not_stated", "unreadable", "contract_not_stated",
+]
 
 
 class JobComparisonConditionsDTO(CandidateConditionsDTO):
@@ -26,7 +33,11 @@ class JobComparisonConditionsDTO(CandidateConditionsDTO):
 
 
 class ComparedJobDTO(ModelConfigBaseModel):
-    """A compared job as its card names it; conditions are as in JobCardDTO, None while the page is not read."""
+    """A compared job as its card names it; conditions are as in JobCardDTO, None while the page is not read.
+
+    published_on, deadline_on and deadline_passed are as in JobSummaryDTO, so
+    a view can word the deadline itself.
+    """
 
     id: int
     display_title: str
@@ -37,6 +48,9 @@ class ComparedJobDTO(ModelConfigBaseModel):
     details_status: DetailsStatus
     category: str | None
     category_source: Literal["description", "feed"] | None
+    published_on: date | None
+    deadline_on: date | None
+    deadline_passed: bool | None = None
     conditions: JobConditionsDTO | None
 
 
@@ -49,7 +63,9 @@ class ComparisonCellDTO(ModelConfigBaseModel):
     for the deadline it is the date and whether it came from the job page or
     the feed. verdict is None when the person set no condition for the aspect,
     and reason then is too; otherwise reason says in a short English sentence
-    what in the job's data gave the verdict.
+    what in the job's data gave the verdict. unknown_reason is a code for why
+    value is unknown, set whenever value is None on a condition aspect, with
+    or without a verdict, and None otherwise, so also for the deadline.
     """
 
     job_id: int
@@ -57,6 +73,7 @@ class ComparisonCellDTO(ModelConfigBaseModel):
     evidence: str | None
     verdict: ConditionVerdict | None
     reason: str | None
+    unknown_reason: UnknownReason | None = None
 
 
 class ComparisonRowDTO(ModelConfigBaseModel):
@@ -98,3 +115,45 @@ class JobComparisonInputDTO(ModelConfigBaseModel):
     summary: JobSummaryDTO
     conditions: JobConditionsDTO | None
     page: RawJobConditionsDTO | None
+
+
+class ComparisonCellViewDTO(ComparisonCellDTO):
+    """A cell with the Croatian wording the job comparison view shows.
+
+    text is, for the deadline, "do 29. 11. 2026. (još 28 dana)", "do
+    01. 11. 2026. (zadnji dan)", "istekao 31. 10. 2026." or "nije naveden";
+    for the other aspects the job page's own text when it has one, else why
+    the value is unknown (from unknown_reason, e.g. "oglas ne navodi"), else
+    the known value in Croatian. note is why the value is unknown when text
+    is the page's own text, e.g. "Novootvoreni poslovi" with "oglas navodi
+    vrstu zaposlenja, ali ne i ugovor", None otherwise.
+    verdict_label is the verdict in Croatian: "odgovara", "ne odgovara" or
+    "nije poznato".
+    """
+
+    text: str
+    note: str | None
+    verdict_label: str | None
+
+
+class ComparisonRowViewDTO(ComparisonRowDTO):
+    """A row with its aspect's Croatian name and the person's condition in Croatian, None without one."""
+
+    name: str
+    condition_label: str | None
+    cells: tuple[ComparisonCellViewDTO, ...]
+
+
+class JobComparisonViewDTO(JobComparisonDTO):
+    """A comparison for the job comparison view, with the Croatian wording it shows; the English fields stay.
+
+    description names the person's conditions, or says there are none.
+    disclaimer says a comparison shows only what the advertisements state;
+    unknown_note says how many verdicts are unknown, None when none is.
+    """
+
+    title: str
+    description: str
+    disclaimer: str
+    unknown_note: str | None
+    rows: tuple[ComparisonRowViewDTO, ...]

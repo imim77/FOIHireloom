@@ -35,7 +35,7 @@ class JobComparisonTests(ModelTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
         self.today = await self.session.scalar(text("SELECT (now() AT TIME ZONE 'Europe/Zagreb')::date"))
-        county = County(code="varazdinska", name="Varaždinska županija")
+        county = County(code="varazdinska", iso_code="HR-05", name="Varaždinska županija")
         self.session.add(county)
         await self.session.flush()
         feed = SourceFeed(county_id=county.id, ckan_resource_id=uuid4(), label="varazdinska", scope="county",
@@ -105,6 +105,9 @@ class JobComparisonTests(ModelTestCase):
         comparison = await self.compare("waiter", "cook")
         self.assertEqual(comparison.today, self.today)
         self.assertEqual([job.id for job in comparison.jobs], [self.ids["waiter"], self.ids["cook"]])
+        # The deadline as the job's summary has it, so a view can word it.
+        self.assertEqual([(job.deadline_on, job.deadline_passed, job.published_on) for job in comparison.jobs],
+                         [(self.today - timedelta(days=1), True, None), (self.today + timedelta(days=5), False, None)])
         self.assertIsNone(comparison.conditions)
         cook = comparison.jobs[1]
         self.assertEqual((cook.display_title, cook.employer_name, cook.county_name, cook.display_location,
@@ -214,6 +217,15 @@ class JobComparisonTests(ModelTestCase):
             "accommodation": "the job offers no accommodation, as you want",
             "deadline": None,
         })
+        # A code for each unknown value, for the view's Croatian wording.
+        self.assertEqual(self.column(comparison, 0, "unknown_reason"), {
+            "experience": "not_stated", "education": "unreadable", "contract": "not_stated", "working_time": None,
+            "accommodation": "not_stated", "deadline": None,
+        })
+        self.assertEqual(self.column(comparison, 1, "unknown_reason"),
+                         dict.fromkeys(EVIDENCE_FIELDS, "page_unavailable") | {"deadline": None})
+        self.assertEqual(self.column(comparison, 2, "unknown_reason"),
+                         dict.fromkeys(ASPECTS) | {"contract": "contract_not_stated"})
         no_match = await self.compare("cook", "waiter", conditions=JobComparisonConditionsDTO(
             education="primary", accommodation=False, contract="other", max_experience_months=0))
         self.assertEqual(self.column(no_match, 0, "reason"), {
@@ -227,6 +239,25 @@ class JobComparisonTests(ModelTestCase):
         })
         self.assertEqual(self.row(no_match, "education")[1].reason,
                          "the job page asks for secondary school (4 years) or higher levels, not primary school")
+
+    async def test_unknown_reasons_do_not_need_a_condition(self) -> None:
+        # Pages never read: still pending, not returned by HZZ, and one whose fetch failed.
+        unread = await self.compare("driver", "gone", "waiter")
+        await self.session.execute(update(Job).where(Job.id == self.ids["driver"]).values(
+            page_status="failed", page_checked_at=func.now()))
+        await self.session.commit()
+        failed = await self.compare("driver", "cook")
+        self.assertEqual({cell.verdict for row in unread.rows for cell in row.cells}, {None})
+        for comparison, index, code in ((unread, 0, "page_not_read"), (unread, 1, "page_unavailable"),
+                                        (failed, 0, "page_failed")):
+            with self.subTest(code=code):
+                self.assertEqual(self.column(comparison, index, "unknown_reason"),
+                                 dict.fromkeys(EVIDENCE_FIELDS, code) | {"deadline": None})
+        self.assertEqual(self.column(unread, 2, "unknown_reason"),
+                         dict.fromkeys(ASPECTS) | {"contract": "contract_not_stated"})
+        # Known values have none; nor has the deadline, known or not.
+        self.assertEqual(self.column(failed, 1, "unknown_reason"), dict.fromkeys(ASPECTS))
+        self.assertEqual(self.row(unread, "deadline")[0].value, None)
 
     async def test_a_page_read_once_keeps_its_conditions_after_a_failed_fetch(self) -> None:
         # The search filters still use the stored conditions, so the comparison and the cards must too.

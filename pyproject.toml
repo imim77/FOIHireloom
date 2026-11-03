@@ -8,6 +8,7 @@ dependencies = [
     "defusedxml>=0.7,<1",
     "fastmcp>=3.0,<4",
     "httpx>=0.28,<1",
+    "openpyxl>=3.1,<4",
     "pydantic>=2,<3",
     "pydantic-settings>=2,<3",
     "sqlalchemy[asyncio]>=2.0,<3",
@@ -16,6 +17,7 @@ dependencies = [
 [project.scripts]
 foihireloom-category-snapshot = "FOIHireloom.commands.category_snapshot:main"
 foihireloom-fetch-job-pages = "FOIHireloom.commands.fetch_job_pages:main"
+foihireloom-import-dzs = "FOIHireloom.commands.import_dzs:main"
 foihireloom-mcp = "FOIHireloom.main:main"
 foihireloom-normalize-job-conditions = "FOIHireloom.commands.normalize_job_conditions:main"
 foihireloom-register-sources = "FOIHireloom.commands.register_sources:main"

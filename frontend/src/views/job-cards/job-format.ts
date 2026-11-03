@@ -1,23 +1,10 @@
 // HZZ writes most values in capitals and with every option it allows; these turn them into the card's short labels.
 
 import { formatWorkers, plural } from '../../shared/format'
+import { titleCase } from '../../shared/text'
 import type { Contract, JobCard, JobConditions } from './types'
 
-/** "PRODAVAČ/PRODAVAČICA" → "Prodavač/prodavačica"; text that is not all capitals stays. */
-export function sentenceCase(text: string): string {
-  if (text !== text.toUpperCase()) return text
-  const lower = text.toLocaleLowerCase('hr-HR')
-  return lower.charAt(0).toLocaleUpperCase('hr-HR') + lower.slice(1)
-}
-
-/** "županija istarska" → "Županija istarska": only the first letter changes. */
-export const capitalise = (text: string) => text.charAt(0).toLocaleUpperCase('hr-HR') + text.slice(1)
-
-/** "PULA-POLA" → "Pula-Pola": a place name keeps a capital on each word. */
-export function titleCase(text: string): string {
-  return text.toLocaleLowerCase('hr-HR').replace(/(^|[\s\-/(])(\p{L})/gu,
-    (_, before: string, letter: string) => before + letter.toLocaleUpperCase('hr-HR'))
-}
+export { capitalise, sentenceCase, titleCase } from '../../shared/text'
 
 const day = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10))
 /** Whole days from one ISO date to another. */

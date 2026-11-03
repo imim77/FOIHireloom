@@ -39,6 +39,14 @@ class RegistrationPlannerTests(unittest.TestCase):
         self.assertEqual(plan.sources[20].county.name, "Zagrebačka županija")
         self.assertEqual(plan.sources[9].county.code, "medimurska")
 
+    def test_catalog_has_one_iso_code_per_county(self) -> None:
+        definitions = self.planner.catalog.definitions
+        self.assertEqual(sorted(d.iso_code for d in definitions), [f"HR-{number:02d}" for number in range(1, 22)])
+        # DZS's English "Zagreb" is the county around the city; ISO puts the city last.
+        self.assertEqual(self.planner.catalog.match("Zagrebačka").iso_code, "HR-01")
+        self.assertEqual(self.planner.catalog.match("Grad Zagreb").iso_code, "HR-21")
+        self.assertEqual(self.planner.catalog.match("Međimurska ").iso_code, "HR-20")
+
     def test_labels_accept_case_spacing_accents_and_name_fallback(self) -> None:
         resource = self.payload["result"]["resources"][6]
         resource.update(description=" ", name="  koprivnicko – krizevacka ZUPANIJA ")
@@ -142,7 +150,7 @@ class SourceFeedRegistrationTests(ModelTestCase):
         self.assertEqual(self.engine.pool.checkedout(), 0)
 
     async def test_existing_county_name_reuses_legacy_code_and_id(self) -> None:
-        county = County(code="zagreb", name="Grad Zagreb")
+        county = County(code="zagreb", iso_code="HR-21", name="Grad Zagreb")
         self.session.add(county)
         await self.session.commit()
         result = await self.register()
@@ -151,6 +159,13 @@ class SourceFeedRegistrationTests(ModelTestCase):
             feed = await reader.scalar(select(SourceFeed).where(SourceFeed.label == "GRAD ZAGREB"))
             self.assertEqual(feed.county_id, county.id)
             self.assertEqual((await reader.get(County, county.id)).code, "zagreb")
+
+    async def test_existing_county_with_another_iso_code_is_rejected(self) -> None:
+        self.session.add(County(code="grad-zagreb", iso_code="HR-01", name="Grad Zagreb"))
+        await self.session.commit()
+        with self.assertRaisesRegex(SourceFeedRegistrationError, "ISO code conflicts with code 'grad-zagreb'"):
+            await self.register()
+        self.assertEqual(await self.counts(), (1, 0))
 
     async def test_label_update_preserves_disabled_flag_validators_and_history(self) -> None:
         await self.register()
@@ -250,8 +265,8 @@ class SourceFeedRegistrationTests(ModelTestCase):
 
     async def test_conflicting_county_keys_preserve_existing_rows(self) -> None:
         self.session.add_all([
-            County(code="legacy-zagreb", name="Grad Zagreb"),
-            County(code="grad-zagreb", name="Conflicting name"),
+            County(code="legacy-zagreb", iso_code="HR-21", name="Grad Zagreb"),
+            County(code="grad-zagreb", iso_code="HR-01", name="Conflicting name"),
         ])
         await self.session.commit()
         with self.assertRaisesRegex(SourceFeedRegistrationError, "different existing counties"):

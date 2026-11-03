@@ -38,6 +38,15 @@ export function useMcpApp<T>(name: string, sample: () => T): McpApp<T> {
   return { app, data, hostContext }
 }
 
+/** Open a link through the host, which may ask the user first; in a browser, or when the host fails, a new tab. */
+export function openLink(app: App | null, url: string) {
+  if (app) void app.openLink({ url }).catch(() => window.open(url, '_blank'))
+  else window.open(url, '_blank', 'noopener')
+}
+
+/** Whether the host takes messages from the view, which it sends as the user's (app.sendMessage). */
+export const canSendMessage = (app: App | null): app is App => Boolean(app?.getHostCapabilities()?.message)
+
 /**
  * Whether a view shows everything: full screen when the host offers it, otherwise inline.
  * Leaving full screen from the host's own controls collapses the view again.

@@ -4,6 +4,8 @@ from types import TracebackType
 from typing import Self
 
 from FOIHireloom.dao.interfaces.county import CountyRepository
+from FOIHireloom.dao.interfaces.dzs_import import DzsImportRepository
+from FOIHireloom.dao.interfaces.dzs_indicator_value import DzsIndicatorValueRepository
 from FOIHireloom.dao.interfaces.job import JobRepository
 from FOIHireloom.dao.interfaces.job_feed_membership import JobFeedMembershipRepository
 from FOIHireloom.dao.interfaces.source_feed import SourceFeedRepository
@@ -22,6 +24,16 @@ class UnitOfWork(ABC):
     @abstractmethod
     def counties(self) -> CountyRepository:
         """Return the county reference repository bound to the same session."""
+
+    @property
+    @abstractmethod
+    def dzs_imports(self) -> DzsImportRepository:
+        """Return the DZS import run repository bound to the same session."""
+
+    @property
+    @abstractmethod
+    def dzs_indicator_values(self) -> DzsIndicatorValueRepository:
+        """Return the DZS county value repository bound to the same session."""
 
     @property
     @abstractmethod

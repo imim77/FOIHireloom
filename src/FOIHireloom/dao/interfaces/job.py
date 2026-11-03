@@ -8,7 +8,12 @@ from FOIHireloom.dto.category_snapshot import CategoryInputDTO
 from FOIHireloom.dto.hzz_job_page import ParsedJobPageDTO
 from FOIHireloom.dto.job import ParsedJobDTO
 from FOIHireloom.dto.job_conditions import JobConditionsDTO, JobConditionsInputDTO
-from FOIHireloom.dto.job_market import JobMarketAggregatesDTO, JobMarketCriteriaDTO
+from FOIHireloom.dto.job_market import (
+    CountyJobCountsRowDTO,
+    CountyJobCriteriaDTO,
+    JobMarketAggregatesDTO,
+    JobMarketCriteriaDTO,
+)
 from FOIHireloom.dto.job_page import JobPageTargetDTO
 from FOIHireloom.dto.job_search import CategoryDTO, JobFilterCriteriaDTO, JobSearchCriteriaDTO, UnknownConditionsDTO
 from FOIHireloom.dto.job_sync import CategoryEvidenceDTO, FilledCategoryDTO, JobSnapshotDTO
@@ -63,6 +68,14 @@ class JobRepository(ABC):
     @abstractmethod
     async def market_aggregates(self, criteria: JobMarketCriteriaDTO) -> JobMarketAggregatesDTO:
         """Count the listed jobs matching criteria, as search() would find them, by county and other fields."""
+
+    @abstractmethod
+    async def county_job_counts(self, criteria: CountyJobCriteriaDTO) -> list[CountyJobCountsRowDTO]:
+        """Count the listed jobs matching criteria in each of criteria.county_ids, as search() would find them.
+
+        A job counts in each county whose feed lists it. A county without
+        such jobs has no entry.
+        """
 
     @abstractmethod
     async def list_categories(self, open_on: date) -> list[CategoryDTO]:

@@ -1,6 +1,6 @@
 import base64
 from collections.abc import Callable, Sequence
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
@@ -21,9 +21,7 @@ from FOIHireloom.dto.job_market import JobMarketCriteriaDTO, JobMarketFiltersDTO
 from FOIHireloom.dto.job_search import (
     SEARCH_TERM,
     CategoryDTO,
-    CountyFeedCheckDTO,
     CoverageDTO,
-    DataStatus,
     JobCardDTO,
     JobCardsPageDTO,
     JobConditionFiltersDTO,
@@ -35,7 +33,6 @@ from FOIHireloom.dto.job_search import (
     JobSearchPageDTO,
     JobSummaryDTO,
     RegionDTO,
-    RegionFreshnessDTO,
     UnknownConditionsDTO,
 )
 from FOIHireloom.exceptions import InvalidJobSearchError, NotFoundError
@@ -43,14 +40,13 @@ from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 
 from .croatian_counties import CroatianCountyCatalog
 from .croatian_stem import stem
+from .feed_coverage import FeedCoverage
 from .job_comparison import JobComparator, JobConditionMatcher
 
 # HZZ deadlines are Croatian calendar days and stay open until the end of the day.
 LOCAL_TIME_ZONE = ZoneInfo("Europe/Zagreb")
 # The same folding as the stored search vector.
 SEARCH_FOLD = str.maketrans(SEARCH_FOLD_FROM, SEARCH_FOLD_TO)
-# Counties named in a coverage warning before the rest are only counted.
-WARNING_REGION_LIMIT = 5
 INVALID_CURSOR = "The cursor is not valid; start the search again without it."
 # Job IDs are bigint identities.
 MAX_JOB_ID = 2**63 - 1
@@ -72,11 +68,9 @@ class JobSearchService(JobSearchServiceInterface):
         stale_after: timedelta = timedelta(hours=6),
         comparator: JobComparator | None = None,
     ) -> None:
-        if stale_after <= timedelta(0):
-            raise ValueError("stale_after must be positive.")
         self._uow_factory = uow_factory
         self._counties = counties
-        self._stale_after = stale_after
+        self._feed_coverage = FeedCoverage(stale_after)
         self._comparator = comparator or JobComparator(JobConditionMatcher())
 
     async def search(self, filters: JobSearchFiltersDTO) -> JobSearchPageDTO:
@@ -95,15 +89,15 @@ class JobSearchService(JobSearchServiceInterface):
         """One page of jobs, each made by result, with the next page's cursor, the searched counties' coverage,
         today and the jobs left out only for unknown values.
         """
-        terms = self._terms(filters.query)
-        conditions = self._conditions(filters)
+        terms = search_terms(filters.query)
+        conditions = condition_criteria(filters)
         after = self._decode_cursor(filters.cursor) if filters.cursor else None
         # A cursor orders by title match exactly when the search has a query.
         if after is not None and (after.title_match is None) != (not terms):
             raise InvalidJobSearchError(INVALID_CURSOR)
         async with self._uow_factory() as work:
             now = await work.transaction_time()
-            today = self._local_date(now)
+            today = local_date(now)
             county_id, county_code = await self._resolve_county(work, filters.county)
             criteria = JobSearchCriteriaDTO(
                 terms=terms,
@@ -119,19 +113,19 @@ class JobSearchService(JobSearchServiceInterface):
             unknown = await work.jobs.count_unknown_conditions(criteria)
             counties = self._first_county(await work.job_feed_memberships.list_counties([hit.job.id for hit in found]))
             jobs = [result(hit.job, today, counties.get(hit.job.id), hit.title_match) for hit in found]
-            regions = self._freshness(await work.counties.list_feed_checks(), now)
+            regions = self._feed_coverage.freshness(await work.counties.list_feed_checks(), now)
         if county_code is not None:
             regions = [region for region in regions if region.code == county_code]
         page = jobs[:filters.limit]
         next_cursor = self._encode_cursor(page[-1]) if len(jobs) > filters.limit else None
-        return tuple(page), next_cursor, self._coverage(regions), today, unknown
+        return tuple(page), next_cursor, self._feed_coverage.coverage(regions), today, unknown
 
     async def market_stats(self, filters: JobMarketFiltersDTO) -> JobMarketStatsDTO:
-        terms = self._terms(filters.query)
-        conditions = self._conditions(filters)
+        terms = search_terms(filters.query)
+        conditions = condition_criteria(filters)
         async with self._uow_factory() as work:
             now = await work.transaction_time()
-            today = self._local_date(now)
+            today = local_date(now)
             county_id, county_code = await self._resolve_county(work, filters.county)
             criteria = JobMarketCriteriaDTO(
                 terms=terms,
@@ -144,10 +138,10 @@ class JobSearchService(JobSearchServiceInterface):
             )
             aggregates = await work.jobs.market_aggregates(criteria)
             unknown = await work.jobs.count_unknown_conditions(criteria)
-            regions = self._freshness(await work.counties.list_feed_checks(), now)
+            regions = self._feed_coverage.freshness(await work.counties.list_feed_checks(), now)
         if county_code is not None:
             regions = [region for region in regions if region.code == county_code]
-        return JobMarketStatsDTO(**aggregates.model_dump(), today=today, coverage=self._coverage(regions),
+        return JobMarketStatsDTO(**aggregates.model_dump(), today=today, coverage=self._feed_coverage.coverage(regions),
                                  unknown_conditions=unknown.by_filter, unknown_total=unknown.total)
 
     async def get_job(self, job_id: int) -> JobDetailsDTO:
@@ -160,7 +154,7 @@ class JobSearchService(JobSearchServiceInterface):
             county = self._first_county(await work.job_feed_memberships.list_counties([job_id])).get(job_id)
             return JobDetailsDTO.model_validate(job).model_copy(update={
                 **self._county_fields(county),
-                **self._page_fields(job, self._local_date(now)),
+                **self._page_fields(job, local_date(now)),
                 "description_text": job.page_description_text or job.description_text,
                 "description_source": "job_page" if job.page_description_text else "feed" if job.description_text else None,
                 "valid_from": job.page_valid_from,
@@ -174,7 +168,7 @@ class JobSearchService(JobSearchServiceInterface):
                 "experience": job.page_experience,
                 "details_checked_at": job.page_checked_at,
                 "listings": tuple(
-                    listing.model_copy(update={"data_status": self._status([listing.feed_last_success_at], now)})
+                    listing.model_copy(update={"data_status": self._feed_coverage.status([listing.feed_last_success_at], now)})
                     for listing in listings
                 ),
             })
@@ -192,7 +186,7 @@ class JobSearchService(JobSearchServiceInterface):
         if conditions is not None and not conditions.model_dump(exclude_none=True):
             conditions = None
         async with self._uow_factory() as work:
-            today = self._local_date(await work.transaction_time())
+            today = local_date(await work.transaction_time())
             # An ID outside the identity column's range cannot name a job.
             found = await work.jobs.list_by_ids([job_id for job_id in ids if 1 <= job_id <= MAX_JOB_ID])
             jobs = {job.id: job for job in found}
@@ -222,8 +216,8 @@ class JobSearchService(JobSearchServiceInterface):
     async def list_regions(self) -> tuple[RegionDTO, ...]:
         async with self._uow_factory() as work:
             now = await work.transaction_time()
-            regions = await work.counties.list_regions(self._local_date(now))
-            freshness = {region.code: region for region in self._freshness(await work.counties.list_feed_checks(), now)}
+            regions = await work.counties.list_regions(local_date(now))
+            freshness = {region.code: region for region in self._feed_coverage.freshness(await work.counties.list_feed_checks(), now)}
         return tuple(
             region.model_copy(update={
                 "data_status": freshness[region.code].data_status,
@@ -235,88 +229,7 @@ class JobSearchService(JobSearchServiceInterface):
     async def list_categories(self) -> tuple[CategoryDTO, ...]:
         async with self._uow_factory() as work:
             now = await work.transaction_time()
-            return tuple(await work.jobs.list_categories(self._local_date(now)))
-
-    @staticmethod
-    def _local_date(moment: datetime) -> date:
-        return moment.astimezone(LOCAL_TIME_ZONE).date()
-
-    def _status(self, successes: Sequence[datetime | None], now: datetime) -> DataStatus:
-        if not successes or None in successes:
-            return "unavailable"
-        return "stale" if min(successes) < now - self._stale_after else "fresh"
-
-    def _freshness(self, checks: Sequence[CountyFeedCheckDTO], now: datetime) -> list[RegionFreshnessDTO]:
-        counties: dict[str, tuple[str, list[datetime | None]]] = {}
-        for check in checks:
-            _, successes = counties.setdefault(check.code, (check.name, []))
-            if check.feed_id is not None:
-                successes.append(check.last_success_at)
-        return [
-            RegionFreshnessDTO(
-                code=code, name=name, data_status=self._status(successes, now),
-                last_success_at=min((moment for moment in successes if moment is not None), default=None),
-            )
-            for code, (name, successes) in counties.items()
-        ]
-
-    def _coverage(self, regions: Sequence[RegionFreshnessDTO]) -> CoverageDTO:
-        affected = tuple(region for region in regions if region.data_status != "fresh")
-        statuses = {region.data_status for region in affected}
-        successes = [region.last_success_at for region in regions if region.last_success_at is not None]
-        return CoverageDTO(
-            data_status="unavailable" if "unavailable" in statuses or not regions else "stale" if affected else "fresh",
-            data_as_of=min(successes, default=None),
-            stale_after_hours=self._stale_after.total_seconds() / 3600,
-            affected_regions=affected,
-            warning=self._warning(affected, len(regions)),
-        )
-
-    def _warning(self, affected: Sequence[RegionFreshnessDTO], total: int) -> str | None:
-        if total == 0:
-            return "No counties are registered, so there is no job data to search."
-        if not affected:
-            return None
-        named = ", ".join(self._describe(region) for region in affected[:WARNING_REGION_LIMIT])
-        if len(affected) > WARNING_REGION_LIMIT:
-            named += f" and {len(affected) - WARNING_REGION_LIMIT} more"
-        scope = "the requested county" if total == 1 else f"{len(affected)} of {total} counties"
-        hours = f"{self._stale_after.total_seconds() / 3600:g}"
-        return (f"Job data for {scope} was not updated in the last {hours} hours or is unavailable: {named}. "
-                "Results there may be outdated or incomplete; a job missing from them may still be advertised by HZZ.")
-
-    @staticmethod
-    def _describe(region: RegionFreshnessDTO) -> str:
-        if region.last_success_at is None:
-            return f"{region.name} (never loaded)"
-        updated = f"last updated {region.last_success_at.astimezone(UTC):%Y-%m-%d %H:%M} UTC"
-        if region.data_status == "unavailable":
-            updated += ", a feed never loaded"
-        return f"{region.name} ({updated})"
-
-    @staticmethod
-    def _terms(query: str | None) -> tuple[str, ...]:
-        if query is None or not query.strip():
-            return ()
-        # Stemmed, so "medicinske sestre" also finds "MEDICINSKA SESTRA".
-        words = SEARCH_TERM.findall(query.translate(SEARCH_FOLD).casefold())
-        terms = tuple(dict.fromkeys(stem(word) for word in words))
-        if not terms:
-            raise InvalidJobSearchError("The query contains no searchable words.")
-        return terms
-
-    @staticmethod
-    def _conditions(filters: JobConditionFiltersDTO) -> dict[str, object]:
-        """The condition filters as criteria; no employment tags or a blank place is no filter."""
-        place = None
-        if filters.place and filters.place.strip():
-            # Folded as query words are, but not stemmed: a place name matches as whole words.
-            if not (words := SEARCH_TERM.findall(filters.place.translate(SEARCH_FOLD).casefold())):
-                raise InvalidJobSearchError("The place contains no words.")
-            place = " ".join(words)
-        return filters.model_dump(include=set(JobConditionFiltersDTO.model_fields)) | {
-            "employment_tags": filters.employment_tags or None, "place": place,
-        }
+            return tuple(await work.jobs.list_categories(local_date(now)))
 
     async def _resolve_county(self, work: UnitOfWork, county: str | None) -> tuple[int | None, str | None]:
         """ID and code of the requested county, or None for both without one; raise NotFoundError if unknown."""
@@ -412,3 +325,33 @@ class JobSearchService(JobSearchServiceInterface):
             return JobCursorDTO.model_validate_json(base64.urlsafe_b64decode(cursor.encode("ascii")))
         except (ValueError, ValidationError) as error:
             raise InvalidJobSearchError(INVALID_CURSOR) from error
+
+
+def local_date(moment: datetime) -> date:
+    """The day in Croatia at moment; HZZ deadlines are Croatian calendar days."""
+    return moment.astimezone(LOCAL_TIME_ZONE).date()
+
+
+def search_terms(query: str | None) -> tuple[str, ...]:
+    """The query's words, folded and stemmed as the search vector is; raise InvalidJobSearchError without any."""
+    if query is None or not query.strip():
+        return ()
+    # Stemmed, so "medicinske sestre" also finds "MEDICINSKA SESTRA".
+    words = SEARCH_TERM.findall(query.translate(SEARCH_FOLD).casefold())
+    terms = tuple(dict.fromkeys(stem(word) for word in words))
+    if not terms:
+        raise InvalidJobSearchError("The query contains no searchable words.")
+    return terms
+
+
+def condition_criteria(filters: JobConditionFiltersDTO) -> dict[str, object]:
+    """The condition filters as criteria; no employment tags or a blank place is no filter."""
+    place = None
+    if filters.place and filters.place.strip():
+        # Folded as query words are, but not stemmed: a place name matches as whole words.
+        if not (words := SEARCH_TERM.findall(filters.place.translate(SEARCH_FOLD).casefold())):
+            raise InvalidJobSearchError("The place contains no words.")
+        place = " ".join(words)
+    return filters.model_dump(include=set(JobConditionFiltersDTO.model_fields)) | {
+        "employment_tags": filters.employment_tags or None, "place": place,
+    }

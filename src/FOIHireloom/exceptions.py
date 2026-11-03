@@ -35,6 +35,12 @@ class InvalidJobSearchError(FOIHireloomException):
     code = "invalid_job_search"
 
 
+class InvalidIndicatorRequestError(FOIHireloomException):
+    """The counties, month or other arguments of a county comparison or history cannot be used as given."""
+
+    code = "invalid_indicator_request"
+
+
 class SourceFeedRegistrationError(FOIHireloomException):
     """The metadata cannot be registered without ambiguity or conflicting data."""
 
@@ -118,3 +124,40 @@ class HzzJobPageUnavailableError(HzzJobPageError):
 
 class HzzJobPageParseError(HzzJobPageError):
     """The page does not have the expected job page structure."""
+
+
+class DzsError(FOIHireloomException, RuntimeError):
+    """A DZS file could not be obtained or imported."""
+
+    code = "dzs_error"
+
+
+class DzsTransportError(DzsError):
+    """The HTTP request failed, including timeouts."""
+
+
+class DzsHttpError(DzsError):
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
+        super().__init__(f"DZS returned HTTP {status_code}.")
+
+
+class DzsTooLargeError(DzsError):
+    """The decoded response or local file exceeded the configured size limit."""
+
+
+class DzsFileError(DzsError):
+    """A local file could not be read."""
+
+
+class DzsValidationError(DzsError):
+    """The files do not have the expected structure or contradict each other.
+
+    problems lists every problem found, so one run shows all of them.
+    """
+
+    code = "dzs_validation_error"
+
+    def __init__(self, problems: list[str]) -> None:
+        self.problems = tuple(problems)
+        super().__init__(f"{len(problems)} validation problem(s): {problems[0]}" if problems else "Invalid DZS files.")

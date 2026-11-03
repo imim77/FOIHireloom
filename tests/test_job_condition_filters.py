@@ -9,6 +9,7 @@ from sqlalchemy import func, select, text, update
 from model_test_case import ModelTestCase
 
 from FOIHireloom.api.apps.jobs_by_county import MAX_TOP, jobs_by_county
+from FOIHireloom.api.apps.accommodation_comparison import accommodation_comparison
 from FOIHireloom.dao.concrete.sqla_job import UNKNOWN_CONDITIONS, SqlAlchemyJobRepository
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.db.models.job import CONDITION_CODES
@@ -34,9 +35,9 @@ class JobConditionFilterTests(ModelTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
         self.today = await self.session.scalar(text("SELECT (now() AT TIME ZONE 'Europe/Zagreb')::date"))
-        counties = {code: County(code=code, name=name) for code, name in (
-            ("varazdinska", "Varaždinska županija"), ("istarska", "Istarska županija"),
-            ("grad-zagreb", "Grad Zagreb"))}
+        counties = {code: County(code=code, iso_code=iso_code, name=name) for code, iso_code, name in (
+            ("varazdinska", "HR-05", "Varaždinska županija"), ("istarska", "HR-18", "Istarska županija"),
+            ("grad-zagreb", "HR-21", "Grad Zagreb"))}
         self.session.add_all(counties.values())
         await self.session.flush()
         self.county_ids = {code: county.id for code, county in counties.items()}
@@ -312,6 +313,19 @@ class JobConditionFilterTests(ModelTestCase):
                                  (search.unknown_conditions, search.unknown_total))
                 if filters == {"full_time": True}:
                     self.assertEqual(by_county, {"varazdinska": 3, "istarska": 1, "grad-zagreb": 1})
+
+    async def test_accommodation_comparison_partitions_the_same_ads_as_search(self) -> None:
+        for values in ({}, {'county': 'varazdinska'}, {'county': 'istarska', 'full_time': True},
+                       {'contract': 'permanent'}, {'query': 'nonexistent'}, {'include_expired': True}):
+            with self.subTest(filters=values):
+                filters = JobMarketFiltersDTO(**values)
+                chart = accommodation_comparison(await self.service.market_stats(filters), filters)
+                found = (await self.service.search_cards(JobSearchFiltersDTO(**values))).jobs
+                counts = Counter('unknown' if job.conditions is None or job.conditions.accommodation is None else
+                                 'not_offered' if job.conditions.accommodation == 'none' else 'offered' for job in found)
+                self.assertEqual({group.key: group.jobs for group in chart.groups},
+                                 {key: counts[key] for key in ('offered', 'not_offered', 'unknown')})
+                self.assertEqual(chart.total_jobs, len(found))
 
     async def test_a_cursor_from_other_filters_continues_after_its_job(self) -> None:
         # A cursor holds only a position in the search order, not the filters that found it. With other

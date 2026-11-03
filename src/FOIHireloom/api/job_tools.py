@@ -12,8 +12,10 @@ from FOIHireloom.dto.job_comparison import (
     MIN_COMPARED_JOBS,
     JobComparisonConditionsDTO,
     JobComparisonDTO,
+    JobComparisonViewDTO,
 )
 from FOIHireloom.dto.job_conditions import Contract, EducationLevel, EmploymentTag
+from FOIHireloom.dto.accommodation_comparison import AccommodationComparisonDTO
 from FOIHireloom.dto.job_market import (
     DEFAULT_MARKET_TOP,
     MAX_MARKET_TOP,
@@ -36,8 +38,8 @@ from FOIHireloom.dto.job_search import (
 from FOIHireloom.exceptions import InvalidJobSearchError, NotFoundError, PersistenceError
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 
-from .apps import job_cards, jobs_by_county
-from .apps.views import JOB_CARDS, JOBS_BY_COUNTY
+from .apps import accommodation_comparison, job_cards, job_comparison, jobs_by_county
+from .apps.views import ACCOMMODATION_COMPARISON, JOB_CARDS, JOB_COMPARISON, JOBS_BY_COUNTY
 from .tool_provider import ToolGroup
 
 # Key of the search service in the server's lifespan context.
@@ -80,6 +82,34 @@ Place = Annotated[str | None, Field(
     description="Place of work in the nominative, e.g. 'Rijeka', not 'Rijeci'. Its words must appear as whole "
                 "words in the job page's place of work or the feed's municipality, ignoring case and diacritics, "
                 "so 'Varazdin' finds 'VARAŽDIN', 'Pula' finds 'PULA-POLA' and 'Zagreb' finds 'ZAGREB-DUBRAVA'.",
+)]
+# The arguments of the tools that compare jobs: the jobs and the conditions the user states about themselves.
+ComparedJobIds = Annotated[list[Annotated[int, Field(ge=1, le=2**63 - 1)]], Field(
+    min_length=MIN_COMPARED_JOBS, max_length=MAX_COMPARED_JOBS,
+    description="ids of the 2 or 3 jobs to compare, each once, from earlier search_jobs or show_jobs results, in the "
+                "order to show them.",
+)]
+UserExperience = Annotated[MaxExperienceMonths, Field(
+    description="The user's experience in months. A job meets it when it asks for at most that; with 0 only jobs "
+                "that need none ('Nije važno') and trainee ads do.",
+)]
+UserContract = Annotated[ContractFilter, Field(
+    description="The contract the user wants: 'permanent' (na neodređeno), 'fixed_term' (na određeno) or 'other' "
+                "(other forms of work).",
+)]
+UserFullTime = Annotated[FullTime, Field(
+    description="true when the user wants a full-time job, false when they want a part-time one (under 40 hours a "
+                "week).",
+)]
+UserEducation = Annotated[Education, Field(
+    description="The user's education level; a job meets it when it accepts that level: 'primary_lower' (lower "
+                "primary grades), 'primary' (primary school), 'secondary_3' (3-year secondary school), 'secondary_4' "
+                "(4-year secondary school), 'college' (viša or bachelor's) or 'university' (faculty, master's or "
+                "doctorate).",
+)]
+UserAccommodation = Annotated[Accommodation, Field(
+    description="true when the user needs accommodation, met by jobs offering any (shared, single or family); false "
+                "when the user wants a job that offers none.",
 )]
 
 
@@ -126,6 +156,11 @@ class JobTools(ToolGroup):
         ) -> JobSearchPageDTO:
             """Search Croatian Employment Service (HZZ) job advertisements, newest first.
 
+            For 'Koliko oglasa nudi smještaj, a koliko ne?' or accommodation
+            percentages, call show_accommodation_comparison directly. Do not
+            count a search page or infer accommodation from free text for
+            these aggregate questions. This tool lists individual ads.
+
             Returns jobs still listed in an HZZ county feed. With a query,
             jobs whose title contains every query word come first
             (title_match true), then jobs that match only elsewhere, such as
@@ -144,7 +179,8 @@ class JobTools(ToolGroup):
             it, 'feed' when it was filled in from an HZZ occupation feed whose
             category was verified on its jobs. Use get_job for the full
             details, and canonical_url to view or apply on the HZZ site.
-            To compare 2 or 3 found jobs, pass their ids to compare_jobs.
+            To compare 2 or 3 found jobs, pass their ids to
+            show_job_comparison to show the comparison, or to compare_jobs.
 
             The condition filters (max_experience_months, contract,
             full_time, education, accommodation, employment_tags and place)
@@ -203,14 +239,20 @@ class JobTools(ToolGroup):
         ) -> JobCardsDTO:
             """Show the user the jobs search_jobs would find as cards, newest first.
 
+            For accommodation counts or shares, use show_accommodation_comparison
+            directly; it counts all matching ads and displays the distribution.
+            Use these cards when the user wants to browse individual jobs.
+
             Use it when the user wants to see or browse jobs, not just read
             about them. Hosts that support MCP Apps draw a card per job: the
             employer, the title, the place, the employment type, working
             hours, education, experience, workers sought, accommodation and
             the application deadline, with a link to the HZZ advertisement.
             The user can load more cards there, and remove a filter, which
-            shows the cards found without it. To compare 2 or 3 of the jobs,
-            pass their ids to compare_jobs. Every host also gets the data:
+            shows the cards found without it. The user can also pick 2 or 3
+            cards to compare, which sends a message naming them with their
+            ids; show those jobs with show_job_comparison, passing only the
+            conditions the user stated. Every host also gets the data:
             the jobs as in search_jobs, category_source included, plus those
             job page values as text, which are null until the job's HZZ page
             has been read. conditions holds the same page's normalised
@@ -258,11 +300,15 @@ class JobTools(ToolGroup):
                 ge=1, le=MAX_MARKET_TOP, description="Entries in the employers list.",
             )] = DEFAULT_MARKET_TOP,
         ) -> JobMarketStatsDTO:
-            """Count the jobs search_jobs would find for the same filters, broken down for labour market questions.
+            """General labour-market counts; for accommodation counts or shares use show_accommodation_comparison.
 
             Use it for questions such as where most jobs of a kind are, which
             employers hire most, or what share is permanent; use search_jobs
-            to list the jobs themselves. jobs is the number of matching jobs
+            to list the jobs themselves. For accommodation counts, shares or
+            distribution (smještaj / bez smještaja / nepoznato), automatically
+            use show_accommodation_comparison even if the user does not request
+            a chart, a comparison or a named tool. It displays the chart and returns
+            the counts together. jobs is the number of matching jobs
             and workers_needed the positions their HZZ pages state, so one job
             can seek several workers. Each breakdown entry gives jobs and
             workers_needed per value, most common first.
@@ -303,6 +349,50 @@ class JobTools(ToolGroup):
                 employment_tags=employment_tags, place=place, include_expired=include_expired, top=top,
             )
             return await self._call(service(ctx).market_stats(filters))
+
+        @server.tool(app=AppConfig(resource_uri=ACCOMMODATION_COMPARISON.uri), annotations=READ_ONLY)
+        async def show_accommodation_comparison(
+            ctx: Context,
+            query: Annotated[str | None, Field(max_length=MAX_QUERY_LENGTH,
+                description="Words as for search_jobs, e.g. 'kuhar'; leave out for all occupations.")] = None,
+            county: Annotated[str | None, Field(
+                description="County code or name from list_regions; leave out for all counties.")] = None,
+            category: Annotated[str | None, Field(description=CATEGORY_DESCRIPTION)] = None,
+            max_experience_months: MaxExperienceMonths = None,
+            contract: ContractFilter = None,
+            full_time: FullTime = None,
+            education: Education = None,
+            employment_tags: EmploymentTags = None,
+            place: Place = None,
+            include_expired: Annotated[bool, Field(description="Also include ads whose deadline has passed.")] = False,
+        ) -> AccommodationComparisonDTO:
+            """Koliko oglasa nudi smještaj, a koliko ne? Vraća brojeve i postotke te odmah prikazuje graf.
+
+            Odaberi ovaj alat za pitanja o broju, udjelu ili raspodjeli oglasa prema smještaju.
+            Korisnik ne mora spomenuti graf, usporedbu ni naziv alata.
+            Primjeri: 'Koliko oglasa za kuhare u Varaždinskoj županiji nudi smještaj, a koliko ne?',
+            'Koliki udio poslova u Istri ima smještaj?', 'Usporedi oglase sa smještajem i bez njega'.
+            Za prvi primjer pozovi query='kuhar', county='varazdinska'. Pozovi izravno, bez prethodnog
+            search_jobs, ručnog brojanja oglasa ili biranja nekoliko primjera za show_job_comparison.
+
+            Obuhvaća sve oglase za zadane filtre i prikazuje tri skupine: nudi smještaj (shared,
+            single, family), izričito nema smještaja (none), podatak nepoznat. Nepoznato nikad ne
+            pribrajaj skupini bez smještaja niti nagađaj iz slobodnog teksta. Udjeli se računaju od
+            svih pronađenih oglasa, ne radnih mjesta. Nema filtra accommodation jer se uspoređuju
+            sve tri skupine. Prenesi coverage_note i unknown_note. Query pretražuje tekst, a category
+            obuhvaća samo oglase poznate kategorije. Skrivanje skupine u legendi ne mijenja izvorne
+            brojeve. Vraća podatke i na hostu bez MCP Apps podrške.
+
+            Za 'Pronađi mi posao kuhara sa smještajem' koristi show_jobs s accommodation=True;
+            ovaj alat služi pitanjima o broju i udjelima, a show_job_comparison odabranim oglasima.
+            """
+            filters = JobMarketFiltersDTO(
+                query=query, county=county, category=category, max_experience_months=max_experience_months,
+                contract=contract, full_time=full_time, education=education, employment_tags=employment_tags,
+                place=place, include_expired=include_expired,
+            )
+            stats = await self._call(service(ctx).market_stats(filters))
+            return accommodation_comparison.accommodation_comparison(stats, filters)
 
         @server.tool(app=AppConfig(resource_uri=JOBS_BY_COUNTY.uri), annotations=READ_ONLY)
         async def show_jobs_by_county(
@@ -379,44 +469,29 @@ class JobTools(ToolGroup):
         @server.tool(annotations=READ_ONLY)
         async def compare_jobs(
             ctx: Context,
-            job_ids: Annotated[list[Annotated[int, Field(ge=1, le=2**63 - 1)]], Field(
-                min_length=MIN_COMPARED_JOBS, max_length=MAX_COMPARED_JOBS,
-                description="ids of the 2 or 3 jobs to compare, each once, from earlier search_jobs or show_jobs "
-                            "results, in the order to show them.",
-            )],
-            max_experience_months: Annotated[MaxExperienceMonths, Field(
-                description="The user's experience in months. A job meets it when it asks for at most that; with 0 "
-                            "only jobs that need none ('Nije važno') and trainee ads do.",
-            )] = None,
-            contract: Annotated[ContractFilter, Field(
-                description="The contract the user wants: 'permanent' (na neodređeno), 'fixed_term' (na određeno) "
-                            "or 'other' (other forms of work).",
-            )] = None,
-            full_time: Annotated[FullTime, Field(
-                description="true when the user wants a full-time job, false when they want a part-time one "
-                            "(under 40 hours a week).",
-            )] = None,
-            education: Annotated[Education, Field(
-                description="The user's education level; a job meets it when it accepts that level: 'primary_lower' "
-                            "(lower primary grades), 'primary' (primary school), 'secondary_3' (3-year secondary "
-                            "school), 'secondary_4' (4-year secondary school), 'college' (viša or bachelor's) or "
-                            "'university' (faculty, master's or doctorate).",
-            )] = None,
-            accommodation: Annotated[Accommodation, Field(
-                description="true when the user needs accommodation, met by jobs offering any (shared, single or "
-                            "family); false when the user wants a job that offers none.",
-            )] = None,
+            job_ids: ComparedJobIds,
+            max_experience_months: UserExperience = None,
+            contract: UserContract = None,
+            full_time: UserFullTime = None,
+            education: UserEducation = None,
+            accommodation: UserAccommodation = None,
         ) -> JobComparisonDTO:
             """Compare 2 or 3 jobs the user picked side by side, against the conditions the user stated.
 
             Use it when the user wants to compare particular jobs, e.g. "compare
-            the first and the third". Take job_ids from earlier search_jobs or
-            show_jobs results in this conversation, in the order the user named
-            them: the selection lives only in the conversation, as there are
-            no accounts or saved lists. Expired jobs, jobs no longer listed and
-            jobs whose HZZ page was not read are compared too.
+            the first and the third", and only the data is needed; to show the
+            user the comparison as a table, use show_job_comparison. Take
+            job_ids from earlier search_jobs or show_jobs results in this
+            conversation, in the order the user named them: the selection
+            lives only in the conversation, as there are no accounts or saved
+            lists. Do not select example jobs on the user's behalf for a
+            market-wide comparison. For counts or shares of ads with, without
+            or with unknown accommodation, use show_accommodation_comparison.
+            Expired jobs, jobs no longer listed and jobs whose HZZ page
+            was not read are compared too.
 
-            jobs names each job as its card does, in the given order. rows
+            jobs names each job as its card does, in the given order, with
+            its published_on, deadline_on and deadline_passed. rows
             hold one aspect each, in the order experience, education,
             contract, working_time, accommodation and deadline, with a cell
             per job in the jobs' order. A cell's value is a short English
@@ -426,7 +501,13 @@ class JobTools(ToolGroup):
             whether it came from the job page or the HZZ feed. differs is true
             when the jobs' values are not all equal, an unknown value
             differing from a known one; point out the rows that differ. today
-            is the day in Croatia the deadlines are counted from.
+            is the day in Croatia the deadlines are counted from. When a
+            value is null on any aspect but the deadline, unknown_reason
+            says why: 'page_not_read', 'page_unavailable' (HZZ returned an
+            error page) or 'page_failed' while the page was not read,
+            'not_stated' when it does not state it, 'unreadable' when its
+            words were not recognised, 'contract_not_stated' when it states
+            the type of employment but not the contract.
 
             Pass only the conditions the user actually stated about themselves
             or the job they want; never guess or infer one, and leave the rest
@@ -445,9 +526,51 @@ class JobTools(ToolGroup):
                 max_experience_months=max_experience_months, contract=contract, full_time=full_time,
                 education=education, accommodation=accommodation,
             )
-            # The service compares without conditions when none is set; pass that as None.
-            stated = conditions if conditions.model_dump(exclude_none=True) else None
-            return await self._call(service(ctx).compare_jobs(job_ids, stated))
+            return await self._compare(ctx, job_ids, conditions)
+
+        @server.tool(app=AppConfig(resource_uri=JOB_COMPARISON.uri), annotations=READ_ONLY)
+        async def show_job_comparison(
+            ctx: Context,
+            job_ids: ComparedJobIds,
+            max_experience_months: UserExperience = None,
+            contract: UserContract = None,
+            full_time: UserFullTime = None,
+            education: UserEducation = None,
+            accommodation: UserAccommodation = None,
+        ) -> JobComparisonViewDTO:
+            """Display a table comparing 2 or 3 specific job ads explicitly selected by the user.
+
+            Use only when the user identified the particular ads, e.g. 'compare
+            the first and third' or after picking jobs on the cards. Take
+            job_ids from those selected ads; do not choose 2 or 3 examples on
+            the user's behalf. A request to compare counts or percentages of
+            ads offering accommodation, not offering it and having unknown data
+            ('usporedba oglasa sa smještajem i bez smještaja') belongs to
+            show_accommodation_comparison, which displays the aggregate donut
+            chart for the entire matching population; use compare_jobs when only the data is
+            needed. Hosts that support MCP Apps draw a table with a column per
+            job and a row per aspect (experience, education, contract,
+            working time, accommodation, deadline), the job page's own words
+            in each cell, a verdict for each condition the user stated and
+            the rows that differ marked, with a link to each HZZ
+            advertisement. Every host also gets the data, as in compare_jobs.
+
+            The rules of compare_jobs apply: pass only the conditions the
+            user actually stated, never guessed or inferred ones; report
+            'unknown' as unknown, never as met; a verdict says only whether
+            what the advertisement states meets what the user said, never
+            that the employer will accept the user, so do not claim that.
+            unknown_reason is a code for why a cell's value is unknown.
+            title, description (the user's conditions), the rows' name and
+            condition_label, the cells' text, note and verdict_label,
+            disclaimer and unknown_note are the Croatian wording the view
+            shows.
+            """
+            conditions = JobComparisonConditionsDTO(
+                max_experience_months=max_experience_months, contract=contract, full_time=full_time,
+                education=education, accommodation=accommodation,
+            )
+            return job_comparison.job_comparison(await self._compare(ctx, job_ids, conditions))
 
         @server.tool(annotations=READ_ONLY)
         async def list_regions(ctx: Context) -> list[RegionDTO]:
@@ -469,6 +592,13 @@ class JobTools(ToolGroup):
             query when every job of an occupation matters.
             """
             return list(await self._call(service(ctx).list_categories()))
+
+    async def _compare(
+        self, ctx: Context, job_ids: list[int], conditions: JobComparisonConditionsDTO,
+    ) -> JobComparisonDTO:
+        # The service compares without conditions when none is set; pass that as None.
+        stated = conditions if conditions.model_dump(exclude_none=True) else None
+        return await self._call(service(ctx).compare_jobs(job_ids, stated))
 
     @staticmethod
     async def _call[T](operation: Awaitable[T]) -> T:

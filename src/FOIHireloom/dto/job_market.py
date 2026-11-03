@@ -15,16 +15,18 @@ DEFAULT_MARKET_TOP = 10
 MAX_MARKET_TOP = 50
 
 
-class JobMarketFiltersDTO(JobConditionFiltersDTO):
-    """The jobs to count, chosen as JobSearchFiltersDTO chooses jobs to list.
-
-    top is the length of the employers breakdown.
-    """
+class JobCountFiltersDTO(JobConditionFiltersDTO):
+    """The jobs to count in any county, chosen as JobSearchFiltersDTO chooses jobs to list."""
 
     query: str | None = Field(default=None, max_length=MAX_QUERY_LENGTH)
-    county: str | None = None
     category: str | None = None
     include_expired: bool = False
+
+
+class JobMarketFiltersDTO(JobCountFiltersDTO):
+    """The jobs to count, optionally in one county; top is the length of the employers breakdown."""
+
+    county: str | None = None
     top: int = Field(default=DEFAULT_MARKET_TOP, ge=1, le=MAX_MARKET_TOP)
 
 
@@ -36,6 +38,34 @@ class JobMarketCriteriaDTO(JobFilterCriteriaDTO):
 
     today: date
     top: int = Field(ge=1)
+
+
+class CountyJobCriteriaDTO(JobFilterCriteriaDTO):
+    """Filters for counting the jobs of each of county_ids; today starts the closing-soon window.
+
+    county_id stays None: the counties are county_ids.
+    """
+
+    county_ids: tuple[int, ...] = Field(min_length=1)
+    today: date
+
+
+class CountyJobCountsRowDTO(ModelConfigBaseModel):
+    """One county's listed jobs matching CountyJobCriteriaDTO.
+
+    workers_needed sums the with_workers_needed jobs whose page states the
+    number of workers; the others are unknown, not 0. permanent counts the
+    with_contract jobs whose known contract is permanent. closing_soon counts
+    jobs whose deadline falls within MARKET_WINDOW_DAYS days of today.
+    """
+
+    county_id: int
+    jobs: int
+    with_workers_needed: int
+    workers_needed: int
+    with_contract: int
+    permanent: int
+    closing_soon: int
 
 
 class MarketCountDTO(ModelConfigBaseModel):

@@ -3,7 +3,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { Card, ExpandButton, Notes, Warning } from '../../shared/Card'
 import { finish, releaseStyles, useReducedMotion } from '../../shared/chart-motion'
 import { formatAds } from '../../shared/format'
-import { useExpanded, useMcpApp } from '../../shared/mcp'
+import { canSendMessage, openLink, useExpanded, useMcpApp } from '../../shared/mcp'
 import type { ActiveFilter } from '../../shared/types'
 import { type CardActions, JobCardView } from './JobCardView'
 import { capitalise, sentenceCase } from './job-format'
@@ -21,6 +21,29 @@ interface More {
   base: JobCardsData
   jobs: { job: JobCard; order: number }[]
   cursor: string | null
+}
+
+// The cards picked for a comparison, in the order picked; a new result starts over.
+interface Picked {
+  base: JobCardsData
+  jobs: JobCard[]
+}
+
+// A comparison takes 2 or 3 jobs, as show_job_comparison does.
+const MIN_COMPARED = 2
+const MAX_COMPARED = 3
+
+/** The user's message that asks for the comparison: Usporedi oglase „Kuhar” (id 1) i „Konobar” (id 2). */
+function compareMessage(jobs: JobCard[]): string {
+  const names = jobs.map((job) => `„${sentenceCase(job.display_title)}” (id ${job.id})`)
+  return `Usporedi oglase ${names.slice(0, -1).join(', ')} i ${names[names.length - 1]}.`
+}
+
+/** What the comparison bar says about the picked cards. */
+function pickedHint(count: number): string {
+  if (count < MIN_COMPARED) return 'Odaberite još jedan ili dva oglasa za usporedbu.'
+  if (count < MAX_COMPARED) return 'Možete odabrati još jedan oglas.'
+  return 'Odabrana su 3 oglasa, najviše koliko se može usporediti.'
 }
 
 // A result the view asked for itself, without a removed filter; base is the host's result it replaced.
@@ -41,6 +64,7 @@ export function JobCards() {
   const { expanded, toggle } = useExpanded(mcp)
   const [refiltered, setRefiltered] = useState<Refiltered | null>(null)
   const [more, setMore] = useState<More | null>(null)
+  const [picked, setPicked] = useState<Picked | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const list = useRef<HTMLDivElement>(null)
@@ -71,14 +95,14 @@ export function JobCards() {
   const cards = [...data.jobs.map((job, order) => ({ job, order })), ...(extra?.jobs ?? [])]
   const cursor = extra ? extra.cursor : data.next_cursor
   const tools = Boolean(app?.getHostCapabilities()?.serverTools)
+  // Picking cards to compare sends the user's message, so it needs a host that takes one.
+  const messages = canSendMessage(app)
+  const chosen = picked?.base === data ? picked.jobs : []
   // Chips under the header; with server tools each one can be removed.
   const chips = data.active_filters ?? []
 
   const actions: CardActions = {
-    open: (job) => {
-      if (app) void app.openLink({ url: job.canonical_url }).catch(() => window.open(job.canonical_url, '_blank'))
-      else window.open(job.canonical_url, '_blank', 'noopener')
-    },
+    open: (job) => openLink(app, job.canonical_url),
     ask: app ? (job) => {
       const employer = job.employer_name ? ` (${job.employer_name})` : ''
       void app.sendMessage({ role: 'user', content: [{
@@ -112,6 +136,26 @@ export function JobCards() {
       const added = next.jobs.filter((job) => !shown.has(job.id)).map((job, order) => ({ job, order }))
       setMore({ base: data, jobs: [...(extra?.jobs ?? []), ...added], cursor: next.next_cursor })
     })
+  }
+
+  function togglePicked(job: JobCard) {
+    if (!data) return
+    const jobs = chosen.some((other) => other.id === job.id)
+      ? chosen.filter((other) => other.id !== job.id)
+      : chosen.length < MAX_COMPARED ? [...chosen, job] : chosen
+    setPicked({ base: data, jobs })
+  }
+
+  async function compare() {
+    if (!canSendMessage(app) || chosen.length < MIN_COMPARED) return
+    setError(null)
+    try {
+      const result = await app.sendMessage({ role: 'user', content: [{ type: 'text', text: compareMessage(chosen) }] })
+      if (result.isError) throw new Error('Poruka za usporedbu nije poslana.')
+      setPicked(null)
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure))
+    }
   }
 
   function removeFilter(filter: ActiveFilter) {
@@ -149,11 +193,26 @@ export function JobCards() {
       {cards.length ? (
         <div className={`job-list${expanded ? ' expanded' : ''}`} ref={list}>
           {cards.map(({ job, order }) => (
-            <JobCardView key={job.id} job={job} today={data.today} order={order} actions={actions} />
+            <JobCardView key={job.id} job={job} today={data.today} order={order} actions={actions}
+              compare={messages ? {
+                checked: chosen.some((other) => other.id === job.id),
+                disabled: chosen.length >= MAX_COMPARED && !chosen.some((other) => other.id === job.id),
+                onChange: () => togglePicked(job),
+              } : null} />
           ))}
         </div>
       ) : (
         <p className="empty">Nema aktivnih oglasa za zadane filtre.</p>
+      )}
+      {messages && chosen.length > 0 && (
+        <div className="compare-bar">
+          <p className="soft" role="status">{pickedHint(chosen.length)}</p>
+          <button className="more" type="button" onClick={() => setPicked(null)}>Poništi odabir</button>
+          <button className="more primary" type="button" disabled={chosen.length < MIN_COMPARED}
+            onClick={() => void compare()}>
+            Usporedi odabrane ({chosen.length})
+          </button>
+        </div>
       )}
       <Warning text={error} />
       {cards.length > 0 && (

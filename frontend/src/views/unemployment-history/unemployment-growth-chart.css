@@ -1,0 +1,69 @@
+/* The supplied Revenue Growth card, adapted to monthly DZS rates and the host's two themes. */
+.history {
+  --series-1: #8979ff;
+  --series-2: #f58233;
+  --series-3: #3a6ee8;
+  --series-4: #19965a;
+  --series-5: #c85594;
+  --series-6: #a38500;
+}
+:root[data-theme="dark"] .history {
+  --series-1: #a99dff;
+  --series-2: #ff9d5c;
+  --series-3: #79a2ff;
+  --series-4: #5ed799;
+  --series-5: #f58fc9;
+  --series-6: #ddc45a;
+}
+.growth-chart { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.growth-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 16px; }
+.growth-stat { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-width: 0;
+  padding: 16px; border-radius: 16px; background: var(--surface-sunken); }
+.growth-stat p { margin: 0; }
+.growth-stat-name { display: flex; align-items: center; gap: 8px; max-width: 100%; color: var(--fg-soft);
+  font-size: 12px; font-weight: 500; line-height: 1.4; }
+.growth-legend-dot { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--series); box-shadow: 0 0 0 2px var(--card), 0 0 0 3px color-mix(in srgb, var(--series) 30%, transparent); }
+.growth-stat-reading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.growth-value { font-size: 24px; line-height: 30px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.growth-stat-month { color: var(--fg-soft); font-size: 12px; line-height: 1.4; }
+.growth-missing { color: var(--fg-soft); font-size: 16px; line-height: 30px; }
+.growth-legend { gap: 10px 20px; }
+.growth-plot-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; color: var(--fg-soft); font-size: 12px; }
+.growth-plot-heading p { margin: 0; }
+.growth-axes { display: flex; gap: 12px; min-width: 0; }
+.growth-y-axis { position: relative; flex: none; min-width: 44px; color: var(--fg-soft); font-size: 11px;
+  font-variant-numeric: tabular-nums; }
+.growth-y-axis span { position: absolute; left: 0; white-space: nowrap; transform: translateY(-50%); }
+.growth-plot-column { flex: 1; min-width: 0; }
+.growth-plot { position: relative; }
+.growth-plot > svg { display: block; width: 100%; overflow: visible; }
+.growth-axis { stroke: var(--border); stroke-width: 1; }
+.growth-grid { stroke: var(--border); stroke-width: 1; }
+[data-slot="growth-grid"] { transform-box: fill-box; transform-origin: left; }
+.growth-hatch { stroke: var(--surface-disable); stroke-width: 1; opacity: 0.35; }
+.growth-cursor { fill: var(--fg-loud); }
+.growth-cursor line { stroke: var(--fg-loud); stroke-width: 1.5; }
+.growth-series { color: var(--series); transition: opacity 250ms; }
+.growth-series.is-muted { opacity: 0.25; }
+.growth-line { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.growth-node { fill: currentColor; transform-box: fill-box; transform-origin: center; }
+.growth-node-shell { fill: var(--card); }
+.growth-scrubber { position: absolute; inset: 0; cursor: crosshair; touch-action: pan-y; border-radius: 8px; outline: none; }
+.growth-scrubber:focus-visible { box-shadow: var(--focus); }
+.growth-x-axis { position: relative; height: 24px; margin-top: 4px; color: var(--fg-soft); font-size: 11px; }
+.growth-x-axis span { position: absolute; white-space: nowrap; transform: translateX(-50%); }
+.growth-x-axis .is-first { transform: none; }
+.growth-x-axis .is-last { transform: translateX(-100%); }
+.growth-hint { margin: 0; color: var(--fg-soft); font-size: 11px; line-height: 1.5; }
+@media (max-width: 400px) {
+  .growth-stats { gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .growth-stat { padding: 12px; gap: 8px; }
+  .growth-stat-name { font-size: 11px; overflow-wrap: anywhere; }
+  .growth-value { font-size: 22px; }
+  .growth-stat-month { font-size: 11px; }
+  .growth-axes { gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .growth-series { transition: none; }
+}

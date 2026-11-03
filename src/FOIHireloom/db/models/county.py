@@ -14,10 +14,13 @@ class County(Base):
     __table_args__ = (
         CheckConstraint("length(btrim(code)) > 0", name="code_not_blank"),
         CheckConstraint("length(btrim(name)) > 0", name="name_not_blank"),
+        CheckConstraint("iso_code ~ '^HR-(0[1-9]|1[0-9]|2[01])$'", name="iso_code_valid"),
     )
 
     id: Mapped[int] = mapped_column(SmallInteger, Identity(), primary_key=True)
     code: Mapped[str] = mapped_column(Text, unique=True)
+    # ISO 3166-2:HR, HR-01 … HR-21; links DZS tables to the county.
+    iso_code: Mapped[str] = mapped_column(Text, unique=True)
     name: Mapped[str] = mapped_column(Text, unique=True)
 
     source_feeds: Mapped[list["SourceFeed"]] = relationship(
