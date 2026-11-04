@@ -56,11 +56,16 @@ class WeeklyJobAdsRowDTO(ModelConfigBaseModel):
 
 
 class ObservedPointDTO(ModelConfigBaseModel):
-    """A past value; value is None when the source has none for that period."""
+    """A past value; value is None when the source has none for that period.
+
+    is_estimated is True when the value was derived from other published
+    values rather than published itself.
+    """
 
     period: date
     value: float | None
     is_provisional: bool | None = None
+    is_estimated: bool | None = None
 
 
 class PredictedPointDTO(ModelConfigBaseModel):

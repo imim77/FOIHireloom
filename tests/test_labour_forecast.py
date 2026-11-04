@@ -155,6 +155,70 @@ class DzsForecastTests(unittest.IsolatedAsyncioTestCase):
                 await service(FakeWork(latest=LAST_MONTH), FakeForecaster()).forecast(request)
 
 
+class FakeDzsValues:
+    """Answers the DZS repository's queries from a list of stored values, as the database would."""
+
+    def __init__(self, values: list[DzsStoredValueDTO]) -> None:
+        self._values = values
+
+    async def list_series(self, county_ids, indicator, sex, first, last):
+        return [v for v in self._values if v.county_id in county_ids and v.indicator == indicator and v.sex == sex
+                and first <= v.period <= last]
+
+    async def latest_common_periods(self, county_ids, indicators, sex):
+        latest = {}
+        for indicator in indicators:
+            periods = {v.period for v in self._values if v.indicator == indicator and v.sex == sex}
+            common = [p for p in periods if all(any(v.county_id == c and v.period == p and v.value is not None
+                                                    and v.indicator == indicator and v.sex == sex
+                                                    for v in self._values) for c in county_ids)]
+            if common:
+                latest[indicator] = max(common)
+        return latest
+
+
+def stored(indicator: str, sex: str, period: date, value: str, provisional: bool = False) -> DzsStoredValueDTO:
+    return DzsStoredValueDTO(county_id=VARAZDINSKA.id, indicator=indicator, period=period, sex=sex,
+                             value=Decimal(value), missing_reason=None, is_provisional=provisional,
+                             source="t1" if indicator in ("unemployed", "employed") else "workbook_9_4_14")
+
+
+class PersonsForecastTests(unittest.IsolatedAsyncioTestCase):
+    def work(self, values: list[DzsStoredValueDTO]) -> FakeWork:
+        work = FakeWork()
+        work.dzs_indicator_values = FakeDzsValues(values)
+        return work
+
+    async def test_estimates_months_without_an_exact_count(self) -> None:
+        months = months_back(30)
+        values = [stored("unemployment_rate", "total", m, "5.0") for m in months]
+        values += [stored("active_population", "total", m, "80000", provisional=m == LAST_MONTH) for m in months]
+        values += [stored("unemployed", "total", LAST_MONTH, "3990"), stored("employed", "total", LAST_MONTH, "76010")]
+        for target, estimate, exact in (("unemployed", 4000.0, 3990.0), ("employed", 76000.0, 76010.0)):
+            forecaster = FakeForecaster()
+            result = await service(self.work(values), forecaster).forecast(
+                CountyForecastRequestDTO(counties=("varazdinska",), target=target, horizon=1))
+            (histories, _), = forecaster.calls
+            self.assertEqual(histories[0][-2:], [estimate, exact])  # The exact count wins.
+            county = result.counties[0]
+            self.assertEqual([(p.value, p.is_estimated) for p in county.history[-2:]],
+                             [(estimate, True), (exact, False)])
+            self.assertEqual(county.unavailable_reason, None)
+            self.assertIn("estimated", " ".join(result.notes))
+
+    async def test_men_use_total_minus_women_active_population(self) -> None:
+        months = months_back(24)
+        values = [stored("unemployment_rate", "men", m, "4.0") for m in months]
+        values += [stored("active_population", "total", m, "80000") for m in months]
+        values += [stored("active_population", "women", m, "30000", provisional=True) for m in months]
+        forecaster = FakeForecaster()
+        result = await service(self.work(values), forecaster).forecast(
+            CountyForecastRequestDTO(counties=("varazdinska",), target="unemployed", horizon=1, sex="men"))
+        self.assertEqual(forecaster.calls[0][0][0], [2000.0] * 24)
+        self.assertTrue(result.counties[0].history[-1].is_provisional)
+        self.assertEqual(result.last_observed_period, LAST_MONTH)
+
+
 class JobAdsForecastTests(unittest.IsolatedAsyncioTestCase):
     async def test_counts_full_weeks_since_tracking_began(self) -> None:
         # Tracking began on Wednesday 2026-08-26; today is Wednesday 2026-11-04.

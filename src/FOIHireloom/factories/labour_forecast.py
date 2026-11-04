@@ -8,6 +8,7 @@ from FOIHireloom.services.concrete.labour_forecast import LabourMarketForecastSe
 from FOIHireloom.services.concrete.labour_forecast_series import (
     NOTE_PERSONS,
     NOTE_RATE,
+    DzsPersonsSeriesLoader,
     DzsSeriesLoader,
     HzzJobAdsSeriesLoader,
 )
@@ -26,8 +27,8 @@ class LabourMarketForecastServiceFactory:
         forecaster = forecaster or ChronosForecaster(self._settings.CHRONOS_MODEL, self._settings.CHRONOS_DEVICE)
         loaders = {
             "unemployment_rate": DzsSeriesLoader("unemployment_rate", "percent", 1, 100.0, (NOTE_RATE,)),
-            "unemployed": DzsSeriesLoader("unemployed", "persons", 0, None, (NOTE_PERSONS,)),
-            "employed": DzsSeriesLoader("employed", "persons", 0, None, (NOTE_PERSONS,)),
+            "unemployed": DzsPersonsSeriesLoader("unemployed", (NOTE_PERSONS,)),
+            "employed": DzsPersonsSeriesLoader("employed", (NOTE_PERSONS,)),
             "job_ads": HzzJobAdsSeriesLoader(),
         }
         return LabourMarketForecastService(uow_factory, CountyResolver(CroatianCountyCatalog()), forecaster, loaders)

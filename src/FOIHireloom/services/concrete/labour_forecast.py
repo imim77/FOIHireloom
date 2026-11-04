@@ -84,11 +84,13 @@ class LabourMarketForecastService(LabourMarketForecastServiceInterface):
     ) -> CountyForecastSeriesDTO:
         values = series.values.get(county.id, [])
         provisional = series.provisional.get(county.id, [None] * len(values))
+        estimated = series.estimated.get(county.id, [None] * len(values))
         shown = slice(-loader.shown_history, None)
         history = tuple(
             ObservedPointDTO(period=period, value=None if value is None else rounded(value, loader.digits),
-                             is_provisional=flag)
-            for period, value, flag in zip(series.periods[shown], values[shown], provisional[shown], strict=True)
+                             is_provisional=flag, is_estimated=guess)
+            for period, value, flag, guess in zip(series.periods[shown], values[shown], provisional[shown],
+                                                  estimated[shown], strict=True)
         )
         last_observed = next((point for point in reversed(history) if point.value is not None), None)
         if forecast is None:
