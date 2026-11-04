@@ -17,6 +17,7 @@ from FOIHireloom.factories.job_conditions import JobConditionsServiceFactory
 from FOIHireloom.factories.job_page import JobPageServiceFactory
 from FOIHireloom.factories.job_search import JobSearchServiceFactory
 from FOIHireloom.factories.job_sync import JobSyncServiceFactory
+from FOIHireloom.factories.labour_forecast import LabourMarketForecastServiceFactory
 from FOIHireloom.factories.source_feed_registration import SourceFeedRegistrationServiceFactory
 from FOIHireloom.services.interfaces.category_snapshot import CategorySnapshotServiceInterface
 from FOIHireloom.services.interfaces.county_indicators import CountyIndicatorServiceInterface
@@ -25,10 +26,14 @@ from FOIHireloom.services.interfaces.job_conditions import JobConditionsServiceI
 from FOIHireloom.services.interfaces.job_page import JobPageServiceInterface
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 from FOIHireloom.services.interfaces.job_sync import JobSyncServiceInterface
+from FOIHireloom.services.interfaces.labour_forecast import LabourMarketForecastServiceInterface
 from FOIHireloom.services.interfaces.lifecycle import ServiceOpener
 from FOIHireloom.services.interfaces.source_feed_registration import SourceFeedRegistrationServiceInterface
 
 USER_AGENT = "FOIHireloom/0.1 (+https://github.com/imim77/FOIHireloom)"
+
+type ReadServices = tuple[
+    JobSearchServiceInterface, CountyIndicatorServiceInterface, LabourMarketForecastServiceInterface]
 
 
 class DependencyService:
@@ -46,19 +51,17 @@ class DependencyService:
         *,
         job_search: ServiceOpener[JobSearchServiceInterface] | None = None,
         county_indicators: ServiceOpener[CountyIndicatorServiceInterface] | None = None,
-    ) -> AsyncIterator[tuple[JobSearchServiceInterface, CountyIndicatorServiceInterface]]:
+        labour_forecast: ServiceOpener[LabourMarketForecastServiceInterface] | None = None,
+    ) -> AsyncIterator[ReadServices]:
         """Open read services over one pool, retaining an independent transaction per operation.
 
-        Overrides own their lifetimes. When both are supplied, no default
+        Overrides own their lifetimes. When all are supplied, no default
         database is opened. Partial startup failures close prior resources.
         """
         async with AsyncExitStack() as stack:
-            if job_search is not None and county_indicators is not None:
-                search = await stack.enter_async_context(job_search())
-                indicators = await stack.enter_async_context(county_indicators())
-                yield search, indicators
-                return
-            uow_factory = await stack.enter_async_context(self._open_uow())
+            uow_factory = None
+            if None in (job_search, county_indicators, labour_forecast):
+                uow_factory = await stack.enter_async_context(self._open_uow())
             if job_search is None:
                 search = JobSearchServiceFactory(self._settings).create(uow_factory)
             else:
@@ -67,7 +70,11 @@ class DependencyService:
                 indicators = CountyIndicatorServiceFactory(self._settings).create(uow_factory)
             else:
                 indicators = await stack.enter_async_context(county_indicators())
-            yield search, indicators
+            if labour_forecast is None:
+                forecast = LabourMarketForecastServiceFactory(self._settings).create(uow_factory)
+            else:
+                forecast = await stack.enter_async_context(labour_forecast())
+            yield search, indicators, forecast
 
     @asynccontextmanager
     async def source_feed_registration_service(
