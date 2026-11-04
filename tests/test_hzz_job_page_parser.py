@@ -3,7 +3,7 @@ from datetime import date
 from pathlib import Path
 
 from FOIHireloom.exceptions import HzzJobPageParseError, HzzJobPageUnavailableError
-from FOIHireloom.services import HzzJobPageParser
+from FOIHireloom.services.concrete.hzz_job_page_parser import HzzJobPageParser
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

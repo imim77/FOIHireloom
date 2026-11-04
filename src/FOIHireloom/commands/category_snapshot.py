@@ -15,14 +15,16 @@ from FOIHireloom.config.settings import Settings
 from FOIHireloom.dto.category_snapshot import CategorySnapshotDTO
 from FOIHireloom.exceptions import PersistenceError
 from FOIHireloom.services.dependency import DependencyService
+from FOIHireloom.services.interfaces.category_snapshot import CategorySnapshotServiceInterface
+from FOIHireloom.services.interfaces.lifecycle import ServiceOpener
 
 
 class CategorySnapshotCommand:
-    def __init__(self, settings: Settings) -> None:
-        self._settings = settings
+    def __init__(self, service: ServiceOpener[CategorySnapshotServiceInterface]) -> None:
+        self._open_service = service
 
     async def run(self) -> CategorySnapshotDTO:
-        async with DependencyService(self._settings).category_snapshot_service() as service:
+        async with self._open_service() as service:
             return await service.take()
 
 
@@ -39,7 +41,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--out", type=Path, required=True, help="Write the JSON snapshot to this file.")
     args = parser.parse_args(argv)
     try:
-        snapshot = asyncio.run(CategorySnapshotCommand(Settings()).run())
+        command = CategorySnapshotCommand(DependencyService(Settings()).category_snapshot_service)
+        snapshot = asyncio.run(command.run())
     except (PersistenceError, OSError):
         print("Category snapshot failed: check DATABASE_URL and apply Alembic migrations.", file=sys.stderr)
         raise SystemExit(1) from None

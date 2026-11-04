@@ -12,14 +12,16 @@ import sys
 from FOIHireloom.config.settings import Settings
 from FOIHireloom.exceptions import NotFoundError, PersistenceError
 from FOIHireloom.services.dependency import DependencyService
+from FOIHireloom.services.interfaces.job_sync import JobSyncServiceInterface
+from FOIHireloom.services.interfaces.lifecycle import ServiceOpener
 
 
 class JobSyncCommand:
-    def __init__(self, settings: Settings) -> None:
-        self._settings = settings
+    def __init__(self, service: ServiceOpener[JobSyncServiceInterface]) -> None:
+        self._open_service = service
 
     async def run(self, feed_id: int | None = None) -> dict:
-        async with DependencyService(self._settings).job_sync_service() as service:
+        async with self._open_service() as service:
             if feed_id is not None:
                 return {"feeds": [(await service.sync_feed(feed_id)).model_dump()]}
             return (await service.sync_all()).model_dump()
@@ -30,7 +32,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--feed-id", type=int, help="Sync only this source feed, even if it is disabled.")
     args = parser.parse_args(argv)
     try:
-        result = asyncio.run(JobSyncCommand(Settings()).run(args.feed_id))
+        command = JobSyncCommand(DependencyService(Settings()).job_sync_service)
+        result = asyncio.run(command.run(args.feed_id))
     except (PersistenceError, OSError):
         print("Sync failed: check DATABASE_URL and apply Alembic migrations.", file=sys.stderr)
         raise SystemExit(1) from None

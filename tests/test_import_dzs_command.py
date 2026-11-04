@@ -13,6 +13,7 @@ from FOIHireloom.commands.import_dzs import DzsImportCommand, main
 from FOIHireloom.config.settings import Settings
 from FOIHireloom.dto.dzs import DzsImportResultDTO, DzsSeriesDTO, DzsSourceDTO
 from FOIHireloom.exceptions import PersistenceError
+from FOIHireloom.services.dependency import DependencyService
 
 SERIES = DzsSeriesDTO(source="t1", values=504, provisional=378, missing=0, first_period=date(2026, 7, 1),
                       last_period=date(2026, 9, 1))
@@ -108,7 +109,9 @@ class DzsImportWiringTests(unittest.IsolatedAsyncioTestCase):
             t1, workbook = Path(directory) / "t1.xlsx", Path(directory) / "workbook.xlsx"
             t1.write_bytes(files.t1_bytes())
             workbook.write_bytes(files.workbook_bytes())
-            summary = await DzsImportCommand(Settings()).run(t1, workbook, dry_run=True)
+            settings = Settings()
+            command = DzsImportCommand(settings, DependencyService(settings).dzs_import_service)
+            summary = await command.run(t1, workbook, dry_run=True)
         self.assertEqual((summary["status"], summary["errors"]), ("validated", []))
         self.assertEqual([file["role"] for file in summary["files"]], ["t1", "workbook"])
         self.assertEqual(summary["series"][2]["last_period"], "2026-09-01")

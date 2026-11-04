@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 import httpx
 from sqlalchemy.exc import SQLAlchemyError
@@ -8,6 +8,7 @@ from FOIHireloom.config.settings import Settings
 from FOIHireloom.db.database import PostgresDatabase
 from FOIHireloom.db.session import SessionManager
 from FOIHireloom.db.uow import SqlAlchemyUnitOfWorkFactory
+from FOIHireloom.db.uow.base import UnitOfWorkFactory
 from FOIHireloom.exceptions import PersistenceError
 from FOIHireloom.factories.category_snapshot import CategorySnapshotServiceFactory
 from FOIHireloom.factories.county_indicators import CountyIndicatorServiceFactory
@@ -24,6 +25,7 @@ from FOIHireloom.services.interfaces.job_conditions import JobConditionsServiceI
 from FOIHireloom.services.interfaces.job_page import JobPageServiceInterface
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
 from FOIHireloom.services.interfaces.job_sync import JobSyncServiceInterface
+from FOIHireloom.services.interfaces.lifecycle import ServiceOpener
 from FOIHireloom.services.interfaces.source_feed_registration import SourceFeedRegistrationServiceInterface
 
 USER_AGENT = "FOIHireloom/0.1 (+https://github.com/imim77/FOIHireloom)"
@@ -32,8 +34,40 @@ USER_AGENT = "FOIHireloom/0.1 (+https://github.com/imim77/FOIHireloom)"
 class DependencyService:
     """Own the infrastructure behind services for commands and API handlers."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self, settings: Settings, *, unit_of_work: ServiceOpener[UnitOfWorkFactory] | None = None,
+    ) -> None:
         self._settings = settings
+        self._open_uow = unit_of_work if unit_of_work is not None else self._unit_of_work_factory
+
+    @asynccontextmanager
+    async def read_services(
+        self,
+        *,
+        job_search: ServiceOpener[JobSearchServiceInterface] | None = None,
+        county_indicators: ServiceOpener[CountyIndicatorServiceInterface] | None = None,
+    ) -> AsyncIterator[tuple[JobSearchServiceInterface, CountyIndicatorServiceInterface]]:
+        """Open read services over one pool, retaining an independent transaction per operation.
+
+        Overrides own their lifetimes. When both are supplied, no default
+        database is opened. Partial startup failures close prior resources.
+        """
+        async with AsyncExitStack() as stack:
+            if job_search is not None and county_indicators is not None:
+                search = await stack.enter_async_context(job_search())
+                indicators = await stack.enter_async_context(county_indicators())
+                yield search, indicators
+                return
+            uow_factory = await stack.enter_async_context(self._open_uow())
+            if job_search is None:
+                search = JobSearchServiceFactory(self._settings).create(uow_factory)
+            else:
+                search = await stack.enter_async_context(job_search())
+            if county_indicators is None:
+                indicators = CountyIndicatorServiceFactory(self._settings).create(uow_factory)
+            else:
+                indicators = await stack.enter_async_context(county_indicators())
+            yield search, indicators
 
     @asynccontextmanager
     async def source_feed_registration_service(
@@ -49,7 +83,7 @@ class DependencyService:
             if not with_database:
                 yield factory.create(http, None)
                 return
-            async with self._unit_of_work_factory() as uow_factory:
+            async with self._open_uow() as uow_factory:
                 yield factory.create(http, uow_factory)
 
     @asynccontextmanager
@@ -57,7 +91,7 @@ class DependencyService:
         """Yield a sync service sharing one HTTP client, and its HZZ cookie, for the whole run."""
         factory = JobSyncServiceFactory(self._settings)
         async with httpx.AsyncClient(headers={"User-Agent": USER_AGENT}) as http:
-            async with self._unit_of_work_factory() as uow_factory:
+            async with self._open_uow() as uow_factory:
                 yield factory.create(http, uow_factory)
 
     @asynccontextmanager
@@ -65,7 +99,7 @@ class DependencyService:
         """Yield a job page service sharing one HTTP client, and its HZZ cookie, for the whole run."""
         factory = JobPageServiceFactory(self._settings)
         async with httpx.AsyncClient(headers={"User-Agent": USER_AGENT}) as http:
-            async with self._unit_of_work_factory() as uow_factory:
+            async with self._open_uow() as uow_factory:
                 yield factory.create(http, uow_factory)
 
     @asynccontextmanager
@@ -80,31 +114,31 @@ class DependencyService:
             if not with_database:
                 yield factory.create(http, None)
                 return
-            async with self._unit_of_work_factory() as uow_factory:
+            async with self._open_uow() as uow_factory:
                 yield factory.create(http, uow_factory)
 
     @asynccontextmanager
     async def job_search_service(self) -> AsyncIterator[JobSearchServiceInterface]:
         """Yield a read-only search service; keep it open for as long as requests arrive."""
-        async with self._unit_of_work_factory() as uow_factory:
+        async with self._open_uow() as uow_factory:
             yield JobSearchServiceFactory(self._settings).create(uow_factory)
 
     @asynccontextmanager
     async def county_indicator_service(self) -> AsyncIterator[CountyIndicatorServiceInterface]:
         """Yield a read-only county indicator service; keep it open for as long as requests arrive."""
-        async with self._unit_of_work_factory() as uow_factory:
+        async with self._open_uow() as uow_factory:
             yield CountyIndicatorServiceFactory(self._settings).create(uow_factory)
 
     @asynccontextmanager
     async def category_snapshot_service(self) -> AsyncIterator[CategorySnapshotServiceInterface]:
         """Yield a read-only category snapshot service."""
-        async with self._unit_of_work_factory() as uow_factory:
+        async with self._open_uow() as uow_factory:
             yield CategorySnapshotServiceFactory().create(uow_factory)
 
     @asynccontextmanager
     async def job_conditions_service(self) -> AsyncIterator[JobConditionsServiceInterface]:
         """Yield a service that normalises the stored job conditions again."""
-        async with self._unit_of_work_factory() as uow_factory:
+        async with self._open_uow() as uow_factory:
             yield JobConditionsServiceFactory().create(uow_factory)
 
     @asynccontextmanager

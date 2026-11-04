@@ -2,7 +2,7 @@ import unittest
 
 from FOIHireloom.db.models.job import CONDITION_CODES
 from FOIHireloom.dto import JobConditionsDTO, ParsedJobPageDTO, RawJobConditionsDTO
-from FOIHireloom.services import JobConditionsNormalizer
+from FOIHireloom.services.concrete.job_conditions import JobConditionsNormalizer
 from FOIHireloom.services.concrete import job_conditions
 
 # Every distinct experience and working hours value on fetched HZZ pages.

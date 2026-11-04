@@ -1,11 +1,12 @@
-from collections.abc import Callable
-
 import httpx
 
 from FOIHireloom.config.settings import Settings
-from FOIHireloom.db.uow.base import UnitOfWork
+from FOIHireloom.db.uow.base import UnitOfWorkFactory
 from FOIHireloom.integrations.concrete.dzs import DzsClient
-from FOIHireloom.services import CroatianCountyCatalog, DzsImportService, DzsImportServiceInterface, DzsReleaseParser
+from FOIHireloom.services.concrete.croatian_counties import CroatianCountyCatalog
+from FOIHireloom.services.concrete.dzs_import import DzsImportService
+from FOIHireloom.services.interfaces.dzs_import import DzsImportServiceInterface
+from FOIHireloom.services.concrete.dzs_release_parser import DzsReleaseParser
 
 
 class DzsImportServiceFactory:
@@ -15,7 +16,7 @@ class DzsImportServiceFactory:
         self._settings = settings
 
     def create(
-        self, http: httpx.AsyncClient, uow_factory: Callable[[], UnitOfWork] | None
+        self, http: httpx.AsyncClient, uow_factory: UnitOfWorkFactory | None
     ) -> DzsImportServiceInterface:
         client = DzsClient(http, self._settings.DZS_TIMEOUT, self._settings.DZS_MAX_BYTES)
         catalog = CroatianCountyCatalog()

@@ -1,8 +1,7 @@
 import math
-from collections.abc import Callable
 from datetime import datetime
 
-from FOIHireloom.db.uow.base import UnitOfWork
+from FOIHireloom.db.uow.base import UnitOfWork, UnitOfWorkFactory
 from FOIHireloom.dto.hzz_feed import FeedResponseDTO
 from FOIHireloom.dto.job import ParsedFeedDTO, ParsedJobDTO
 from FOIHireloom.dto.job_sync import (
@@ -49,7 +48,7 @@ class JobSyncService(JobSyncServiceInterface):
         self,
         client: HzzFeedClientInterface,
         parser: HzzFeedParser,
-        uow_factory: Callable[[], UnitOfWork],
+        uow_factory: UnitOfWorkFactory,
         min_retained_ratio: float = 0.5,
         category_verifier: FeedCategoryVerifier | None = None,
     ) -> None:

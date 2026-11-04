@@ -21,14 +21,10 @@ from sqlalchemy.dialects.postgresql import ARRAY, TSVECTOR
 from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from FOIHireloom.domain.search_text import SEARCH_FOLD_FROM, SEARCH_FOLD_TO
+
 from .base import Base
 
-# Searchable text with Croatian letters folded to ASCII, so "cistacica" finds
-# "ČISTAČICA". "/" and "." become spaces: the parser would otherwise read
-# "KUHAR/KUHARICA" as a file path and "68.STRUČNI" as a host name. Queries
-# must apply the same translate(); unaccent() is not immutable and cannot be
-# used in a generated column.
-SEARCH_FOLD_FROM, SEARCH_FOLD_TO = "ČĆŽŠĐčćžšđ/.", "CCZSDcczsd  "
 # Title words get weight A, so a query restricted to it (kuhar:*A) tells
 # whether the title matched; everything else keeps the default weight D. The
 # job page's values replace the feed's truncated title and description once

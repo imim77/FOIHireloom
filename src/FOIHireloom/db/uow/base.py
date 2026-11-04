@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from datetime import datetime
 from types import TracebackType
 from typing import Self
@@ -87,3 +88,6 @@ class UnitOfWork(ABC):
     @abstractmethod
     async def rollback(self) -> None:
         """Discard the current transaction while keeping the context usable."""
+
+
+type UnitOfWorkFactory = Callable[[], UnitOfWork]

@@ -9,6 +9,7 @@ import httpx
 
 from FOIHireloom.commands.register_sources import SourceFeedRegistrationCommand, main
 from FOIHireloom.config.settings import Settings
+from FOIHireloom.services.dependency import DependencyService
 
 
 def ckan_fixtures(request: httpx.Request) -> httpx.Response:
@@ -24,7 +25,7 @@ class RegistrationCommandTests(unittest.IsolatedAsyncioTestCase):
         with patch("FOIHireloom.services.dependency.httpx.AsyncClient", return_value=http), patch(
             "FOIHireloom.services.dependency.PostgresDatabase", side_effect=AssertionError("Dry run must not access DB")
         ):
-            result = await SourceFeedRegistrationCommand(settings).run(dry_run=True)
+            result = await SourceFeedRegistrationCommand(settings, DependencyService(settings).source_feed_registration_service).run(dry_run=True)
         self.assertEqual(
             result, {"dry_run": True, "counties": 21, "feeds": 39, "occupation_feeds": 18, "resources_skipped": 1}
         )
@@ -34,7 +35,9 @@ class RegistrationCommandTests(unittest.IsolatedAsyncioTestCase):
         http = httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(503)))
         with patch("FOIHireloom.services.dependency.httpx.AsyncClient", return_value=http):
             with self.assertRaisesRegex(RuntimeError, "503"):
-                await SourceFeedRegistrationCommand(Settings(_env_file=None)).run(dry_run=True)
+                settings = Settings(_env_file=None)
+                command = SourceFeedRegistrationCommand(settings, DependencyService(settings).source_feed_registration_service)
+                await command.run(dry_run=True)
         self.assertTrue(http.is_closed)
 
 

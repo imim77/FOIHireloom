@@ -7,7 +7,7 @@ from dzs_workbooks import CROATIA, DzsFiles, save
 
 from FOIHireloom.dto.dzs import DzsReleaseDTO, DzsValueDTO
 from FOIHireloom.exceptions import DzsValidationError
-from FOIHireloom.services import CroatianCountyCatalog
+from FOIHireloom.services.concrete.croatian_counties import CroatianCountyCatalog
 from FOIHireloom.services.concrete.dzs_release_parser import DzsReleaseParser
 
 

@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import Field, computed_field, field_validator
 
+from FOIHireloom.domain.search_text import SEARCH_TERM
+
 from .base import ModelConfigBaseModel
 from .job_conditions import Contract, EducationLevel, EmploymentTag, JobConditionsDTO
 
@@ -11,7 +13,6 @@ MAX_PAGE_SIZE = 20
 MAX_QUERY_LENGTH = 200
 # 50 years, well within the integer column.
 MAX_EXPERIENCE_MONTHS = 600
-SEARCH_TERM = re.compile(r"[^\W_]+")
 PLACE_WORDS = re.compile(r"[^\W_]+(?: [^\W_]+)*")
 
 # fresh: every feed succeeded recently; stale: a feed's last success is too

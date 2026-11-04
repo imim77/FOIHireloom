@@ -12,15 +12,18 @@ import sys
 from FOIHireloom.config.settings import Settings
 from FOIHireloom.exceptions import PersistenceError
 from FOIHireloom.services.dependency import DependencyService
+from FOIHireloom.services.interfaces.job_page import JobPageServiceInterface
+from FOIHireloom.services.interfaces.lifecycle import ServiceOpener
 
 
 class JobPageCommand:
-    def __init__(self, settings: Settings) -> None:
-        self._settings = settings
+    def __init__(self, service: ServiceOpener[JobPageServiceInterface], batch_size: int) -> None:
+        self._open_service = service
+        self._batch_size = batch_size
 
     async def run(self, limit: int | None = None) -> dict:
-        async with DependencyService(self._settings).job_page_service() as service:
-            return (await service.fetch_due(limit or self._settings.HZZ_PAGE_BATCH_SIZE)).model_dump()
+        async with self._open_service() as service:
+            return (await service.fetch_due(self._batch_size if limit is None else limit)).model_dump()
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -30,7 +33,9 @@ def main(argv: list[str] | None = None) -> None:
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be at least 1")
     try:
-        result = asyncio.run(JobPageCommand(Settings()).run(args.limit))
+        settings = Settings()
+        command = JobPageCommand(DependencyService(settings).job_page_service, settings.HZZ_PAGE_BATCH_SIZE)
+        result = asyncio.run(command.run(args.limit))
     except (PersistenceError, OSError):
         print("Fetching job pages failed: check DATABASE_URL and apply Alembic migrations.", file=sys.stderr)
         raise SystemExit(1) from None
