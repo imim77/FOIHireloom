@@ -5,6 +5,7 @@ from typing import NamedTuple
 
 from FOIHireloom.db.models import Job
 from FOIHireloom.dto.category_snapshot import CategoryInputDTO
+from FOIHireloom.dto.forecast import WeeklyJobAdsRowDTO
 from FOIHireloom.dto.hzz_job_page import ParsedJobPageDTO
 from FOIHireloom.dto.job import ParsedJobDTO
 from FOIHireloom.dto.job_conditions import JobConditionsDTO, JobConditionsInputDTO
@@ -76,6 +77,20 @@ class JobRepository(ABC):
         A job counts in each county whose feed lists it. A county without
         such jobs has no entry.
         """
+
+    @abstractmethod
+    async def weekly_published_counts(
+        self, county_ids: Collection[int], first_week: date, last_week: date,
+    ) -> list[WeeklyJobAdsRowDTO]:
+        """Count the jobs published in each week from first_week to last_week (Mondays, both included) per county.
+
+        Jobs count whether or not they are still listed, in each county
+        whose feed has ever listed them. A week without such jobs has no entry.
+        """
+
+    @abstractmethod
+    async def tracking_started_at(self) -> datetime | None:
+        """Return when the first stored job was first seen, or None without jobs."""
 
     @abstractmethod
     async def list_categories(self, open_on: date) -> list[CategoryDTO]:

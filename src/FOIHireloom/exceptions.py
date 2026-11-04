@@ -36,9 +36,15 @@ class InvalidJobSearchError(FOIHireloomException):
 
 
 class InvalidIndicatorRequestError(FOIHireloomException):
-    """The counties, month or other arguments of a county comparison or history cannot be used as given."""
+    """The counties, month or other arguments of a county comparison, history or forecast cannot be used as given."""
 
     code = "invalid_indicator_request"
+
+
+class ForecastUnavailableError(FOIHireloomException):
+    """The forecasting model cannot be loaded or run, e.g. without the forecast extra installed."""
+
+    code = "forecast_unavailable"
 
 
 class SourceFeedRegistrationError(FOIHireloomException):

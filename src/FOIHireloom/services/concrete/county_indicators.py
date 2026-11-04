@@ -2,7 +2,6 @@ from collections.abc import Sequence
 from datetime import date
 
 from FOIHireloom.db.uow.base import UnitOfWork, UnitOfWorkFactory
-from FOIHireloom.dto.county import CountyDTO
 from FOIHireloom.dto.county_indicators import (
     MAX_COMPARED_COUNTIES,
     MAX_HISTORY_COUNTIES,
@@ -18,9 +17,9 @@ from FOIHireloom.dto.county_indicators import (
 )
 from FOIHireloom.dto.dzs import DzsImportProvenanceDTO, DzsIndicator, DzsStoredValueDTO
 from FOIHireloom.dto.job_market import CountyJobCriteriaDTO
-from FOIHireloom.exceptions import InvalidIndicatorRequestError
 from FOIHireloom.services.interfaces.county_indicators import CountyIndicatorServiceInterface
 
+from .county_resolver import CountyResolver
 from .croatian_counties import CroatianCountyCatalog
 from .feed_coverage import FeedCoverage
 from FOIHireloom.domain.job_search import condition_criteria, local_date, search_terms
@@ -70,19 +69,19 @@ class CountyIndicatorService(CountyIndicatorServiceInterface):
         calculator: CountyIndicatorCalculator,
     ) -> None:
         self._uow_factory = uow_factory
-        self._counties = counties
+        self._resolver = CountyResolver(counties)
         self._feed_coverage = feed_coverage
         self._calculator = calculator
 
     async def compare_counties(self, request: CountyComparisonRequestDTO) -> CountyComparisonDTO:
-        self._check_count(request.counties, MIN_COMPARED_COUNTIES, MAX_COMPARED_COUNTIES)
+        self._resolver.check_count(request.counties, MIN_COMPARED_COUNTIES, MAX_COMPARED_COUNTIES)
         filters = request.filters
         terms = search_terms(filters.query)
         conditions = condition_criteria(filters)
         async with self._uow_factory() as work:
             now = await work.transaction_time()
             today = local_date(now)
-            counties = await self._resolve(work, request.counties)
+            counties = await self._resolver.resolve(work, request.counties)
             ids = tuple(county.id for county in counties)
             filtered = await work.jobs.county_job_counts(CountyJobCriteriaDTO(
                 terms=terms, category=(filters.category or "").strip() or None,
@@ -115,14 +114,14 @@ class CountyIndicatorService(CountyIndicatorServiceInterface):
             dzs_periods=tuple(periods.values()),
             hzz_coverage=self._feed_coverage.coverage(compared_regions),
             dzs=provenance,
-            sources=self._sources(provenance),
+            sources=sources(provenance),
             notes=(NOTE_SCOPE, NOTE_COUNTY_WIDE, NOTE_WORKERS, NOTE_MOMENTS, NOTE_PROVISIONAL),
         )
 
     async def unemployment_history(self, request: UnemploymentHistoryRequestDTO) -> UnemploymentHistoryDTO:
-        self._check_count(request.counties, 1, MAX_HISTORY_COUNTIES)
+        self._resolver.check_count(request.counties, 1, MAX_HISTORY_COUNTIES)
         async with self._uow_factory() as work:
-            counties = await self._resolve(work, request.counties)
+            counties = await self._resolver.resolve(work, request.counties)
             ids = tuple(county.id for county in counties)
             provenance = await work.dzs_imports.get_latest_succeeded()
             last = None
@@ -147,7 +146,7 @@ class CountyIndicatorService(CountyIndicatorServiceInterface):
                     for county in counties
                 ),
                 sex=request.sex, months=request.months, first_period=None, last_period=None,
-                unavailable_reason=reason, dzs=provenance, sources=self._sources(provenance, with_hzz=False),
+                unavailable_reason=reason, dzs=provenance, sources=sources(provenance, with_hzz=False),
                 notes=notes,
             )
         rates = {(value.county_id, value.period): value for value in stored}
@@ -155,35 +154,8 @@ class CountyIndicatorService(CountyIndicatorServiceInterface):
         return UnemploymentHistoryDTO(
             counties=tuple(self._calculator.history(county, rates, window, previous_year) for county in counties),
             sex=request.sex, months=request.months, first_period=first, last_period=last, unavailable_reason=None,
-            dzs=provenance, sources=self._sources(provenance, with_hzz=False), notes=notes,
+            dzs=provenance, sources=sources(provenance, with_hzz=False), notes=notes,
         )
-
-    @staticmethod
-    def _check_count(counties: Sequence[str], least: int, most: int) -> None:
-        if not least <= len(counties) <= most:
-            raise InvalidIndicatorRequestError(f"Choose {least} to {most} counties, not {len(counties)}.")
-
-    async def _resolve(self, work: UnitOfWork, requested: Sequence[str]) -> list[CountyDTO]:
-        """The stored counties by code or name, in the given order; raise for unknown or repeated ones."""
-        stored = {county.code: county for county in await work.counties.list_all()}
-        resolved: list[CountyDTO] = []
-        unknown: list[str] = []
-        for label in requested:
-            definition = self._counties.match(label)
-            code = definition.code if definition is not None else label.strip().casefold()
-            if code in stored:
-                resolved.append(stored[code])
-            else:
-                unknown.append(label)
-        if unknown:
-            raise InvalidIndicatorRequestError(
-                f"Unknown {'county' if len(unknown) == 1 else 'counties'}: {', '.join(unknown)}. Use county codes "
-                f"or names from list_regions: {', '.join(sorted(stored))}.")
-        codes = [county.code for county in resolved]
-        if repeated := sorted({code for code in codes if codes.count(code) > 1}):
-            raise InvalidIndicatorRequestError(
-                f"Choose different counties; given more than once: {', '.join(repeated)}.")
-        return resolved
 
     @staticmethod
     async def _reference_periods(
@@ -207,19 +179,19 @@ class CountyIndicatorService(CountyIndicatorServiceInterface):
             for indicator in COMPARED_INDICATORS
         }
 
-    @staticmethod
-    def _sources(provenance: DzsImportProvenanceDTO | None, *, with_hzz: bool = True) -> tuple[SourceDTO, ...]:
-        """HZZ, and each DZS file of the latest succeeded import; a local file has no URL."""
-        files = provenance.files if provenance is not None else ()
-        dzs = []
-        for file in files:
-            name, description = DZS_FILES[file.role]
-            if file.location.startswith(("https://", "http://")):
-                dzs.append(SourceDTO(name=name, url=file.location, description=description))
-            else:
-                dzs.append(SourceDTO(name=name, url=None, description=f"{description} Read from the local file "
-                                                                      f"{file.location}."))
-        return (HZZ_SOURCE, *dzs) if with_hzz else tuple(dzs)
+
+def sources(provenance: DzsImportProvenanceDTO | None, *, with_hzz: bool = True) -> tuple[SourceDTO, ...]:
+    """HZZ, and each DZS file of the latest succeeded import; a local file has no URL."""
+    files = provenance.files if provenance is not None else ()
+    dzs = []
+    for file in files:
+        name, description = DZS_FILES[file.role]
+        if file.location.startswith(("https://", "http://")):
+            dzs.append(SourceDTO(name=name, url=file.location, description=description))
+        else:
+            dzs.append(SourceDTO(name=name, url=None, description=f"{description} Read from the local file "
+                                                                  f"{file.location}."))
+    return (HZZ_SOURCE, *dzs) if with_hzz else tuple(dzs)
 
 
 def add_months(month: date, months: int) -> date:

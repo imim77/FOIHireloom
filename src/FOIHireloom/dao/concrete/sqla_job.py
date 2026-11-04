@@ -1,12 +1,13 @@
 from collections.abc import Collection, Mapping, Sequence
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import CTE, ColumnElement, and_, bindparam, case, func, not_, or_, select, update
+from sqlalchemy import CTE, ColumnElement, Date, and_, bindparam, case, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.db.models.job import SEARCH_TITLE_WEIGHT
 from FOIHireloom.dto.category_snapshot import CategoryInputDTO
+from FOIHireloom.dto.forecast import WeeklyJobAdsRowDTO
 from FOIHireloom.dto.hzz_job_page import ParsedJobPageDTO
 from FOIHireloom.dto.job import ParsedJobDTO
 from FOIHireloom.dto.job_conditions import JobConditionsDTO, JobConditionsInputDTO, RawJobConditionsDTO
@@ -232,6 +233,32 @@ class SqlAlchemyJobRepository(JobRepository):
             .group_by(placed.c.county_id)
         )
         return [CountyJobCountsRowDTO.model_validate(row) for row in (await self._session.execute(statement)).all()]
+
+    async def weekly_published_counts(
+        self, county_ids: Collection[int], first_week: date, last_week: date,
+    ) -> list[WeeklyJobAdsRowDTO]:
+        if not county_ids:
+            return []
+        # Expired ads count too: a forecast of demand needs every ad published.
+        placed = (
+            select(JobFeedMembership.job_id, SourceFeed.county_id)
+            .join(SourceFeed)
+            .where(SourceFeed.scope == "county", SourceFeed.county_id.in_(county_ids))
+            .distinct()
+            .subquery()
+        )
+        week = func.date_trunc("week", Job.published_on).cast(Date).label("week")  # ISO weeks start on Monday.
+        statement = (
+            select(placed.c.county_id, week, func.count().label("jobs"))
+            .select_from(placed)
+            .join(Job, Job.id == placed.c.job_id)
+            .where(Job.published_on.between(first_week, last_week + timedelta(days=6)))
+            .group_by(placed.c.county_id, week)
+        )
+        return [WeeklyJobAdsRowDTO.model_validate(row) for row in (await self._session.execute(statement)).all()]
+
+    async def tracking_started_at(self) -> datetime | None:
+        return await self._session.scalar(select(func.min(Job.first_seen_at)))
 
     async def list_categories(self, open_on: date) -> list[CategoryDTO]:
         open_jobs = func.count().label("open_jobs")

@@ -12,11 +12,13 @@ from FOIHireloom.config.settings import Settings
 from FOIHireloom.services.dependency import DependencyService
 from FOIHireloom.services.interfaces.county_indicators import CountyIndicatorServiceInterface
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
+from FOIHireloom.services.interfaces.labour_forecast import LabourMarketForecastServiceInterface
 from FOIHireloom.services.interfaces.lifecycle import ServiceOpener
 
 from .app_views import AppViews
 from .apps.views import BUILD_HINT, stale_sources
 from .county_tools import COUNTY_INDICATOR_SERVICE, CountyIndicatorTools
+from .forecast_tools import LABOUR_FORECAST_SERVICE, ForecastTools
 from .job_tools import JOB_SEARCH_SERVICE, JobTools
 
 INSTRUCTIONS = (
@@ -46,17 +48,20 @@ INSTRUCTIONS = (
     "show_unemployment_history. Both return the data and show it; compare_counties and unemployment_history "
     "return the same data without a view, only for when you need the numbers without showing them. Their indicators describe each county as a whole, and HZZ and DZS data refer to different dates, "
     "so name both. "
+    "When the user asks about the future, e.g. how unemployment will develop or how many jobs will be needed, "
+    "call forecast_labour_market; it returns an Amazon Chronos model forecast with an 80% interval. "
     "When a result carries a coverage warning, pass it on to the "
     "user. Send users to canonical_url to read the full advertisement or apply."
 )
 
 
 class McpServer:
-    """FastMCP server whose tools share one search service and one county indicator service while it runs.
+    """FastMCP server whose tools share one search, county indicator and forecast service while it runs.
 
     The services, and their database engines, open when the server starts
-    and close when it stops. Pass job_search_service or
-    county_indicator_service to supply another one, for example in tests. Settings choose the transport: stdio, or Streamable
+    and close when it stops. Pass job_search_service,
+    county_indicator_service or labour_forecast_service to supply another
+    one, for example in tests. Settings choose the transport: stdio, or Streamable
     HTTP with a /health route for hosting platforms.
     """
 
@@ -66,15 +71,17 @@ class McpServer:
         *,
         job_search_service: ServiceOpener[JobSearchServiceInterface] | None = None,
         county_indicator_service: ServiceOpener[CountyIndicatorServiceInterface] | None = None,
+        labour_forecast_service: ServiceOpener[LabourMarketForecastServiceInterface] | None = None,
     ) -> None:
         self._settings = settings or Settings()
         self._dependencies = DependencyService(self._settings)
         self._job_search_service = job_search_service
         self._county_indicator_service = county_indicator_service
+        self._labour_forecast_service = labour_forecast_service
         # Unexpected errors reach the client without details; tools raise ToolError for the rest.
         self.server = FastMCP("FOIHireloom", instructions=INSTRUCTIONS, lifespan=self._lifespan,
                               mask_error_details=True)
-        for group in (JobTools(), CountyIndicatorTools(), AppViews()):
+        for group in (JobTools(), CountyIndicatorTools(), ForecastTools(), AppViews()):
             group.register(self.server)
         self.server.custom_route("/health", methods=["GET"], include_in_schema=False)(self._health)
 
@@ -82,8 +89,9 @@ class McpServer:
     async def _lifespan(self, server: FastMCP) -> AsyncIterator[dict[str, Any]]:
         async with self._dependencies.read_services(
             job_search=self._job_search_service, county_indicators=self._county_indicator_service,
-        ) as (search, indicators):
-            yield {JOB_SEARCH_SERVICE: search, COUNTY_INDICATOR_SERVICE: indicators}
+            labour_forecast=self._labour_forecast_service,
+        ) as (search, indicators, forecast):
+            yield {JOB_SEARCH_SERVICE: search, COUNTY_INDICATOR_SERVICE: indicators, LABOUR_FORECAST_SERVICE: forecast}
 
     @staticmethod
     async def _health(request: Request) -> Response:

@@ -46,7 +46,7 @@ class DependencyServiceTests(unittest.IsolatedAsyncioTestCase):
         self.dependencies = DependencyService(Settings(_env_file=None), unit_of_work=open_database)
 
     async def test_default_read_services_share_one_pool_and_use_independent_transactions(self) -> None:
-        async with self.dependencies.read_services() as (search, indicators):
+        async with self.dependencies.read_services() as (search, indicators, _):
             categories, history = await asyncio.gather(search.list_categories(), indicators.unemployment_history(
                 UnemploymentHistoryRequestDTO(counties=(COUNTY.code,))))
             self.assertEqual(categories, (CategoryDTO(name="Kuhari", open_jobs=2),))
@@ -75,9 +75,19 @@ class DependencyServiceTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 self.events.append("indicators-closed")
 
-        async with self.dependencies.read_services(job_search=search, county_indicators=indicators) as services:
-            self.assertEqual(services, ("search", "indicators"))
-        self.assertEqual(self.events, ["search-opened", "indicators-opened", "indicators-closed", "search-closed"])
+        @asynccontextmanager
+        async def forecast():
+            self.events.append("forecast-opened")
+            try:
+                yield "forecast"
+            finally:
+                self.events.append("forecast-closed")
+
+        async with self.dependencies.read_services(job_search=search, county_indicators=indicators,
+                                                   labour_forecast=forecast) as services:
+            self.assertEqual(services, ("search", "indicators", "forecast"))
+        self.assertEqual(self.events, ["search-opened", "indicators-opened", "forecast-opened", "forecast-closed",
+                                       "indicators-closed", "search-closed"])
 
     async def test_partial_override_closes_before_the_default_pool(self) -> None:
         @asynccontextmanager
@@ -87,7 +97,7 @@ class DependencyServiceTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 self.events.append("search-closed")
 
-        async with self.dependencies.read_services(job_search=search) as (service, _):
+        async with self.dependencies.read_services(job_search=search) as (service, _, _):
             self.assertEqual(service, "search")
         self.assertEqual(self.events, ["database-opened", "search-closed", "database-closed"])
 
@@ -105,7 +115,8 @@ class DependencyServiceTests(unittest.IsolatedAsyncioTestCase):
             yield  # This opener fails before yielding a service.
 
         with self.assertRaisesRegex(RuntimeError, "startup failed"):
-            async with self.dependencies.read_services(job_search=search, county_indicators=broken_indicators):
+            async with self.dependencies.read_services(job_search=search, county_indicators=broken_indicators,
+                                                       labour_forecast=search):
                 self.fail("Startup should not complete")
         self.assertEqual(self.events, ["search-closed"])
 

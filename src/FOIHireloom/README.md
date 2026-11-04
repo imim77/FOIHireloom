@@ -28,6 +28,12 @@ Responsibilities that change independently have their own modules:
   statistics and county counts, including unknown values and effective deadlines.
 - `api/job_filters.py` defines the shared MCP filter annotations and descriptions.
 
+- `services/concrete/labour_forecast.py` forecasts county series with Amazon
+  Chronos (`integrations/concrete/chronos.py`); one loader per target in
+  `labour_forecast_series.py` supplies DZS monthly values or weekly HZZ ad
+  counts. Chronos is the optional `forecast` extra and loads on the first
+  forecast, so the server and tests run without torch.
+
 Import implementations and contracts from their defining modules. Service and
 factory package initializers do not eagerly import unrelated implementations.
 
