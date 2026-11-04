@@ -1,4 +1,5 @@
-import type { JobCard, JobCardsData, JobConditions } from './types'
+import type { JobConditions } from '../../shared/jobs'
+import type { JobCard, JobCardsData } from './types'
 
 const job = (id: number, fields: Partial<JobCard>): JobCard => ({
   id, display_title: '', display_location: '', employer_name: null, category: null, category_source: null,

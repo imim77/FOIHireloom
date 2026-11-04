@@ -1,4 +1,4 @@
-import type { Contract, EducationLevel, JobConditions } from '../job-cards/types'
+import type { Contract, EducationLevel, JobConditions } from '../../shared/jobs'
 
 export type Aspect = 'experience' | 'education' | 'contract' | 'working_time' | 'accommodation' | 'deadline'
 export type Verdict = 'match' | 'no_match' | 'unknown'

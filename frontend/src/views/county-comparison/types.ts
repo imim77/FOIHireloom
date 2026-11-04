@@ -1,4 +1,4 @@
-import type { Contract, EducationLevel, EmploymentTag } from '../job-cards/types'
+import type { JobFilters } from '../../shared/jobs'
 import type { ActiveFilter, DzsProvenance, SourceLink, UnavailableReason } from '../../shared/types'
 
 export type DzsIndicator = 'unemployed' | 'active_population' | 'unemployment_rate' | 'employed'
@@ -68,18 +68,7 @@ export interface ComparedCounty {
 }
 
 // JobCountFiltersDTO: the arguments compare_counties takes besides the counties and the period.
-export interface CountyFilters {
-  query: string | null
-  category: string | null
-  max_experience_months: number | null
-  contract: Contract | null
-  full_time: boolean | null
-  education: EducationLevel | null
-  accommodation: boolean | null
-  employment_tags: EmploymentTag[] | null
-  place: string | null
-  include_expired: boolean
-}
+export type CountyFilters = JobFilters
 
 export interface ReferencePeriod {
   indicator: DzsIndicator
