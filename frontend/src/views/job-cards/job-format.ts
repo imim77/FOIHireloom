@@ -2,9 +2,8 @@
 
 import { formatWorkers, plural } from '../../shared/format'
 import { titleCase } from '../../shared/text'
-import type { Contract, JobCard, JobConditions } from './types'
-
-export { capitalise, sentenceCase, titleCase } from '../../shared/text'
+import type { Contract, JobConditions } from '../../shared/jobs'
+import type { JobCard } from './types'
 
 const day = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10))
 /** Whole days from one ISO date to another. */

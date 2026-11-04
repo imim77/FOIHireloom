@@ -7,8 +7,8 @@
 import { animate, stagger, utils } from 'animejs'
 import { useRef } from 'react'
 import { fadeIn, finish, releaseStyles, useChartEntrance } from '../../shared/chart-motion'
-import { FEED_CATEGORY } from '../../shared/text'
-import { age, type DetailKind, details, sentenceCase } from './job-format'
+import { FEED_CATEGORY, sentenceCase } from '../../shared/text'
+import { age, type DetailKind, details } from './job-format'
 import type { JobCard } from './types'
 
 // The Performance chart's tile entrance: each tile rises 10px over 800ms after the one before it (70ms).

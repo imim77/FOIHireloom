@@ -5,7 +5,7 @@ import { type KeyboardEvent, type PointerEvent, useId, useLayoutEffect, useMemo,
 import { fadeIn, finish, releaseStyles, useChartEntrance, useCountUp, useReducedMotion } from '../../shared/chart-motion'
 import { formatMonth, formatRate, formatShortMonth } from '../../shared/format'
 import { useChartWidth } from '../../shared/use-chart-size'
-import { provisionalBands, seriesRuns, toGrowthData, type GrowthData, type GrowthSeries } from './chart-data'
+import { provisionalBands, seriesRuns, toGrowthData, type GrowthSeries } from './chart-data'
 import { areaPath, curvePath, monthTicks, rateAxis } from './chart-geometry'
 import type { CountyHistory, UnemploymentPoint } from './types'
 import './unemployment-growth-chart.css'
@@ -16,12 +16,6 @@ const BOTTOM = HEIGHT - 14
 const EDGE = 8
 const DRAW_AT = 250
 const DRAW_DURATION = 1400
-
-export function UnemploymentGrowthChart({ counties }: { counties: CountyHistory[] }) {
-  const data = useMemo(() => toGrowthData(counties), [counties])
-  // A new tool result opens on its last month and cancels every animation from the old result.
-  return <GrowthChart key={JSON.stringify(counties)} data={data} />
-}
 
 function RateValue({ rate }: { rate: number }) {
   const ref = useRef<HTMLParagraphElement>(null)
@@ -50,7 +44,8 @@ function Stat({ series, value, period, onEmphasis }: {
   )
 }
 
-function GrowthChart({ data }: { data: GrowthData }) {
+export function UnemploymentGrowthChart({ counties }: { counties: CountyHistory[] }) {
+  const data = useMemo(() => toGrowthData(counties), [counties])
   const { series, points } = data
   const root = useRef<HTMLDivElement>(null)
   const cursor = useRef<SVGGElement>(null)

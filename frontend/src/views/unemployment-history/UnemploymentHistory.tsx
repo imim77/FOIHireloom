@@ -25,7 +25,7 @@ export function UnemploymentHistory() {
   const charted = data.counties.some((county) => county.series.length)
   return (
     <Card title={data.title} description={data.description}>
-      {charted ? <History data={data} app={mcp.app} /> : (
+      {charted ? <History key={mcp.revision} data={data} app={mcp.app} /> : (
         <>
           <Warning text={data.unavailable_label ?? 'Podaci o nezaposlenosti nisu dostupni.'} />
           <Footer data={data} app={mcp.app} />

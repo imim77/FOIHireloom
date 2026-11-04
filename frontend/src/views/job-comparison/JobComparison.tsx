@@ -5,18 +5,15 @@
 // headings rise in one after another, then the rows.
 
 import type { App } from '@modelcontextprotocol/ext-apps'
-import { stagger } from 'animejs'
-import { type CSSProperties, useRef } from 'react'
+import type { CSSProperties } from 'react'
 import { Card, ExpandButton, Notes } from '../../shared/Card'
-import { fadeIn, useChartEntrance } from '../../shared/chart-motion'
+import { useComparisonEntrance } from '../../shared/use-comparison-entrance'
 import { openLink, useExpanded, useMcpApp } from '../../shared/mcp'
 import { capitalise, FEED_CATEGORY, sentenceCase, titleCase } from '../../shared/text'
 import { sample } from './sample'
 import type { ComparedJob, ComparisonCell, ComparisonRow, JobComparisonData } from './types'
 import './job-comparison.css'
 
-const HEAD_STAGGER = 70
-const ROWS_AT = 250
 const ROW_STAGGER = 60
 
 const OPEN_ICON = ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5']
@@ -48,23 +45,7 @@ export function JobComparison() {
 
 /** Mounted once the data is there, so its entrance plays with the data. */
 function ComparisonTable({ data, app, expanded }: { data: JobComparisonData; app: App | null; expanded: boolean }) {
-  const root = useRef<HTMLDivElement>(null)
-
-  useChartEntrance(root, (timeline) => {
-    const all = (selector: string) => [...root.current!.querySelectorAll<HTMLElement>(selector)]
-    const heads = all('[data-slot="job"]')
-    timeline.add(heads, { ...fadeIn(heads, 10), duration: 800, ease: 'outExpo', delay: stagger(HEAD_STAGGER) }, 0)
-    // A row's heading and cells come in together, each row after the one above.
-    const cells = all('[data-row]')
-    timeline.add(cells, { ...fadeIn(cells, 4), duration: 500, delay: (target?: unknown) =>
-      Number((target as HTMLElement | undefined)?.dataset.row ?? 0) * ROW_STAGGER }, ROWS_AT)
-    return () => {
-      for (const el of [...heads, ...cells]) {
-        el.style.removeProperty('opacity')
-        el.style.removeProperty('transform')
-      }
-    }
-  })
+  const root = useComparisonEntrance('job', ROW_STAGGER)
 
   return (
     <div className={`compare-scroll${expanded ? ' expanded' : ''}`} ref={root} role="region" tabIndex={0}
