@@ -30,9 +30,8 @@ from .apps import county_comparison
 from .apps import unemployment_history as history_view
 from .apps.labels import active_filters
 from .apps.views import COUNTY_COMPARISON, UNEMPLOYMENT_HISTORY
-from .job_tools import (
+from .job_filters import (
     CATEGORY_DESCRIPTION,
-    READ_ONLY,
     Accommodation,
     ContractFilter,
     Education,
@@ -41,14 +40,14 @@ from .job_tools import (
     MaxExperienceMonths,
     Place,
 )
-from .tool_provider import ToolGroup
+from .tool_provider import READ_ONLY, ToolGroup
 
 # Key of the indicator service in the server's lifespan context.
 COUNTY_INDICATOR_SERVICE = "county_indicator_service"
 
 CountyLabel = Annotated[str, Field(min_length=1, max_length=100)]
 
-# The arguments compare_counties and show_county_comparison share, besides the job filters of job_tools.
+# The arguments compare_counties and show_county_comparison share, besides the shared job filters.
 ComparedCounties = Annotated[list[CountyLabel], Field(
     min_length=MIN_COMPARED_COUNTIES, max_length=MAX_COMPARED_COUNTIES,
     description=f"{MIN_COMPARED_COUNTIES} to {MAX_COMPARED_COUNTIES} different counties to compare, as codes or names "

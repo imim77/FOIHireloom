@@ -1,6 +1,6 @@
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 
-from FOIHireloom.db.uow.base import UnitOfWork
+from FOIHireloom.db.uow.base import UnitOfWork, UnitOfWorkFactory
 from FOIHireloom.dto.ckan import CkanResource
 from FOIHireloom.dto.source_feed import (
     PlannedSourceDTO,
@@ -78,7 +78,7 @@ class SourceFeedRegistrationService(SourceFeedRegistrationServiceInterface):
     def __init__(
         self,
         client: CkanClientInterface,
-        uow_factory: Callable[[], UnitOfWork] | None,
+        uow_factory: UnitOfWorkFactory | None,
         planner: SourceFeedRegistrationPlanner,
     ) -> None:
         self._client = client

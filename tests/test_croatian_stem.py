@@ -1,6 +1,6 @@
 import unittest
 
-from FOIHireloom.services.concrete.croatian_stem import stem
+from FOIHireloom.domain.croatian_stem import stem
 
 
 class CroatianStemTests(unittest.TestCase):

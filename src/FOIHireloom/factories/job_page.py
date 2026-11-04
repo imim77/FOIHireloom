@@ -1,12 +1,14 @@
-from collections.abc import Callable
 from datetime import timedelta
 
 import httpx
 
 from FOIHireloom.config.settings import Settings
-from FOIHireloom.db.uow.base import UnitOfWork
+from FOIHireloom.db.uow.base import UnitOfWorkFactory
 from FOIHireloom.integrations.concrete.hzz_job_page import HzzJobPageClient
-from FOIHireloom.services import HzzJobPageParser, JobConditionsNormalizer, JobPageService, JobPageServiceInterface
+from FOIHireloom.services.concrete.hzz_job_page_parser import HzzJobPageParser
+from FOIHireloom.services.concrete.job_conditions import JobConditionsNormalizer
+from FOIHireloom.services.concrete.job_page import JobPageService
+from FOIHireloom.services.interfaces.job_page import JobPageServiceInterface
 
 
 class JobPageServiceFactory:
@@ -15,7 +17,7 @@ class JobPageServiceFactory:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    def create(self, http: httpx.AsyncClient, uow_factory: Callable[[], UnitOfWork]) -> JobPageServiceInterface:
+    def create(self, http: httpx.AsyncClient, uow_factory: UnitOfWorkFactory) -> JobPageServiceInterface:
         settings = self._settings
         client = HzzJobPageClient(http, settings.HZZ_PAGE_TIMEOUT, settings.HZZ_PAGE_MAX_BYTES)
         return JobPageService(

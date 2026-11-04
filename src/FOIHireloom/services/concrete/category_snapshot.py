@@ -1,6 +1,5 @@
-from collections.abc import Callable
 
-from FOIHireloom.db.uow.base import UnitOfWork
+from FOIHireloom.db.uow.base import UnitOfWorkFactory
 from FOIHireloom.dto.category_snapshot import (
     CategoryCoverageDTO,
     CategoryInputDTO,
@@ -25,7 +24,7 @@ class CategorySnapshotService(CategorySnapshotServiceInterface):
     feeds' confirmed mappings with the rule the sync applies.
     """
 
-    def __init__(self, uow_factory: Callable[[], UnitOfWork]) -> None:
+    def __init__(self, uow_factory: UnitOfWorkFactory) -> None:
         self._uow_factory = uow_factory
 
     async def take(self) -> CategorySnapshotDTO:

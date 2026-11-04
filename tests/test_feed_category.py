@@ -3,7 +3,7 @@ from datetime import date
 
 from FOIHireloom.dto.job import ParsedJobDTO
 from FOIHireloom.dto.job_sync import FilledCategoryDTO
-from FOIHireloom.services import FeedCategoryVerifier
+from FOIHireloom.services.concrete.feed_category import FeedCategoryVerifier
 from FOIHireloom.services.concrete.feed_category import resolve_category
 
 IT = "INFORMATIČKI, RAČUNALNI I STRUČNJACI ZA INTERNET"

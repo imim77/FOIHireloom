@@ -2,7 +2,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
 
-from FOIHireloom.db.uow.base import UnitOfWork
+from FOIHireloom.db.uow.base import UnitOfWorkFactory
 from FOIHireloom.dto.job_conditions import RawJobConditionsDTO
 from FOIHireloom.dto.job_page import JobPageFetchResultDTO
 from FOIHireloom.exceptions import HzzJobPageError, HzzJobPageUnavailableError
@@ -29,7 +29,7 @@ class JobPageService(JobPageServiceInterface):
         client: HzzJobPageClientInterface,
         parser: HzzJobPageParser,
         normalizer: JobConditionsNormalizer,
-        uow_factory: Callable[[], UnitOfWork],
+        uow_factory: UnitOfWorkFactory,
         delay_seconds: float = 1.0,
         retry_after: timedelta = timedelta(hours=24),
         max_consecutive_failures: int = 5,

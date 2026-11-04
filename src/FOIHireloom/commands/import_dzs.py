@@ -16,16 +16,19 @@ from FOIHireloom.config.settings import Settings
 from FOIHireloom.dto.dzs import DzsSourceDTO
 from FOIHireloom.exceptions import PersistenceError
 from FOIHireloom.services.dependency import DependencyService
+from FOIHireloom.services.interfaces.dzs_import import DzsImportServiceInterface
+from FOIHireloom.services.interfaces.lifecycle import DatabaseServiceOpener
 
 
 class DzsImportCommand:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, service: DatabaseServiceOpener[DzsImportServiceInterface]) -> None:
         self._settings = settings
+        self._open_service = service
 
     async def run(self, t1_file: Path | None = None, workbook_file: Path | None = None, dry_run: bool = False) -> dict:
         t1 = self._source(t1_file, self._settings.DZS_T1_URL)
         workbook = self._source(workbook_file, self._settings.DZS_WORKBOOK_URL)
-        async with DependencyService(self._settings).dzs_import_service(with_database=not dry_run) as service:
+        async with self._open_service(with_database=not dry_run) as service:
             if dry_run:
                 return (await service.validate_release(t1, workbook)).model_dump(mode="json")
             return (await service.import_release(t1, workbook)).model_dump(mode="json")
@@ -46,7 +49,9 @@ def main(argv: list[str] | None = None) -> None:
                         help="Parse and validate the files without accessing the database.")
     args = parser.parse_args(argv)
     try:
-        result = asyncio.run(DzsImportCommand(Settings()).run(args.t1_file, args.workbook_file, args.dry_run))
+        settings = Settings()
+        command = DzsImportCommand(settings, DependencyService(settings).dzs_import_service)
+        result = asyncio.run(command.run(args.t1_file, args.workbook_file, args.dry_run))
     except (PersistenceError, OSError):
         print("DZS import failed: check DATABASE_URL and apply Alembic migrations.", file=sys.stderr)
         raise SystemExit(1) from None

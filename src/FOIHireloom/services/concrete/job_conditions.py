@@ -2,7 +2,7 @@ import re
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
-from FOIHireloom.db.uow.base import UnitOfWork
+from FOIHireloom.db.uow.base import UnitOfWorkFactory
 from FOIHireloom.dto.job_conditions import JobConditionsDTO, JobConditionsRunDTO, RawJobConditionsDTO
 from FOIHireloom.services.interfaces.job_conditions import JobConditionsServiceInterface
 
@@ -145,7 +145,7 @@ class JobConditionsService(JobConditionsServiceInterface):
     whenever the normaliser's vocabulary changes.
     """
 
-    def __init__(self, uow_factory: Callable[[], UnitOfWork], normalizer: JobConditionsNormalizer) -> None:
+    def __init__(self, uow_factory: UnitOfWorkFactory, normalizer: JobConditionsNormalizer) -> None:
         self._uow_factory = uow_factory
         self._normalizer = normalizer
 

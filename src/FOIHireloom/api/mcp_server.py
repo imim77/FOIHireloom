@@ -1,7 +1,7 @@
 import socket
 import sys
-from collections.abc import AsyncIterator, Callable
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastmcp import FastMCP
@@ -12,6 +12,7 @@ from FOIHireloom.config.settings import Settings
 from FOIHireloom.services.dependency import DependencyService
 from FOIHireloom.services.interfaces.county_indicators import CountyIndicatorServiceInterface
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
+from FOIHireloom.services.interfaces.lifecycle import ServiceOpener
 
 from .app_views import AppViews
 from .apps.views import BUILD_HINT, stale_sources
@@ -49,9 +50,6 @@ INSTRUCTIONS = (
     "user. Send users to canonical_url to read the full advertisement or apply."
 )
 
-type JobSearchServiceOpener = Callable[[], AbstractAsyncContextManager[JobSearchServiceInterface]]
-type CountyIndicatorServiceOpener = Callable[[], AbstractAsyncContextManager[CountyIndicatorServiceInterface]]
-
 
 class McpServer:
     """FastMCP server whose tools share one search service and one county indicator service while it runs.
@@ -66,13 +64,13 @@ class McpServer:
         self,
         settings: Settings | None = None,
         *,
-        job_search_service: JobSearchServiceOpener | None = None,
-        county_indicator_service: CountyIndicatorServiceOpener | None = None,
+        job_search_service: ServiceOpener[JobSearchServiceInterface] | None = None,
+        county_indicator_service: ServiceOpener[CountyIndicatorServiceInterface] | None = None,
     ) -> None:
         self._settings = settings or Settings()
-        dependencies = DependencyService(self._settings)
-        self._job_search_service = job_search_service or dependencies.job_search_service
-        self._county_indicator_service = county_indicator_service or dependencies.county_indicator_service
+        self._dependencies = DependencyService(self._settings)
+        self._job_search_service = job_search_service
+        self._county_indicator_service = county_indicator_service
         # Unexpected errors reach the client without details; tools raise ToolError for the rest.
         self.server = FastMCP("FOIHireloom", instructions=INSTRUCTIONS, lifespan=self._lifespan,
                               mask_error_details=True)
@@ -82,7 +80,9 @@ class McpServer:
 
     @asynccontextmanager
     async def _lifespan(self, server: FastMCP) -> AsyncIterator[dict[str, Any]]:
-        async with self._job_search_service() as search, self._county_indicator_service() as indicators:
+        async with self._dependencies.read_services(
+            job_search=self._job_search_service, county_indicators=self._county_indicator_service,
+        ) as (search, indicators):
             yield {JOB_SEARCH_SERVICE: search, COUNTY_INDICATOR_SERVICE: indicators}
 
     @staticmethod

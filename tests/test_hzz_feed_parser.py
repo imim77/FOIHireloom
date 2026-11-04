@@ -3,7 +3,7 @@ from datetime import date
 from pathlib import Path
 
 from FOIHireloom.exceptions import HzzFeedParseError
-from FOIHireloom.services import HzzFeedParser
+from FOIHireloom.services.concrete.hzz_feed_parser import HzzFeedParser
 
 FIXTURE = Path(__file__).parent / "fixtures/hzz_feed_sample.xml"
 

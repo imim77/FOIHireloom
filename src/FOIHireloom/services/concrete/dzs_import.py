@@ -1,10 +1,10 @@
 import hashlib
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from FOIHireloom.db.uow.base import UnitOfWork
+from FOIHireloom.db.uow.base import UnitOfWorkFactory
 from FOIHireloom.dto.dzs import (
     DzsFileDTO,
     DzsImportOutcomeDTO,
@@ -39,7 +39,7 @@ class DzsImportService(DzsImportServiceInterface):
         self,
         client: DzsClientInterface,
         parser: DzsReleaseParser,
-        uow_factory: Callable[[], UnitOfWork] | None,
+        uow_factory: UnitOfWorkFactory | None,
         catalog: CroatianCountyCatalog,
     ) -> None:
         self._client = client

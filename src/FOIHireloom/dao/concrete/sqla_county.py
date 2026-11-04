@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.dto.county import CountyDefinitionDTO, CountyDTO
 from FOIHireloom.dto.job_search import CountyFeedCheckDTO, RegionDTO
-from FOIHireloom.dao.concrete.sqla_job import open_condition
+from .job_predicates import open_condition
 from FOIHireloom.dao.interfaces.county import CountyRepository
 
 

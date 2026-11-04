@@ -6,7 +6,8 @@ from uuid import uuid4
 
 from FOIHireloom.dto.ckan import CkanResource
 from FOIHireloom.exceptions import SourceFeedRegistrationError
-from FOIHireloom.services import CroatianCountyCatalog, SourceFeedRegistrationPlanner
+from FOIHireloom.services.concrete.croatian_counties import CroatianCountyCatalog
+from FOIHireloom.services.concrete.source_feed_registration import SourceFeedRegistrationPlanner
 
 
 class RegistrationPlannerTests(unittest.TestCase):
