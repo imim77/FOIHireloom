@@ -14,6 +14,7 @@ from FOIHireloom.dto.job_comparison import (
     JobComparisonDTO,
 )
 from FOIHireloom.dto.job_market import JobMarketCriteriaDTO, JobMarketFiltersDTO, JobMarketStatsDTO
+from FOIHireloom.dto.job_skills import Skill
 from FOIHireloom.dto.job_search import (
     CategoryDTO,
     CoverageDTO,
@@ -75,7 +76,8 @@ class JobSearchService(JobSearchServiceInterface):
                                unknown_conditions=unknown.by_filter, unknown_total=unknown.total)
 
     async def _search[T: JobSummaryDTO](
-        self, filters: JobSearchFiltersDTO, result: Callable[[Job, date, JobCountyDTO | None, bool | None], T],
+        self, filters: JobSearchFiltersDTO,
+        result: Callable[[Job, date, JobCountyDTO | None, bool | None, tuple[Skill, ...]], T],
     ) -> tuple[tuple[T, ...], str | None, CoverageDTO, date, UnknownConditionsDTO]:
         """One page of jobs, each made by result, with the next page's cursor, the searched counties' coverage,
         today and the jobs left out only for unknown values.
@@ -83,8 +85,12 @@ class JobSearchService(JobSearchServiceInterface):
         terms = search_terms(filters.query)
         conditions = condition_criteria(filters)
         after = self._cursors.decode(filters.cursor) if filters.cursor else None
-        # A cursor orders by title match exactly when the search has a query.
-        if after is not None and (after.title_match is None) != (not terms):
+        # The cursor must carry exactly the ranks this search uses.
+        if after is not None and (
+            (after.title_match is None) != (not terms)
+            or (after.skill_matches is None) != (not conditions["skills"])
+            or (after.skill_matches is not None and after.skill_matches > len(conditions["skills"] or ()))
+        ):
             raise InvalidJobSearchError(INVALID_CURSOR)
         async with self._uow_factory() as work:
             now = await work.transaction_time()
@@ -103,7 +109,8 @@ class JobSearchService(JobSearchServiceInterface):
             found = await work.jobs.search(criteria)
             unknown = await work.jobs.count_unknown_conditions(criteria)
             counties = self._first_county(await work.job_feed_memberships.list_counties([hit.job.id for hit in found]))
-            jobs = [result(hit.job, today, counties.get(hit.job.id), hit.title_match) for hit in found]
+            jobs = [result(hit.job, today, counties.get(hit.job.id), hit.title_match, criteria.skills or ())
+                    for hit in found]
             regions = self._feed_coverage.freshness(await work.counties.list_feed_checks(), now)
         if county_code is not None:
             regions = [region for region in regions if region.code == county_code]

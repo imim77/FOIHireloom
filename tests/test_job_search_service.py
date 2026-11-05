@@ -62,6 +62,19 @@ class SearchRuleTests(unittest.TestCase):
         self.assertEqual(local_date(NOW), TODAY)
         self.assertEqual(local_date(datetime(2026, 7, 1, 22, 30, tzinfo=UTC)), date(2026, 7, 2))
 
+    def test_skills_are_optional_and_duplicate_requests_count_once(self) -> None:
+        self.assertIsNone(condition_criteria(JobConditionFiltersDTO(skills=()))["skills"])
+        filters = JobConditionFiltersDTO(skills=("csharp", "python", "csharp"))
+        self.assertEqual(condition_criteria(filters)["skills"], ("csharp", "python"))
+
+    def test_skill_cursor_preserves_the_number_of_requested_matches(self) -> None:
+        presenter, codec = JobPresenter(), JobCursorCodec()
+        summary = presenter.summary(job(skills=["python", "csharp", "sql"]), TODAY, None, False,
+                                    ("csharp", "python", "csharp"))
+        self.assertEqual(summary.matched_skills, ("csharp", "python"))
+        self.assertEqual(codec.decode(codec.encode(summary)).skill_matches, 2)
+        self.assertEqual(presenter.card(job(skills=["sql"]), TODAY, None, None, ("python",)).matched_skills, ())
+
 
 class JobPresentationTests(unittest.TestCase):
     def test_fetched_page_keeps_precedence_when_a_later_fetch_fails(self) -> None:
@@ -147,6 +160,32 @@ class JobSearchServiceTests(unittest.IsolatedAsyncioTestCase):
         cursor = JobCursorCodec().encode(JobPresenter().summary(job(), TODAY, None, None))
         with self.assertRaises(InvalidJobSearchError):
             await self.service.search(JobSearchFiltersDTO(query="kuhar", cursor=cursor))
+        self.assertEqual(self.opened, 0)
+
+    async def test_skills_reach_criteria_and_both_result_types_keep_cursor_ranking(self) -> None:
+        self.jobs[0].skills = ["csharp", "python", "sql"]
+        self.jobs[1].skills = ["python"]
+        filters = JobSearchFiltersDTO(query="programer", skills=("csharp", "python"), limit=2)
+        page = await self.service.search(filters)
+        cards = await self.service.search_cards(filters)
+        self.assertEqual(self.work.jobs.search.call_args.args[0].skills, ("csharp", "python"))
+        self.assertEqual([row.matched_skills for row in page.jobs], [("csharp", "python"), ("python",)])
+        self.assertEqual([row.matched_skills for row in cards.jobs], [("csharp", "python"), ("python",)])
+        self.assertEqual(JobCursorCodec.decode(page.next_cursor).skill_matches, 1)
+        await self.service.search(filters.model_copy(update={"cursor": page.next_cursor}))
+        self.assertEqual(self.work.jobs.search.call_args.args[0].after.skill_matches, 1)
+
+    async def test_skill_cursor_requires_the_corresponding_filter_before_opening_a_transaction(self) -> None:
+        unranked = JobPresenter().summary(job(), TODAY, None, None)
+        ranked = JobPresenter().summary(job(skills=["python", "csharp"]), TODAY, None, None,
+                                        ("python", "csharp"))
+        for filters in (
+            JobSearchFiltersDTO(skills=("python",), cursor=JobCursorCodec.encode(unranked)),
+            JobSearchFiltersDTO(cursor=JobCursorCodec.encode(ranked)),
+            JobSearchFiltersDTO(skills=("python",), cursor=JobCursorCodec.encode(ranked)),
+        ):
+            with self.subTest(filters=filters), self.assertRaises(InvalidJobSearchError):
+                await self.service.search(filters)
         self.assertEqual(self.opened, 0)
 
     async def test_comparison_preserves_requested_order_and_unknown_conditions(self) -> None:

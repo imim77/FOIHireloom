@@ -43,10 +43,10 @@ class JobRepository(ABC):
         """Return up to criteria.limit listed jobs matching every criterion.
 
         A job is listed while it is present in at least one county feed. With
-        search terms, jobs whose title matches every term come first. Jobs
-        are then ordered by publication date, newest first and unknown dates
-        last, then by descending ID; criteria.after continues after that
-        position.
+        search terms, jobs whose title matches every term come first, then
+        jobs with more requested skills, then publication date, newest first
+        and unknown dates last, then descending ID. criteria.after continues
+        after that position.
         """
 
     @abstractmethod

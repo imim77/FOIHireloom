@@ -1,7 +1,7 @@
 from collections.abc import Collection, Mapping, Sequence
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import CTE, ColumnElement, Date, and_, bindparam, case, func, not_, or_, select, update
+from sqlalchemy import CTE, ColumnElement, Date, Integer, and_, bindparam, case, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
@@ -31,7 +31,7 @@ from FOIHireloom.dto.job_sync import CategoryEvidenceDTO, FilledCategoryDTO, Job
 from FOIHireloom.dao.interfaces.job import JobRepository, JobSearchHit
 
 from .job_predicates import (
-    condition_filters, effective_deadline, filter_conditions, listed_condition,
+    after_descending, condition_filters, effective_deadline, filter_conditions, listed_condition,
     open_condition, page_due_condition, terms_condition,
 )
 
@@ -67,24 +67,21 @@ class SqlAlchemyJobRepository(JobRepository):
 
     async def search(self, criteria: JobSearchCriteriaDTO) -> list[JobSearchHit]:
         title_match = terms_condition(criteria.terms, SEARCH_TITLE_WEIGHT) if criteria.terms else None
+        skill_matches = sum(
+            (case((Job.skills.contains([skill]), 1), else_=0) for skill in dict.fromkeys(criteria.skills or ())),
+        ) if criteria.skills else None
         statement = select(Job, title_match).where(*filter_conditions(criteria))
-        if (after := criteria.after) is not None:
-            if after.published_on is None:
-                later = and_(Job.published_on.is_(None), Job.id < after.id)
-            else:
-                later = or_(
-                    Job.published_on < after.published_on,
-                    and_(Job.published_on == after.published_on, Job.id < after.id),
-                    Job.published_on.is_(None),
-                )
-            if title_match is not None:
-                later = or_(and_(title_match, later), not_(title_match)) if after.title_match else \
-                    and_(not_(title_match), later)
-            statement = statement.where(later)
-        order = [Job.published_on.desc().nulls_last(), Job.id.desc()]
+        keys = []
         if title_match is not None:
-            order.insert(0, title_match.desc())
-        statement = statement.order_by(*order).limit(criteria.limit)
+            keys.append((title_match.cast(Integer), criteria.after.title_match if criteria.after else None))
+        if skill_matches is not None:
+            keys.append((skill_matches, criteria.after.skill_matches if criteria.after else None))
+        keys.extend(((Job.published_on, criteria.after.published_on if criteria.after else None),
+                     (Job.id, criteria.after.id if criteria.after else None)))
+        if criteria.after is not None:
+            positions = [(column, int(value) if isinstance(value, bool) else value) for column, value in keys]
+            statement = statement.where(after_descending(positions))
+        statement = statement.order_by(*(column.desc().nulls_last() for column, _ in keys)).limit(criteria.limit)
         return [JobSearchHit(job, title_match) for job, title_match in await self._session.execute(statement)]
 
     async def count_unknown_conditions(self, criteria: JobFilterCriteriaDTO) -> UnknownConditionsDTO:

@@ -5,6 +5,7 @@ from FOIHireloom.db.models import Job
 from FOIHireloom.dto.job_comparison import JobComparisonInputDTO
 from FOIHireloom.dto.job_conditions import JobConditionsDTO, RawJobConditionsDTO
 from FOIHireloom.dto.job_search import JobCardDTO, JobCountyDTO, JobDetailsDTO, JobListingDTO, JobSummaryDTO
+from FOIHireloom.dto.job_skills import Skill
 
 
 class JobPresenter:
@@ -16,14 +17,18 @@ class JobPresenter:
 
     def summary[T: JobSummaryDTO](
         self, job: Job, today: date, county: JobCountyDTO | None, title_match: bool | None,
-        dto: type[T] = JobSummaryDTO,
+        skills: tuple[Skill, ...] = (), dto: type[T] = JobSummaryDTO,
     ) -> T:
         return dto.model_validate(job).model_copy(
-            update={**self._page_fields(job, today), **self._county_fields(county), "title_match": title_match}
+            update={**self._page_fields(job, today), **self._county_fields(county), "title_match": title_match,
+                    "matched_skills": tuple(skill for skill in dict.fromkeys(skills) if skill in (job.skills or ()))},
         )
 
-    def card(self, job: Job, today: date, county: JobCountyDTO | None, title_match: bool | None) -> JobCardDTO:
-        return self.summary(job, today, county, title_match, JobCardDTO).model_copy(update={
+    def card(
+        self, job: Job, today: date, county: JobCountyDTO | None, title_match: bool | None,
+        skills: tuple[Skill, ...] = (),
+    ) -> JobCardDTO:
+        return self.summary(job, today, county, title_match, skills, JobCardDTO).model_copy(update={
             "workers_needed": job.page_workers_needed,
             "employment_type": job.page_employment_type,
             "working_hours": job.page_working_hours,

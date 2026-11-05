@@ -8,6 +8,7 @@ from FOIHireloom.domain.search_text import SEARCH_TERM
 
 from .base import ModelConfigBaseModel
 from .job_conditions import Contract, EducationLevel, EmploymentTag, JobConditionsDTO
+from .job_skills import Skill
 
 MAX_PAGE_SIZE = 20
 MAX_QUERY_LENGTH = 200
@@ -49,13 +50,15 @@ class JobConditionFiltersDTO(CandidateConditionsDTO):
     finds "Nije važno" and trainee ads. education is the caller's level and
     matches jobs that accept it. accommodation True finds jobs offering any
     accommodation, False those offering none. A job must have every one of
-    employment_tags. place matches the place of work on the job page, without
+    employment_tags. skills match at least one explicitly mentioned skill.
+    place matches the place of work on the job page, without
     the county after its comma, or the feed's municipality when the place's
     words appear there in a row as whole words, ignoring case and Croatian
     diacritics: "Pula" finds "PULA-POLA" and "Zagreb" "ZAGREB-DUBRAVA".
     """
 
     employment_tags: tuple[EmploymentTag, ...] | None = None
+    skills: tuple[Skill, ...] | None = None
     place: str | None = Field(default=None, max_length=MAX_QUERY_LENGTH)
 
 
@@ -77,10 +80,11 @@ class JobSearchFiltersDTO(JobConditionFiltersDTO):
 class JobCursorDTO(ModelConfigBaseModel):
     """Position after the last returned job in the search order.
 
-    title_match is set only for a search with a query, whose title matches come first.
+    title_match is set only with a query; skill_matches only with skills.
     """
 
     title_match: bool | None = None
+    skill_matches: int | None = Field(default=None, ge=1)
     published_on: date | None
     id: int = Field(ge=1, le=2**63 - 1)
 
@@ -135,6 +139,7 @@ class JobSummaryDTO(ModelConfigBaseModel):
     from the county feed that publishes the job and is known for every job in
     a feed. title_match tells whether every query word matched the title;
     such jobs come first, and it is None for a search without a query.
+    matched_skills lists the requested skills explicitly mentioned by the ad.
     """
 
     id: int
@@ -156,6 +161,7 @@ class JobSummaryDTO(ModelConfigBaseModel):
     quality_flags: tuple[str, ...]
     details_status: DetailsStatus = "pending"
     title_match: bool | None = None
+    matched_skills: tuple[Skill, ...] = ()
     last_seen_at: datetime
 
     @computed_field

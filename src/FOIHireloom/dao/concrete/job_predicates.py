@@ -39,7 +39,21 @@ def filter_conditions(criteria: JobFilterCriteriaDTO) -> list[ColumnElement[bool
         conditions.append(func.upper(Job.category) == func.upper(criteria.category))
     if criteria.open_on is not None:
         conditions.append(open_condition(criteria.open_on))
+    if criteria.skills:
+        # An unmentioned skill does not count as an unknown working condition.
+        conditions.append(Job.skills.overlap(list(criteria.skills)))
     return [*conditions, *condition_filters(criteria).values()]
+
+
+def after_descending(keys: Sequence[tuple[ColumnElement, object]]) -> ColumnElement[bool]:
+    """Rows after these descending keys, with NULL values last at each key."""
+    equal = []
+    later = []
+    for column, value in keys:
+        if value is not None:
+            later.append(and_(*equal, or_(column < value, column.is_(None))))
+        equal.append(column.is_not_distinct_from(value))
+    return or_(*later)
 
 
 def condition_filters(criteria: JobConditionFiltersDTO) -> dict[str, ColumnElement[bool]]:

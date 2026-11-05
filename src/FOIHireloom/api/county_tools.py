@@ -39,6 +39,7 @@ from .job_filters import (
     FullTime,
     MaxExperienceMonths,
     Place,
+    Skills,
 )
 from .tool_provider import READ_ONLY, ToolGroup
 
@@ -109,6 +110,7 @@ class CountyIndicatorTools(ToolGroup):
             accommodation: Accommodation = None,
             employment_tags: EmploymentTags = None,
             place: Place = None,
+            skills: Skills = None,
             include_expired: CountyIncludeExpired = False,
             period: Period = None,
         ) -> CountyComparisonDTO:
@@ -157,7 +159,7 @@ class CountyIndicatorTools(ToolGroup):
             filters = JobCountFiltersDTO(
                 query=query, category=category, max_experience_months=max_experience_months, contract=contract,
                 full_time=full_time, education=education, accommodation=accommodation,
-                employment_tags=employment_tags, place=place, include_expired=include_expired,
+                employment_tags=employment_tags, place=place, skills=skills, include_expired=include_expired,
             )
             return await self._compare(ctx, counties, filters, period)
 
@@ -174,6 +176,7 @@ class CountyIndicatorTools(ToolGroup):
             accommodation: Accommodation = None,
             employment_tags: EmploymentTags = None,
             place: Place = None,
+            skills: Skills = None,
             include_expired: CountyIncludeExpired = False,
             period: Period = None,
         ) -> CountyComparisonViewDTO:
@@ -197,7 +200,7 @@ class CountyIndicatorTools(ToolGroup):
             filters = JobCountFiltersDTO(
                 query=query, category=category, max_experience_months=max_experience_months, contract=contract,
                 full_time=full_time, education=education, accommodation=accommodation,
-                employment_tags=employment_tags, place=place, include_expired=include_expired,
+                employment_tags=employment_tags, place=place, skills=skills, include_expired=include_expired,
             )
             return county_comparison.county_comparison(await self._compare(ctx, counties, filters, period))
 

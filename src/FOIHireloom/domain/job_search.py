@@ -20,7 +20,8 @@ class JobCursorCodec:
 
     @staticmethod
     def encode(job: JobSummaryDTO) -> str:
-        cursor = JobCursorDTO(title_match=job.title_match, published_on=job.published_on, id=job.id)
+        cursor = JobCursorDTO(title_match=job.title_match, skill_matches=len(job.matched_skills) or None,
+                              published_on=job.published_on, id=job.id)
         return base64.urlsafe_b64encode(cursor.model_dump_json().encode()).decode()
 
     @staticmethod
@@ -49,7 +50,7 @@ def search_terms(query: str | None) -> tuple[str, ...]:
 
 
 def condition_criteria(filters: JobConditionFiltersDTO) -> dict[str, object]:
-    """The condition filters as criteria; no employment tags or a blank place is no filter."""
+    """The condition filters as criteria; empty tags, skills or a blank place is no filter."""
     place = None
     if filters.place and filters.place.strip():
         # Folded as query words are, but not stemmed: a place name matches as whole words.
@@ -58,4 +59,5 @@ def condition_criteria(filters: JobConditionFiltersDTO) -> dict[str, object]:
         place = " ".join(words)
     return filters.model_dump(include=set(JobConditionFiltersDTO.model_fields)) | {
         "employment_tags": filters.employment_tags or None, "place": place,
+        "skills": tuple(dict.fromkeys(filters.skills)) if filters.skills else None,
     }

@@ -39,7 +39,7 @@ from .apps import accommodation_comparison, job_cards, job_comparison, jobs_by_c
 from .apps.views import ACCOMMODATION_COMPARISON, JOB_CARDS, JOB_COMPARISON, JOBS_BY_COUNTY
 from .job_filters import (
     CATEGORY_DESCRIPTION, Accommodation, ContractFilter, Education, EmploymentTags,
-    FullTime, MaxExperienceMonths, Place,
+    FullTime, MaxExperienceMonths, Place, Skills,
 )
 from .tool_provider import READ_ONLY, ToolGroup
 
@@ -109,6 +109,7 @@ class JobTools(ToolGroup):
             accommodation: Accommodation = None,
             employment_tags: EmploymentTags = None,
             place: Place = None,
+            skills: Skills = None,
             include_expired: Annotated[bool, Field(
                 description="Also return jobs whose application deadline has passed.",
             )] = False,
@@ -166,7 +167,7 @@ class JobTools(ToolGroup):
             filters = JobSearchFiltersDTO(
                 query=query, county=county, category=category, max_experience_months=max_experience_months,
                 contract=contract, full_time=full_time, education=education, accommodation=accommodation,
-                employment_tags=employment_tags, place=place, include_expired=include_expired, limit=limit,
+                employment_tags=employment_tags, place=place, skills=skills, include_expired=include_expired, limit=limit,
                 cursor=cursor,
             )
             return await self._call(service(ctx).search(filters))
@@ -189,6 +190,7 @@ class JobTools(ToolGroup):
             accommodation: Accommodation = None,
             employment_tags: EmploymentTags = None,
             place: Place = None,
+            skills: Skills = None,
             include_expired: Annotated[bool, Field(
                 description="Also show jobs whose application deadline has passed.",
             )] = False,
@@ -233,7 +235,7 @@ class JobTools(ToolGroup):
             filters = JobSearchFiltersDTO(
                 query=query, county=county, category=category, max_experience_months=max_experience_months,
                 contract=contract, full_time=full_time, education=education, accommodation=accommodation,
-                employment_tags=employment_tags, place=place, include_expired=include_expired, limit=limit,
+                employment_tags=employment_tags, place=place, skills=skills, include_expired=include_expired, limit=limit,
                 cursor=cursor,
             )
             return job_cards.job_cards(await self._call(service(ctx).search_cards(filters)), filters)
@@ -256,6 +258,7 @@ class JobTools(ToolGroup):
             accommodation: Accommodation = None,
             employment_tags: EmploymentTags = None,
             place: Place = None,
+            skills: Skills = None,
             include_expired: Annotated[bool, Field(
                 description="Also count jobs whose application deadline has passed.",
             )] = False,
@@ -309,7 +312,7 @@ class JobTools(ToolGroup):
             filters = JobMarketFiltersDTO(
                 query=query, county=county, category=category, max_experience_months=max_experience_months,
                 contract=contract, full_time=full_time, education=education, accommodation=accommodation,
-                employment_tags=employment_tags, place=place, include_expired=include_expired, top=top,
+                employment_tags=employment_tags, place=place, skills=skills, include_expired=include_expired, top=top,
             )
             return await self._call(service(ctx).market_stats(filters))
 
@@ -327,6 +330,7 @@ class JobTools(ToolGroup):
             education: Education = None,
             employment_tags: EmploymentTags = None,
             place: Place = None,
+            skills: Skills = None,
             include_expired: Annotated[bool, Field(description="Also include ads whose deadline has passed.")] = False,
         ) -> AccommodationComparisonDTO:
             """Koliko oglasa nudi smještaj, a koliko ne? Vraća brojeve i postotke te odmah prikazuje graf.
@@ -352,7 +356,7 @@ class JobTools(ToolGroup):
             filters = JobMarketFiltersDTO(
                 query=query, county=county, category=category, max_experience_months=max_experience_months,
                 contract=contract, full_time=full_time, education=education, employment_tags=employment_tags,
-                place=place, include_expired=include_expired,
+                place=place, skills=skills, include_expired=include_expired,
             )
             stats = await self._call(service(ctx).market_stats(filters))
             return accommodation_comparison.accommodation_comparison(stats, filters)
@@ -372,6 +376,7 @@ class JobTools(ToolGroup):
             accommodation: Accommodation = None,
             employment_tags: EmploymentTags = None,
             place: Place = None,
+            skills: Skills = None,
             include_expired: Annotated[bool, Field(
                 description="Also count jobs whose application deadline has passed.",
             )] = False,
@@ -403,7 +408,7 @@ class JobTools(ToolGroup):
             filters = JobMarketFiltersDTO(
                 query=query, category=category, max_experience_months=max_experience_months, contract=contract,
                 full_time=full_time, education=education, accommodation=accommodation,
-                employment_tags=employment_tags, place=place, include_expired=include_expired,
+                employment_tags=employment_tags, place=place, skills=skills, include_expired=include_expired,
             )
             stats = await self._call(service(ctx).market_stats(filters))
             return jobs_by_county.jobs_by_county(stats, top, filters, metric)

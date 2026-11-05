@@ -4,12 +4,16 @@ from pydantic import Field
 
 from FOIHireloom.dto.job_conditions import Contract, EducationLevel, EmploymentTag
 from FOIHireloom.dto.job_search import MAX_EXPERIENCE_MONTHS, MAX_QUERY_LENGTH
+from FOIHireloom.dto.job_skills import Skill
 
 CATEGORY_DESCRIPTION = (
     "Exact category name from list_categories; letter case is ignored. A job's category is stated in its "
     "description or filled in from an HZZ occupation feed verified on its jobs. Jobs without one do not match, "
     "so also use query when every job of an occupation matters."
 )
+Skills = Annotated[tuple[Skill, ...] | None, Field(
+    description="Skills explicitly mentioned by the ad; at least one must match. More matches rank first.",
+)]
 # The condition filters, shared by the tools that choose jobs as search_jobs does.
 MaxExperienceMonths = Annotated[int | None, Field(
     ge=0, le=MAX_EXPERIENCE_MONTHS,
