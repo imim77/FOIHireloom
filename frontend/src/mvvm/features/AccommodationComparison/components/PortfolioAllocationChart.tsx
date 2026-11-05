@@ -1,3 +1,6 @@
+import { cn } from 'cn'
+import { Button } from '@/components/ui/button'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 // Domain adaptation of the supplied PortfolioAllocationChart. Geometry, stepped bands, sweep, morphing,
 // glass pills and interactive legend follow the reference; values count ads instead of currency.
 import { animate, stagger } from 'animejs'
@@ -40,7 +43,7 @@ function Pill({ index, share, geometry, dimmed }: { index: number; share: number
 export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>) {
   const root = useRef<HTMLDivElement>(null)
   const { groups, total, hidden, values, shown, visibleTotal, shares, active,
-    sliderAt, sliderSlice, filtered, denominator, toggleGroup, selectGroup,
+    sliderAt, sliderSlice, filtered, denominator, showGroups, selectGroup,
     hoverGroup, previewGroup, navigate, resetGroups } = model
   const geometry = useMemo(() => layoutRing(values, active), [values, active])
   const order = groups.map((_, index) => index).sort((a, b) => geometry[a].band - geometry[b].band)
@@ -194,35 +197,27 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
         <span className="allocation-middle-share [max-width:48%] text-[12px] leading-[1.4] text-fg-soft [@media(max-width:_400px)]:text-[11px]">{active === null ? (filtered ? 'u prikazanim skupinama' : 'u odabranom skupu') : `${formatShare(shares[active])} ${denominator}`}</span>
       </div>
     </div>
-    <div className="allocation-legend grid [grid-template-columns:repeat(3,_minmax(0,_1fr))] [gap:12px_16px] w-full
-      [@media(max-width:_400px)]:gap-1 [@media(max-width:_400px)]:[grid-template-columns:1fr]" role="group" aria-label="Skupine smještaja">
+    <ToggleGroup multiple value={groups.filter((group) => group.jobs > 0 && !hidden.includes(group.key)).map((group) => group.key)}
+      onValueChange={showGroups} className="allocation-legend grid w-full grid-cols-3 gap-3 [@media(max-width:_400px)]:grid-cols-1"
+      aria-label="Skupine smještaja">
       {groups.map((group, index) => {
         const off = hidden.includes(group.key) || group.jobs === 0
-        return <button key={group.key} type="button" className={`allocation-legend-item flex items-center min-w-0 gap-2 p-2 [-webkit-tap-highlight-color:transparent]
-          [background:none] [border:none] rounded-[8px] text-fg-loud cursor-pointer text-left
-          [font-family:inherit] text-[12px] [font-weight:inherit] [font-style:inherit] leading-[inherit]
-          [&:hover]:bg-surface-sunken [&:focus-visible]:[outline:2px_solid_var(--allocation-blue)]
-          [&:focus-visible]:[outline-offset:2px] [&.is-off]:text-fg-soft
-          [&.is-off_.allocation-dot]:bg-surface-subdued [&.is-off_.allocation-dot]:[box-shadow:none]
-          [&.is-off_.allocation-legend-label]:line-through [&:disabled]:cursor-default allocation-${group.key}${off ? ' is-off' : ''}`}
-          aria-pressed={!off} disabled={group.jobs === 0} aria-disabled={!off && shown.length <= 1 ? true : undefined}
+        return <ToggleGroupItem key={group.key} value={group.key}
+          className={cn('allocation-legend-item h-auto min-w-0 justify-start gap-2 whitespace-normal p-2', `allocation-${group.key}`, off && 'is-off')}
+          disabled={group.jobs === 0} aria-disabled={!off && shown.length <= 1 ? true : undefined}
           aria-label={`${group.label}: ${formatAds(group.jobs)}, ${formatShare(group.share)} svih oglasa`}
-          onClick={() => toggleGroup(index)} onPointerEnter={(event) => { if (event.pointerType === 'mouse') previewGroup(index) }}
+          onPointerEnter={(event) => { if (event.pointerType === 'mouse') previewGroup(index) }}
           onPointerLeave={() => previewGroup(null)} onFocus={() => previewGroup(index)} onBlur={() => previewGroup(null)}>
           <span className="allocation-dot flex-none w-2.5 h-2.5 rounded-full [background:var(--allocation-color)]
             [box-shadow:0_0_0_2px_var(--card),_0_0_0_3px_color-mix(in_srgb,_var(--allocation-color)_40%,_transparent)]" /><span className="allocation-legend-label flex-1 leading-[1.4]">{group.label}</span>
           <span className="allocation-legend-count font-semibold tabular-nums">{formatInteger(group.jobs)}</span>
-        </button>
+        </ToggleGroupItem>
       })}
-    </div>
+    </ToggleGroup>
     {filtered && <div className="allocation-filter-note flex flex-wrap items-center justify-center [gap:8px_16px] w-full text-[12px]
       leading-[1.5] text-fg-soft" role="status">
       <span>Prikazano {formatInteger(visibleTotal)} od {formatInteger(total)} oglasa. Udjeli su među prikazanim oglasima.</span>
-      <button type="button" className="link inline p-0 [border:0] [background:none] [font-family:inherit] text-[inherit] [font-weight:inherit]
-        [font-style:inherit] leading-[inherit] text-fg-loud underline
-        [text-decoration-color:var(--surface-disable)] [text-underline-offset:2px] cursor-pointer text-left
-        [&:hover]:[text-decoration-color:currentColor] [&:focus-visible]:[outline:none]
-        [&:focus-visible]:rounded-[4px] [&:focus-visible]:shadow-focus" onClick={resetGroups}>Prikaži sve skupine</button>
+      <Button type="button" variant="link" size="sm" className="link" onClick={resetGroups}>Prikaži sve skupine</Button>
     </div>}
     <p id={`${id}-hint`} className="soft allocation-hint m-0 text-[12px] font-medium leading-[1.5] text-fg-soft w-full">Odaberite segment za broj i udio oglasa. Klikom na legendu sakrivate ili vraćate skupinu; strelicama birate segment.</p>
   </div>

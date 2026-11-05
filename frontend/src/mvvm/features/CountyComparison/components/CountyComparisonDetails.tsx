@@ -1,3 +1,5 @@
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
 import type { CSSProperties } from 'react'
 import { useComparisonEntrance } from '../../../hooks/use-comparison-entrance'
 import { formatDay, formatInteger, formatMoment, formatMonth } from '../../../utils/format'
@@ -38,8 +40,7 @@ export function Moments({ data }: { data: CountyComparisonData }) {
           {!months.length ? 'nije dostupan' : months.length === 1 ? formatMonth(months[0])
             : periods.map((reference) => `${DZS_NAMES[reference.indicator]}: ${formatMonth(reference.period!)}`)
               .join(' · ')}
-          {provisional && <span className="provisional inline-block [padding:1px_6px] rounded-full text-[11px] font-medium leading-[1.4]
-            whitespace-nowrap text-fg-soft [outline:1px_dashed_var(--fg-soft)] [outline-offset:-1px]">privremeno</span>}
+          {provisional && <Badge variant="provisional" className="provisional">privremeno</Badge>}
         </dd>
         <dd className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft">
           {data.requested_period ? 'zadani mjesec' : 'posljednji mjesec s podatkom za sve uspoređene županije'}
@@ -60,25 +61,19 @@ export function ComparisonTable({ data, expanded }: { data: CountyComparisonData
       [&:focus-visible]:[outline:none] [&:focus-visible]:shadow-focus [&.expanded]:[--aspect:200px]
       [&.expanded]:[--column:200px] ${expanded ? ' expanded' : ''}`} ref={root} role="region" tabIndex={0}
       aria-label="Usporedba županija po oglasima i nezaposlenosti">
-      <table className="compare [@container(max-width:_520px)]:[--aspect:108px] [@container(max-width:_520px)]:[--column:120px]
+      <Table variant="comparison" containerClassName="contents" className="compare [@container(max-width:_520px)]:[--aspect:108px] [@container(max-width:_520px)]:[--column:120px]
         hyphens-auto [overflow-wrap:break-word] w-full
         [min-width:calc(var(--aspect)_+_var(--counties)_*_var(--column))] table-fixed border-separate
-        border-spacing-0 text-[13px] leading-[1.35] text-fg-loud [&_th]:[padding:10px_12px] [&_th]:text-left
-        [&_th]:align-top [&_th]:[font-weight:inherit] [&_td]:[padding:10px_12px] [&_td]:text-left
-        [&_td]:align-top [&_td]:[font-weight:inherit] [&_.corner]:[width:var(--aspect)]
-        [&_.aspect]:[width:var(--aspect)] [&_.corner]:sticky [&_.corner]:left-0 [&_.corner]:[z-index:1]
-        [&_.corner]:bg-card [&_.corner]:[box-shadow:inset_-1px_0_0_var(--border)] [&_.aspect]:sticky
-        [&_.aspect]:left-0 [&_.aspect]:[z-index:1] [&_.aspect]:bg-card
-        [&_.aspect]:[box-shadow:inset_-1px_0_0_var(--border)]
-        [&_tbody_tr:not(.section)_>_*]:[border-top:1px_solid_var(--border)]
-        [&_.section_>_th]:[padding:18px_0_8px] [&_tbody.indicators_tr:not(.section)_>_*]:bg-surface-sunken
+        border-spacing-0 [&_th]:[padding:10px_12px] [&_th]:text-left [&_th]:align-top [&_td]:[padding:10px_12px]
+        [&_td]:text-left [&_td]:align-top [&_tbody_tr:not(.section)_>_*]:[border-top:1px_solid_var(--border)]
+        [&_.section_>_th]:[padding:18px_0_8px]
         [&_tbody.indicators_tr:not(.section)_>_*]:[border-top-color:var(--card)]
         [&_tbody.indicators_.section-name]:text-orange-500" style={{ '--counties': data.counties.length } as CSSProperties}>
-        <thead>
-          <tr>
-            <td className="corner" />
+        <TableHeader>
+          <TableRow>
+            <TableCell sticky className="corner w-(--aspect)" />
             {data.counties.map((county) => (
-              <th key={county.code} scope="col" className="county-head">
+              <TableHead key={county.code} scope="col" className="county-head">
                 <div className="county-head-inner flex flex-col gap-0.5 min-w-0" data-slot="county">
                   <span className="county-name text-[15px] font-bold leading-[1.25]">{county.short_name}</span>
                   <span className="county-total text-[12px] text-fg-soft">
@@ -86,23 +81,23 @@ export function ComparisonTable({ data, expanded }: { data: CountyComparisonData
                       : `svih aktivnih oglasa: ${formatInteger(county.all_active_jobs.jobs)}`}
                   </span>
                 </div>
-              </th>
+              </TableHead>
             ))}
-          </tr>
-        </thead>
+          </TableRow>
+        </TableHeader>
         {SECTIONS.map((section, k) => {
           const sectionRow = FIRST_ROWS[k]
           return (
-            <tbody key={section.key} className={section.key}>
-              <tr className="section">
-                <th scope="colgroup" colSpan={data.counties.length + 1}>
+            <TableBody key={section.key} className={section.key} tone={section.key === 'indicators' ? 'muted' : 'default'}>
+              <TableRow className="section">
+                <TableHead scope="colgroup" colSpan={data.counties.length + 1}>
                   <div className="section-inner sticky left-0 flex flex-wrap items-baseline [gap:2px_8px] [width:max-content]
                     [max-width:min(100cqw,_100%)] [padding:0_12px]" data-row={sectionRow}>
                     <span className="section-name text-[12px] font-bold [letter-spacing:0.02em] uppercase">{section.name}</span>
                     <span className="section-hint text-[12px] text-fg-soft">{section.hint}</span>
                   </div>
-                </th>
-              </tr>
+                </TableHead>
+              </TableRow>
               {section.rows.map((row, r) => {
                 const rowIndex = sectionRow + 1 + r
                 const cells = data.counties.map((county) => row.cell(county, data))
@@ -111,12 +106,12 @@ export function ComparisonTable({ data, expanded }: { data: CountyComparisonData
                 const low = Math.min(...known)
                 const marked = row.extremes && known.length > 1 && high !== low
                 return (
-                  <tr key={row.key}>
-                    <th scope="row" className="aspect">
+                  <TableRow key={row.key}>
+                    <TableHead scope="row" sticky="column" className="aspect w-(--aspect)">
                       <div className="aspect-inner font-semibold min-w-0" data-row={rowIndex}>{row.name}</div>
-                    </th>
+                    </TableHead>
                     {cells.map((cell, j) => (
-                      <td key={data.counties[j].code} className={`cell [&.unavailable_.cell-text]:text-[13px] [&.unavailable_.cell-text]:font-medium
+                      <TableCell key={data.counties[j].code} className={`cell [&.unavailable_.cell-text]:text-[13px] [&.unavailable_.cell-text]:font-medium
                         [&.unavailable_.cell-text]:italic [&.unavailable_.cell-text]:text-fg-soft
                         [&.unavailable_.cell-note]:text-warning-fg ${cell.unavailable ? ' unavailable' : ''}`}>
                         <div className="cell-inner flex flex-col items-start gap-1 min-w-0" data-row={rowIndex}>
@@ -134,21 +129,19 @@ export function ComparisonTable({ data, expanded }: { data: CountyComparisonData
                           {(cell.note || cell.provisional) && (
                             <span className="cell-note flex flex-wrap items-center [gap:4px_6px] text-[12px] text-fg-soft tabular-nums hyphens-manual">
                               {cell.note}
-                              {cell.provisional && <span className="provisional inline-block [padding:1px_6px] rounded-full text-[11px] font-medium
-                                leading-[1.4] whitespace-nowrap text-fg-soft [outline:1px_dashed_var(--fg-soft)]
-                                [outline-offset:-1px]">privremeno</span>}
+                              {cell.provisional && <Badge variant="provisional" className="provisional">privremeno</Badge>}
                             </span>
                           )}
                         </div>
-                      </td>
+                      </TableCell>
                     ))}
-                  </tr>
+                  </TableRow>
                 )
               })}
-            </tbody>
+            </TableBody>
           )
         })}
-      </table>
+      </Table>
     </div>
   )
 }

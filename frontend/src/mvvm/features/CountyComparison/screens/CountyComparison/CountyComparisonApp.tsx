@@ -21,7 +21,7 @@ function Session({ app, initial, ...expansion }: {
 export function CountyComparisonApp() {
   const mcp = useMcpApp<CountyComparisonData>('FOIHireloom county comparison', sample)
   const expansion = useExpanded(mcp)
-  if (!mcp.data) return <Card sunken title="Usporedba županija" description="Učitavanje…" />
+  if (!mcp.data) return <Card sunken title="Usporedba županija" description="Učitavanje…" loading />
   // A new result from the host replaces the one the view asked for.
   return <Session key={mcp.revision} initial={mcp.data} app={mcp.app} {...expansion} />
 }

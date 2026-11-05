@@ -1,4 +1,4 @@
-import { Card, ExpandButton, Notes } from '../../../../components/Card'
+import { EmptyState, Card, ExpandButton, Notes } from '../../../../components/Card'
 import { formatAds, formatWorkers } from '../../../../utils/format'
 import { CountyColumns } from '../../components/CountyColumns'
 import type { useJobsByCounty } from '../../hooks/use-jobs-by-county'
@@ -6,7 +6,7 @@ import type { useJobsByCounty } from '../../hooks/use-jobs-by-county'
 /** show_jobs_by_county: the top counties as 3D columns, every county once expanded. */
 export function JobsByCounty({ data, columns, shown, label, canExpand, expanded, toggle }:
   ReturnType<typeof useJobsByCounty> & { expanded: boolean; toggle: () => void }) {
-  if (!data) return <Card title="Broj oglasa po županijama" description="Učitavanje…" />
+  if (!data) return <Card title="Broj oglasa po županijama" description="Učitavanje…" loading />
 
   return (
     <Card title={data.title} description={data.description}
@@ -20,7 +20,7 @@ export function JobsByCounty({ data, columns, shown, label, canExpand, expanded,
           </p>
         </>
       ) : (
-        <p className="empty m-0 text-[14px] text-fg-soft">Nema aktivnih oglasa za zadane filtre.</p>
+        <EmptyState>Nema aktivnih oglasa za zadane filtre.</EmptyState>
       )}
     </Card>
   )

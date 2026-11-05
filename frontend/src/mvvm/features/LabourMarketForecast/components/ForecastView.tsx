@@ -1,3 +1,10 @@
+import { Slider } from '@/components/ui/slider'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Button } from '@/components/ui/button'
+import { ChevronDownIcon } from 'lucide-react'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableCaption } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
 import { useId } from 'react'
 import { useChartWidth } from '../../../hooks/use-chart-size'
 import { forecastChart, formatChange, formatPeriod, formatValue } from '../utils/forecast-chart'
@@ -5,15 +12,14 @@ import type { useForecast } from '../hooks/use-forecast'
 import type { CountyForecast, ForecastData, ObservedPoint } from '../types'
 
 function Flags({ point }: { point: ObservedPoint }) {
-  return <>{point.is_estimated && <span className="provisional inline-block [padding:1px_6px] rounded-full text-[11px] font-medium leading-[1.4]
-    whitespace-nowrap text-fg-soft [outline:1px_dashed_var(--fg-soft)] [outline-offset:-1px]">procijenjeno</span>}
-    {point.is_provisional && <span className="provisional inline-block [padding:1px_6px] rounded-full text-[11px] font-medium leading-[1.4]
-      whitespace-nowrap text-fg-soft [outline:1px_dashed_var(--fg-soft)] [outline-offset:-1px]">privremeno</span>}</>
+  return <>{point.is_estimated && <Badge variant="provisional" className="provisional">procijenjeno</Badge>}
+    {point.is_provisional && <Badge variant="provisional" className="provisional">privremeno</Badge>}</>
 }
 
 export function ForecastView(model: ReturnType<typeof useForecast>) {
   const { data, county, selected, selectPeriod, point, last, end, value, period, interval } = model
   const sliderId = useId()
+  const sliderLabel = `${sliderId}-label`
   return <div className="forecast-content min-w-0 flex flex-col gap-5">
     {point && <>
       <div className="forecast-readings grid [grid-template-columns:1fr_1fr] gap-3 [@media(max-width:_420px)]:gap-2">
@@ -37,16 +43,15 @@ export function ForecastView(model: ReturnType<typeof useForecast>) {
     </>}
     {county.history.some((p) => p.value !== null) || point ?
       <ForecastChart data={data} county={county} selected={selected} onSelect={selectPeriod} /> : null}
-    {point && <div className="forecast-control grid [grid-template-columns:auto_1fr] gap-4 items-center text-[12px] [&_input]:w-full
-      [&_input]:min-w-0 [&_input]:m-0 [&_input]:[accent-color:var(--forecast-line)] [&_input]:cursor-pointer
-      [&_input:focus-visible]:[outline:2px_solid_var(--forecast-line)]
-      [&_input:focus-visible]:[outline-offset:4px] [&_input:focus-visible]:rounded-[3px]
-      [@media(max-width:_420px)]:[grid-template-columns:1fr] [@media(max-width:_420px)]:gap-2">
-      <label htmlFor={sliderId}>{data.frequency === 'month' ? 'Mjesec prognoze' : 'Tjedan prognoze'}</label>
-      <input id={sliderId} type="range" min={0} max={county.forecast.length - 1} step={1} value={selected}
-        aria-valuetext={`${period(point.period)}: ${value(point.median)}, ${interval} ${value(point.low)} – ${value(point.high)}`}
-        onChange={(event) => selectPeriod(Number(event.target.value))} />
-    </div>}
+    {point && <FieldGroup className="forecast-control">
+      <Field>
+        <FieldLabel id={sliderLabel}>{data.frequency === 'month' ? 'Mjesec prognoze' : 'Tjedan prognoze'}</FieldLabel>
+        <Slider min={0} max={county.forecast.length - 1} step={1} value={[selected]}
+          onValueChange={(values) => selectPeriod(Array.isArray(values) ? values[0] : values)}
+          thumbProps={{ 'aria-labelledby': sliderLabel,
+            'aria-valuetext': `${period(point.period)}: ${value(point.median)}, ${interval} ${value(point.low)} – ${value(point.high)}` }} />
+      </Field>
+    </FieldGroup>}
     {end && county.change_to_horizon !== null && <p className="forecast-change flex flex-wrap items-baseline [gap:6px_12px] m-0 text-[12px] leading-[1.5] text-fg-soft
       [&_strong]:text-fg-loud [&_strong]:text-[15px] [&_strong]:font-semibold [&_strong]:tabular-nums">
       <strong>{formatChange(county.change_to_horizon, data.unit)}</strong>
@@ -55,48 +60,45 @@ export function ForecastView(model: ReturnType<typeof useForecast>) {
     {county.forecast.length > 0 && <div className="forecast-table-scroll [&:focus-visible]:[outline:2px_solid_var(--forecast-line)]
       [&:focus-visible]:[outline-offset:4px] [&:focus-visible]:rounded-[3px] overflow-auto [max-height:290px]
       border border-border rounded-[12px]" tabIndex={0} role="region" aria-label="Prognozirane vrijednosti">
-      <table className="forecast-table w-full border-collapse text-right text-[12px] leading-[1.5] tabular-nums
-        [&_caption]:text-left [&_caption]:p-3 [&_caption]:text-fg-soft [&_caption]:text-[11px]
-        [&_th]:[padding:9px_12px] [&_th]:[border-top:1px_solid_var(--border)] [&_th]:whitespace-nowrap
-        [&_td]:[padding:9px_12px] [&_td]:[border-top:1px_solid_var(--border)] [&_td]:whitespace-nowrap
-        [&_th]:font-medium [&_th:first-child]:text-left [&_thead_th]:sticky [&_thead_th]:top-0
-        [&_thead_th]:bg-card [&_thead_th]:text-[10px] [&_thead_th]:text-fg-soft
-        [&_.is-selected]:[background:var(--forecast-wash)] [&_.provisional]:m-0.5
-        [@media(max-width:_420px)]:[&_th]:p-2 [@media(max-width:_420px)]:[&_td]:p-2">
-        <caption>Sve prognozirane vrijednosti · {data.unit === 'percent' ? '%' : data.unit === 'persons' ? 'osobe' : 'oglasi'}</caption>
-        <thead><tr><th scope="col">{data.frequency === 'month' ? 'Mjesec' : 'Tjedan od'}</th>
-          <th scope="col">Medijan</th><th scope="col">Donja granica</th><th scope="col">Gornja granica</th></tr></thead>
-        <tbody>{county.forecast.map((p) => <tr key={p.period} data-period={p.period} data-slot="forecast-row"
-          className={point?.period === p.period ? 'is-selected' : ''}>
-          <th scope="row">{period(p.period).replace('tjedan od ', '')}</th><td>{value(p.median)}</td>
-          <td>{value(p.low)}</td><td>{value(p.high)}</td>
-        </tr>)}</tbody>
-      </table>
+      <Table variant="numeric" containerClassName="contents" className="forecast-table w-full border-collapse text-right tabular-nums [&_caption]:text-left [&_caption]:p-3
+        [&_caption]:text-fg-soft [&_th]:[padding:9px_12px] [&_th]:[border-top:1px_solid_var(--border)]
+        [&_th]:whitespace-nowrap [&_td]:[padding:9px_12px] [&_td]:[border-top:1px_solid_var(--border)]
+        [&_td]:whitespace-nowrap [&_th]:font-medium [&_th:first-child]:text-left [&_thead_th]:sticky
+        [&_thead_th]:top-0 [&_thead_th]:text-fg-soft [&_.provisional]:m-0.5 [@media(max-width:_420px)]:[&_th]:p-2
+        [@media(max-width:_420px)]:[&_td]:p-2">
+        <TableCaption>Sve prognozirane vrijednosti · {data.unit === 'percent' ? '%' : data.unit === 'persons' ? 'osobe' : 'oglasi'}</TableCaption>
+        <TableHeader><TableRow><TableHead scope="col" sticky="header">{data.frequency === 'month' ? 'Mjesec' : 'Tjedan od'}</TableHead>
+          <TableHead scope="col" sticky="header">Medijan</TableHead><TableHead scope="col" sticky="header">Donja granica</TableHead><TableHead scope="col" sticky="header">Gornja granica</TableHead></TableRow></TableHeader>
+        <TableBody>{county.forecast.map((p) => <TableRow key={p.period} data-period={p.period} data-slot="forecast-row"
+          data-state={point?.period === p.period ? 'selected' : undefined}>
+          <TableHead scope="row">{period(p.period).replace('tjedan od ', '')}</TableHead><TableCell>{value(p.median)}</TableCell>
+          <TableCell>{value(p.low)}</TableCell><TableCell>{value(p.high)}</TableCell>
+        </TableRow>)}</TableBody>
+      </Table>
     </div>}
-    {county.history.length > 0 && <details className="forecast-history [&_summary:focus-visible]:[outline:2px_solid_var(--forecast-line)]
-      [&_summary:focus-visible]:[outline-offset:4px] [&_summary:focus-visible]:rounded-[3px] text-fg-soft
-      text-[12px] [&_summary]:cursor-pointer [&_summary]:[padding:4px_0] [&_.forecast-table-scroll]:mt-3
-      [&_.forecast-table-scroll]:text-fg-loud">
-      <summary>Povijesni podaci ({county.history.length})</summary>
+    {county.history.length > 0 && <Collapsible className="forecast-history">
+      <CollapsibleTrigger render={<Button variant="ghost" />}>
+        Povijesni podaci ({county.history.length})<ChevronDownIcon data-icon="inline-end" aria-hidden="true" />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
       <div className="forecast-table-scroll [&:focus-visible]:[outline:2px_solid_var(--forecast-line)]
         [&:focus-visible]:[outline-offset:4px] [&:focus-visible]:rounded-[3px] overflow-auto [max-height:290px]
         border border-border rounded-[12px]" tabIndex={0} role="region" aria-label="Povijesne vrijednosti">
-        <table className="forecast-table w-full border-collapse text-right text-[12px] leading-[1.5] tabular-nums
-          [&_caption]:text-left [&_caption]:p-3 [&_caption]:text-fg-soft [&_caption]:text-[11px]
-          [&_th]:[padding:9px_12px] [&_th]:[border-top:1px_solid_var(--border)] [&_th]:whitespace-nowrap
-          [&_td]:[padding:9px_12px] [&_td]:[border-top:1px_solid_var(--border)] [&_td]:whitespace-nowrap
-          [&_th]:font-medium [&_th:first-child]:text-left [&_thead_th]:sticky [&_thead_th]:top-0
-          [&_thead_th]:bg-card [&_thead_th]:text-[10px] [&_thead_th]:text-fg-soft
-          [&_.is-selected]:[background:var(--forecast-wash)] [&_.provisional]:m-0.5
-          [@media(max-width:_420px)]:[&_th]:p-2 [@media(max-width:_420px)]:[&_td]:p-2"><caption>Povijesne vrijednosti korištene u prikazu</caption>
-          <thead><tr><th scope="col">Razdoblje</th><th scope="col">Vrijednost</th><th scope="col">Status</th></tr></thead>
-          <tbody>{county.history.map((p) => <tr key={p.period}><th scope="row">{period(p.period)}</th>
-            <td>{p.value === null ? 'nema podatka' : value(p.value)}</td>
-            <td>{p.value === null ? 'nedostaje' : p.is_estimated || p.is_provisional ? <Flags point={p} /> : 'objavljeno'}</td>
-          </tr>)}</tbody>
-        </table>
+        <Table variant="numeric" containerClassName="contents" className="forecast-table w-full border-collapse text-right tabular-nums [&_caption]:text-left [&_caption]:p-3
+        [&_caption]:text-fg-soft [&_th]:[padding:9px_12px] [&_th]:[border-top:1px_solid_var(--border)]
+        [&_th]:whitespace-nowrap [&_td]:[padding:9px_12px] [&_td]:[border-top:1px_solid_var(--border)]
+        [&_td]:whitespace-nowrap [&_th]:font-medium [&_th:first-child]:text-left [&_thead_th]:sticky
+        [&_thead_th]:top-0 [&_thead_th]:text-fg-soft [&_.provisional]:m-0.5 [@media(max-width:_420px)]:[&_th]:p-2
+        [@media(max-width:_420px)]:[&_td]:p-2"><TableCaption>Povijesne vrijednosti korištene u prikazu</TableCaption>
+          <TableHeader><TableRow><TableHead scope="col" sticky="header">Razdoblje</TableHead><TableHead scope="col" sticky="header">Vrijednost</TableHead><TableHead scope="col" sticky="header">Status</TableHead></TableRow></TableHeader>
+          <TableBody>{county.history.map((p) => <TableRow key={p.period}><TableHead scope="row">{period(p.period)}</TableHead>
+            <TableCell>{p.value === null ? 'nema podatka' : value(p.value)}</TableCell>
+            <TableCell>{p.value === null ? 'nedostaje' : p.is_estimated || p.is_provisional ? <Flags point={p} /> : 'objavljeno'}</TableCell>
+          </TableRow>)}</TableBody>
+        </Table>
       </div>
-    </details>}
+      </CollapsibleContent>
+    </Collapsible>}
   </div>
 }
 

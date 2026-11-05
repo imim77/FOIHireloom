@@ -1,4 +1,4 @@
-import { Card, Notes } from '../../../../components/Card'
+import { EmptyState, Card, Notes } from '../../../../components/Card'
 import { formatInteger, formatMoment } from '../../../../utils/format'
 import { Sources } from '../../../../components/Sources'
 import { PortfolioAllocationChart } from '../../components/PortfolioAllocationChart'
@@ -10,7 +10,7 @@ export function AccommodationComparison({ data, allocation, onOpenLink }: {
   allocation: ReturnType<typeof useAllocation>
   onOpenLink: (url: string) => void
 }) {
-  if (!data) return <Card title="Smještaj u oglasima za posao" description="Učitavanje…" />
+  if (!data) return <Card title="Smještaj u oglasima za posao" description="Učitavanje…" loading />
   return (
     <Card title={data.title} description={data.description}>
       <div className="accommodation-comparison [--allocation-blue:#3155db] [--allocation-light:#dce8ff]
@@ -20,7 +20,7 @@ export function AccommodationComparison({ data, allocation, onOpenLink }: {
         {data.total_jobs > 0 ? <>
           <PortfolioAllocationChart {...allocation} />
           <p className="soft accommodation-known m-0 text-[12px] font-medium leading-[1.5] text-fg-soft [padding:0_12px]">Podatak o smještaju poznat je za {formatInteger(data.known_jobs)} od {formatInteger(data.total_jobs)} oglasa.</p>
-        </> : <p className="empty m-0 text-[14px] text-fg-soft">Nema oglasa za zadane filtre.</p>}
+        </> : <EmptyState>Nema oglasa za zadane filtre.</EmptyState>}
         <Sources onOpenLink={onOpenLink} links={[{ label: 'HZZ, Burza rada', url: 'https://burzarada.hzz.hr/' }]}>
           {data.coverage.data_as_of && <span>Oglasi provjereni {formatMoment(data.coverage.data_as_of)}</span>}
         </Sources>

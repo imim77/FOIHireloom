@@ -14,12 +14,11 @@ export function useAllocation(groups: AccommodationGroup[], total: number) {
   const shares = values.map((value) => visibleTotal ? value / visibleTotal * 100 : 0)
   const pick = (index: number | null) => index !== null && values[index] > 0 ? index : null
   const active = pick(hovered) ?? pick(previewed) ?? pick(selected)
-  function toggle(index: number) {
-    const key = groups[index].key
-    const off = hidden.includes(key)
-    if (!groups[index].jobs || (!off && shown.length <= 1)) return
-    setHidden(off ? hidden.filter((item) => item !== key) : [...hidden, key])
-    if (!off && selected === index) setSelected(null)
+  function showGroups(keys: string[]) {
+    const visible = groups.filter((group) => group.jobs > 0 && keys.includes(group.key))
+    if (!visible.length) return
+    setHidden(groups.filter((group) => group.jobs > 0 && !keys.includes(group.key)).map((group) => group.key))
+    if (selected !== null && !keys.includes(groups[selected].key)) setSelected(null)
   }
   function navigate(key: string) {
     if (key === 'Escape') { setHovered(null); setPreviewed(null); setSelected(null); return true }
@@ -43,6 +42,6 @@ export function useAllocation(groups: AccommodationGroup[], total: number) {
   }
 
   return { groups, total, hidden, values, shown, visibleTotal, shares, active,
-    sliderAt, sliderSlice, filtered, denominator, toggleGroup: toggle, selectGroup,
+    sliderAt, sliderSlice, filtered, denominator, showGroups, selectGroup,
     hoverGroup: setHovered, previewGroup: setPreviewed, navigate, resetGroups: () => setHidden([]) }
 }

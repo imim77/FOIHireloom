@@ -3,15 +3,23 @@
 import * as React from "react"
 import { cn } from "cn"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+function Table({ className, containerClassName, variant = "default", ...props }: React.ComponentProps<"table"> & {
+  containerClassName?: string
+  variant?: "default" | "comparison" | "numeric"
+}) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className={cn("relative w-full overflow-x-auto", containerClassName)}
     >
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
+        className={cn(
+          "w-full caption-bottom text-sm",
+          variant === "comparison" && "[&_th]:whitespace-normal [&_td]:whitespace-normal",
+          variant === "numeric" && "caption-top text-xs tabular-nums",
+          className
+        )}
         {...props}
       />
     </div>
@@ -28,11 +36,11 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   )
 }
 
-function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
+function TableBody({ className, tone = "default", ...props }: React.ComponentProps<"tbody"> & { tone?: "default" | "muted" }) {
   return (
     <tbody
       data-slot="table-body"
-      className={cn("[&_tr:last-child]:border-0", className)}
+      className={cn("[&_tr:last-child]:border-0", tone === "muted" && "[&_td]:bg-muted [&_th]:bg-muted", className)}
       {...props}
     />
   )
@@ -64,12 +72,14 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   )
 }
 
-function TableHead({ className, ...props }: React.ComponentProps<"th">) {
+function TableHead({ className, sticky, ...props }: React.ComponentProps<"th"> & { sticky?: "column" | "header" }) {
   return (
     <th
       data-slot="table-head"
       className={cn(
         "h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0",
+        sticky === "column" && "sticky left-0 z-1 bg-card shadow-[inset_-1px_0_0_var(--border)]",
+        sticky === "header" && "sticky top-0 bg-card",
         className
       )}
       {...props}
@@ -77,12 +87,13 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   )
 }
 
-function TableCell({ className, ...props }: React.ComponentProps<"td">) {
+function TableCell({ className, sticky = false, ...props }: React.ComponentProps<"td"> & { sticky?: boolean }) {
   return (
     <td
       data-slot="table-cell"
       className={cn(
         "p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0",
+        sticky && "sticky left-0 z-1 bg-card shadow-[inset_-1px_0_0_var(--border)]",
         className
       )}
       {...props}

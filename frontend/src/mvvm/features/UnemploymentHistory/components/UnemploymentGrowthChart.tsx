@@ -1,3 +1,5 @@
+import { Badge } from '@/components/ui/badge'
+import { EmptyState } from '@/components/Card'
 // Local adaptation of the supplied Keitoto RevenueGrowthChart: stat tiles, glowing curves and area fills,
 // dashed grid, nodes and a scrubber with triangle caps. Rates retain the original DZS gaps and provenance.
 import { animate, stagger } from 'animejs'
@@ -43,8 +45,7 @@ function Stat({ series, value, period, onEmphasis }: {
         {value?.rate != null ? <RateValue rate={value.rate} /> : <p className="growth-missing text-fg-soft text-[16px] leading-[30px]">nema podatka</p>}
         {period && <p className="growth-stat-month text-fg-soft text-[12px] leading-[1.4] [@media(max-width:_400px)]:text-[11px]">{formatMonth(period)}</p>}
       </div>
-      {value?.is_provisional && <span className="provisional inline-block [padding:1px_6px] rounded-full text-[11px] font-medium leading-[1.4]
-        whitespace-nowrap text-fg-soft [outline:1px_dashed_var(--fg-soft)] [outline-offset:-1px]">privremeno</span>}
+      {value?.is_provisional && <Badge variant="provisional" className="provisional">privremeno</Badge>}
     </section>
   )
 }
@@ -158,7 +159,7 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
           <line x1="19" y1="6" x2="27" y2="6" className="key-solid [stroke:var(--fg-soft)] [stroke-width:2] [stroke-linecap:round]" />
         </svg>prekid: nema podatka</li>}
       </ul>
-      {known.length === 0 ? <div ref={plot}><p className="empty m-0 text-[14px] text-fg-soft">Za odabrano razdoblje nema poznatih stopa nezaposlenosti.</p></div> : <>
+      {known.length === 0 ? <div ref={plot}><EmptyState>Za odabrano razdoblje nema poznatih stopa nezaposlenosti.</EmptyState></div> : <>
         <div className="growth-plot-heading flex flex-wrap justify-between [gap:6px_16px] text-fg-soft text-[12px] [&_p]:m-0"><p>Stopa registrirane nezaposlenosti (%)</p>
           <p>{point && formatMonth(point.period)}</p></div>
         <div className="growth-axes flex gap-3 min-w-0 [@media(max-width:_400px)]:gap-2">

@@ -5,7 +5,14 @@
 // chart's grid lines and the details come in one after another.
 
 import { animate, stagger, utils } from 'animejs'
-import { useRef } from 'react'
+import { useId, useRef } from 'react'
+import { ExternalLinkIcon, MessageCircleIcon, type LucideIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card as SurfaceCard, CardContent, CardHeader } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Field, FieldLabel } from '@/components/ui/field'
+import { Separator } from '@/components/ui/separator'
 import { fadeIn, finish, releaseStyles, useChartEntrance } from '../../../hooks/chart-motion'
 import { FEED_CATEGORY, sentenceCase } from '../../../utils/text'
 import { age, type DetailKind, details } from '../utils/job-format'
@@ -32,9 +39,6 @@ export interface CardCompare {
   onChange: () => void
 }
 
-const OPEN_ICON = ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5']
-const ASK_ICON = ['M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z', 'M8.5 12h.01', 'M12 12h.01', 'M15.5 12h.01']
-
 // 24px outline icons, one per kind of detail.
 const DETAIL_ICONS: Record<DetailKind, string[]> = {
   place: ['M12 21s-7-6.1-7-11.5a7 7 0 0 1 14 0C19 14.9 12 21 12 21Z', 'M12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z'],
@@ -58,17 +62,15 @@ function Icon({ paths }: { paths: string[] }) {
 }
 
 /** An action at the end of the label row: its icon pops when pressed. */
-function Action({ label, icon, onClick }: { label: string; icon: string[]; onClick: () => void }) {
+function Action({ label, icon: IconComponent, onClick }: { label: string; icon: LucideIcon; onClick: () => void }) {
   return (
-    <button className="icon-button grid place-items-center flex-none w-9 h-9 p-0 rounded-[10px] border border-border bg-card
-      text-fg-loud cursor-pointer [&:hover]:bg-surface-subdued [&:focus-visible]:[outline:none]
-      [&:focus-visible]:shadow-focus [&_svg]:w-4.5 [&_svg]:h-4.5" type="button" title={label} aria-label={label} onClick={(event) => {
+    <Button className="icon-button" variant="outline" size="icon" type="button" title={label} aria-label={label} onClick={(event) => {
       finish(animate(event.currentTarget.firstElementChild!, { scale: [0.7, 1], duration: 500, ease: 'outBack(2.4)',
         onComplete: releaseStyles('transform') }))
       onClick()
     }}>
-      <Icon paths={icon} />
-    </button>
+      <IconComponent data-icon="inline-start" aria-hidden="true" />
+    </Button>
   )
 }
 
@@ -85,7 +87,8 @@ export function JobCardView({ job, today, order, actions, compare }: {
   // Employers are written in capitals, as HZZ writes most of them; the placeholder is not a name and stays as it is.
   const employer = job.employer_name?.toLocaleUpperCase('hr-HR') ?? 'Poslodavac nije naveden'
   const title = sentenceCase(job.display_title)
-  const root = useRef<HTMLElement>(null)
+  const root = useRef<HTMLDivElement>(null)
+  const compareId = useId()
 
   useChartEntrance(root, (timeline) => {
     const card = root.current!
@@ -109,61 +112,50 @@ export function JobCardView({ job, today, order, actions, compare }: {
   })
 
   return (
-    <article className="job @container flex flex-col gap-3 min-w-0 p-4 rounded-[16px] bg-card
-      [box-shadow:0_1px_2px_rgb(40_40_40_/_0.08),_0_0_0_1px_var(--border)]" ref={root} data-slot="job" data-id={job.id} aria-label={`${title}, ${employer}`}>
-      <div className="job-top flex items-center gap-2 min-w-0 [&_.icon-button]:w-8 [&_.icon-button]:h-8
-        [&_.icon-button]:rounded-[8px] [&_.icon-button_svg]:w-4 [&_.icon-button_svg]:h-4">
-        <ul className="labels flex flex-1 flex-wrap gap-1.5 min-w-0 m-0 p-0 [list-style:none]" aria-label="Oznake">
-          {published && <li className="label age [padding:4px_8px] rounded-[6px] text-[12px] font-medium leading-[1.25] bg-surface-subdued
-            text-fg-loud [&.age]:bg-green-tint [&.age]:text-green-on-tint [&.feed]:bg-card
-            [&.feed]:[outline:1px_dashed_var(--fg-soft)] [&.feed]:[outline-offset:-1px] [&.feed]:cursor-help" data-slot="label">{published}</li>}
+    <SurfaceCard className="job @container min-w-0" role="article" ref={root} data-slot="job" data-id={job.id} aria-label={`${title}, ${employer}`}>
+      <CardHeader className="job-top flex min-w-0 flex-row flex-wrap items-center gap-2">
+        <ul className="labels flex basis-full flex-1 flex-wrap gap-1.5 min-w-0 m-0 p-0 [list-style:none]" aria-label="Oznake">
+          {published && <li data-slot="label" className="min-w-0 max-w-full"><Badge className="label age" variant="success">{published}</Badge></li>}
           {job.category && (
-            <li className={`label [padding:4px_8px] rounded-[6px] text-[12px] font-medium leading-[1.25] bg-surface-subdued
-              text-fg-loud [&.age]:bg-green-tint [&.age]:text-green-on-tint [&.feed]:bg-card
-              [&.feed]:[outline:1px_dashed_var(--fg-soft)] [&.feed]:[outline-offset:-1px] [&.feed]:cursor-help ${job.category_source === 'feed' ? ' feed' : ''}`} data-slot="label"
-              title={job.category_source === 'feed' ? FEED_CATEGORY : undefined}>
-              {sentenceCase(job.category)}
-            </li>
+            <li data-slot="label" className="min-w-0 max-w-full"><Badge variant={job.category_source === 'feed' ? 'provisional' : 'secondary'} className="label max-w-full" title={job.category_source === 'feed' ? FEED_CATEGORY : undefined}>
+              <span className="truncate">{sentenceCase(job.category)}</span>
+            </Badge></li>
           )}
         </ul>
         {compare && (
-          <label className={`compare-toggle inline-flex flex-none items-center gap-1.5 h-8 [padding:0_10px_0_8px] border
-            border-border rounded-[8px] bg-card text-fg-loud text-[12px] font-semibold cursor-pointer select-none
-            [&:hover:not(:has(input:disabled))]:bg-surface-subdued [&:has(input:focus-visible)]:shadow-focus
-            [&.checked]:bg-green-tint [&.checked]:text-green-on-tint [&.checked]:[border-color:transparent]
-            [&:has(input:disabled)]:text-fg-soft [&:has(input:disabled)]:cursor-not-allowed [&_input]:w-3.5
-            [&_input]:h-3.5 [&_input]:m-0 [&_input]:[accent-color:var(--green-on-tint)]
-            [&_input]:[cursor:inherit] [&_input:focus-visible]:[outline:none] ${compare.checked ? ' checked' : ''}`}
+          <Field orientation="horizontal" className="compare-toggle w-auto shrink-0" data-disabled={compare.disabled}
             title={compare.disabled ? 'Usporediti se mogu najviše 3 oglasa' : undefined}>
-            <input type="checkbox" checked={compare.checked} disabled={compare.disabled} onChange={compare.onChange}
-              aria-label={`Usporedi oglas ${title}`} />
-            <span aria-hidden="true">Usporedi</span>
-          </label>
+            <Checkbox id={compareId} checked={compare.checked} disabled={compare.disabled}
+              onCheckedChange={compare.onChange} aria-label={`Usporedi oglas ${title}`} />
+            <FieldLabel htmlFor={compareId} aria-hidden="true">Usporedi</FieldLabel>
+          </Field>
         )}
-        <Action label="Otvori oglas na HZZ-u" icon={OPEN_ICON} onClick={() => actions.open(job)} />
-        {actions.ask && <Action label="Pitaj o ovom oglasu" icon={ASK_ICON} onClick={() => actions.ask?.(job)} />}
-      </div>
-      <div className="job-heading flex flex-col gap-1 min-w-0">
-        <h2 className="job-title m-0 text-[18px] font-bold leading-[1.25] [overflow-wrap:anywhere]">{title}</h2>
-        <p className="employer-line m-0 text-[13px] font-medium leading-[1.35] text-fg-loud [overflow-wrap:anywhere] [&_.where]:text-fg-soft">
-          <span className="employer" title={employer}>{employer}</span>
-          {job.county_name && <> / <span className="where">{job.county_name}</span></>}
-        </p>
-      </div>
-      {items.length > 0 && <span className="rule block h-px bg-border [transform-origin:left]" aria-hidden="true" data-slot="rule" />}
-      {items.length > 0 && (
-        <ul className="details grid [grid-template-columns:repeat(3,_minmax(0,_1fr))] [gap:8px_16px] m-0 p-0 [list-style:none]
-          [@container(max-width:_520px)]:[grid-template-columns:repeat(2,_minmax(0,_1fr))]" aria-label="Uvjeti">
-          {items.map((item) => (
-            <li key={item.kind} className={`detail flex items-center gap-2 min-w-0 text-[13px] leading-[1.3] text-fg-loud [&_svg]:flex-none
-              [&_svg]:w-4 [&_svg]:h-4 [&_svg]:text-fg-soft [&_span]:min-w-0 [&_span]:overflow-hidden
-              [&_span]:whitespace-nowrap [&_span]:text-ellipsis ${item.kind}`} data-slot="detail">
-              <Icon paths={DETAIL_ICONS[item.kind]} />
-              <span>{item.text}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </article>
+        <Action label="Otvori oglas na HZZ-u" icon={ExternalLinkIcon} onClick={() => actions.open(job)} />
+        {actions.ask && <Action label="Pitaj o ovom oglasu" icon={MessageCircleIcon} onClick={() => actions.ask?.(job)} />}
+      </CardHeader>
+      <CardContent className="flex min-w-0 flex-col gap-3">
+        <div className="job-heading flex flex-col gap-1 min-w-0">
+          <h2 className="job-title m-0 text-[18px] font-bold leading-[1.25] [overflow-wrap:anywhere]">{title}</h2>
+          <p className="employer-line m-0 text-[13px] font-medium leading-[1.35] text-fg-loud [overflow-wrap:anywhere] [&_.where]:text-fg-soft">
+            <span className="employer" title={employer}>{employer}</span>
+            {job.county_name && <> / <span className="where">{job.county_name}</span></>}
+          </p>
+        </div>
+        {items.length > 0 && <Separator className="rule origin-left" aria-hidden="true" data-slot="rule" />}
+        {items.length > 0 && (
+          <ul className="details grid [grid-template-columns:repeat(3,_minmax(0,_1fr))] [gap:8px_16px] m-0 p-0 [list-style:none]
+            [@container(max-width:_520px)]:[grid-template-columns:repeat(2,_minmax(0,_1fr))]" aria-label="Uvjeti">
+            {items.map((item) => (
+              <li key={item.kind} className={`detail flex items-center gap-2 min-w-0 text-[13px] leading-[1.3] text-fg-loud [&_svg]:flex-none
+                [&_svg]:w-4 [&_svg]:h-4 [&_svg]:text-fg-soft [&_span]:min-w-0 [&_span]:overflow-hidden
+                [&_span]:whitespace-nowrap [&_span]:text-ellipsis ${item.kind}`} data-slot="detail">
+                <Icon paths={DETAIL_ICONS[item.kind]} />
+                <span>{item.text}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </SurfaceCard>
   )
 }

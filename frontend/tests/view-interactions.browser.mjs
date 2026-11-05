@@ -1,10 +1,30 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { views, pageFor, open } from '../test-support/mcp-host.mjs'
+import { views, pageFor, open, deliver } from '../test-support/mcp-host.mjs'
 import { sample as countySample } from '../src/mvvm/features/CountyComparison/utils/sample.ts'
 import { sample as forecastSample } from '../src/mvvm/features/LabourMarketForecast/utils/sample.ts'
 import { sample as historySample } from '../src/mvvm/features/UnemploymentHistory/utils/sample.ts'
 import { sample as accommodationSample } from '../src/mvvm/features/AccommodationComparison/utils/sample.ts'
+import { sample as jobSample } from '../src/mvvm/features/JobCards/utils/sample.ts'
+
+test('loading placeholders give way to accessible shadcn controls at mobile width', async () => {
+  const page = await pageFor('/?view=job-cards', 320)
+  try {
+    await page.waitForFunction(() => window.ready)
+    const frame = page.frames().find((frame) => frame.url().includes('/view/'))
+    await frame.locator('.card[aria-busy="true"]').waitFor()
+    assert.equal(await frame.locator('[data-slot="skeleton"]').count(), 2)
+    await deliver(page, frame, jobSample())
+    await frame.locator('.card[aria-busy="false"]').waitFor()
+    assert.equal(await frame.locator('[data-slot="skeleton"]').count(), 0)
+    const checkbox = frame.getByRole('checkbox').first()
+    await checkbox.focus()
+    await checkbox.press('Space')
+    assert.equal(await checkbox.isChecked(), true)
+    assert.equal(await frame.getByRole('button', { name: 'Usporedi odabrane (1)' }).isDisabled(), true)
+    assert.equal(await frame.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
+  } finally { await page.close() }
+})
 
 test('all standalone previews render with shared styling and both themes at mobile width', async () => {
   for (const view of views) {

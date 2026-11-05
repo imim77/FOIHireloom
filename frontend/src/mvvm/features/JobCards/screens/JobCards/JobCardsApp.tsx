@@ -20,7 +20,7 @@ function Session({ app, initial, ...expansion }: {
 export function JobCardsApp() {
   const mcp = useMcpApp<JobCardsData>('FOIHireloom job cards', sample)
   const expansion = useExpanded(mcp)
-  if (!mcp.data) return <Card sunken title="Oglasi" description="Učitavanje…" />
+  if (!mcp.data) return <Card sunken title="Oglasi" description="Učitavanje…" loading />
   // New host results discard local pages, filter changes and comparison picks.
   return <Session key={mcp.revision} initial={mcp.data} app={mcp.app} {...expansion} />
 }

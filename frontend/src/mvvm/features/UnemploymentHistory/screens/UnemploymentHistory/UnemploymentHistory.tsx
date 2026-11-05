@@ -1,3 +1,5 @@
+import { cn } from 'cn'
+import { Badge } from '@/components/ui/badge'
 // show_unemployment_history: the counties' monthly registered unemployment rate (DZS) as lines, a legend that also
 // explains the provisional band and the gaps, and per county the latest rate against the same month a year earlier.
 // The tiles fade in one after another once the lines have drawn in.
@@ -20,7 +22,7 @@ export function UnemploymentHistory({ data, chart, onOpenLink }: {
   chart: ReturnType<typeof useHistoryChart>
   onOpenLink: (url: string) => void
 }) {
-  if (!data) return <Card title="Stopa registrirane nezaposlenosti" description="Učitavanje…" />
+  if (!data) return <Card title="Stopa registrirane nezaposlenosti" description="Učitavanje…" loading />
   const charted = data.counties.some((county) => county.series.length)
   return (
     <Card title={data.title} description={data.description}>
@@ -83,8 +85,7 @@ function Tile({ county, index }: { county: CountyHistory; index: number }) {
         <div className="tile-latest flex flex-col gap-1.5 [&_.soft]:flex [&_.soft]:items-center [&_.soft]:gap-1.5">
           <p className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft">
             {formatMonth(latest.period)}
-            {latest.is_provisional && <span className="provisional inline-block [padding:1px_6px] rounded-full text-[11px] font-medium leading-[1.4]
-              whitespace-nowrap text-fg-soft [outline:1px_dashed_var(--fg-soft)] [outline-offset:-1px]">privremeno</span>}
+            {latest.is_provisional && <Badge variant="provisional" className="provisional">privremeno</Badge>}
           </p>
           <p className={latest.rate === null ? "tile-missing text-[13px] italic text-fg-soft" : "big m-0 text-[28px] font-semibold leading-[1] whitespace-nowrap tabular-nums"}>
             {latest.rate === null ? 'nema podatka' : formatRate(latest.rate)}
@@ -98,29 +99,19 @@ function Tile({ county, index }: { county: CountyHistory; index: number }) {
       )}
       {change !== null ? (
         <p className="tile-change flex flex-col items-start gap-1 [&_.soft]:font-normal [&_.soft]:leading-[1.35]">
-          <span className={`change inline-flex items-center gap-1 [padding:2px_8px] rounded-full text-[12px] font-semibold
-            leading-[1.4] whitespace-nowrap tabular-nums [&_svg]:w-3 [&_svg]:h-3 [&_svg]:[fill:none]
-            [&_svg]:[stroke:currentColor] [&_svg]:[stroke-width:1.8] [&_svg]:[stroke-linecap:round]
-            [&_svg]:[stroke-linejoin:round] [&.down]:bg-green-tint [&.down]:text-green-on-tint
-            [&.up]:bg-warning-bg [&.up]:text-warning-fg [&.same]:bg-surface-subdued [&.same]:text-fg-soft
-            [&.none]:bg-surface-subdued [&.none]:text-fg-soft ${direction}`}>
+          <Badge className={cn('change', direction)} variant={direction === 'down' ? 'success' : direction === 'up' ? 'warning' : 'secondary'}>
             {direction !== 'same' && (
               <svg viewBox="0 0 12 12" aria-hidden="true">
                 <path d={direction === 'down' ? 'M6 2v8M2.5 6.5 6 10l3.5-3.5' : 'M6 10V2M2.5 5.5 6 2l3.5 3.5'} />
               </svg>
             )}
             {formatPoints(change)}
-          </span>
+          </Badge>
           <span className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft">prema istom mjesecu prošle godine</span>
         </p>
       ) : (
         <p className="tile-change unavailable flex flex-col items-start gap-1 [&_.soft]:font-normal [&_.soft]:leading-[1.35]">
-          <span className="change none inline-flex items-center gap-1 [padding:2px_8px] rounded-full text-[12px] font-semibold
-            leading-[1.4] whitespace-nowrap tabular-nums [&_svg]:w-3 [&_svg]:h-3 [&_svg]:[fill:none]
-            [&_svg]:[stroke:currentColor] [&_svg]:[stroke-width:1.8] [&_svg]:[stroke-linecap:round]
-            [&_svg]:[stroke-linejoin:round] [&.down]:bg-green-tint [&.down]:text-green-on-tint
-            [&.up]:bg-warning-bg [&.up]:text-warning-fg [&.same]:bg-surface-subdued [&.same]:text-fg-soft
-            [&.none]:bg-surface-subdued [&.none]:text-fg-soft">promjena nije dostupna</span>
+          <Badge className="change none" variant="secondary">promjena nije dostupna</Badge>
           {county.change_unavailable_label && <span className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft">{county.change_unavailable_label}</span>}
         </p>
       )}

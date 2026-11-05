@@ -1,5 +1,6 @@
+import { Button } from '@/components/ui/button'
 import { animate } from 'animejs'
-import { Card, ExpandButton, Notes, Warning } from '../../../../components/Card'
+import { EmptyState, Card, ExpandButton, Notes, Warning } from '../../../../components/Card'
 import { FilterChips } from '../../../../components/FilterChips'
 import { finish, releaseStyles } from '../../../../hooks/chart-motion'
 import { formatAds } from '../../../../utils/format'
@@ -29,30 +30,18 @@ export function JobCards({ data, cards, loading, error, actions, comparison,
           ))}
         </div>
       ) : (
-        <p className="empty m-0 text-[14px] text-fg-soft">Nema aktivnih oglasa za zadane filtre.</p>
+        <EmptyState>Nema aktivnih oglasa za zadane filtre.</EmptyState>
       )}
       {comparison && (
         <div className="compare-bar flex flex-wrap items-center [gap:8px_12px] [padding:10px_12px] rounded-[12px]
           bg-surface-sunken animate-fade-in [&_.soft]:[flex:1_1_200px] [&_.more:disabled]:cursor-not-allowed
           motion-reduce:[animation:none]">
           <p className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft" role="status">{comparison.hint}</p>
-          <button className="more flex-none h-9 [padding:0_14px] border border-border rounded-[10px] bg-card text-fg-loud
-            [font-family:inherit] text-[12px] font-semibold [font-style:inherit] leading-[inherit] cursor-pointer
-            [&:hover:not(:disabled)]:bg-surface-subdued [&:focus-visible]:[outline:none]
-            [&:focus-visible]:shadow-focus [&:disabled]:text-fg-soft [&:disabled]:cursor-progress
-            [&.primary]:[border-color:transparent] [&.primary]:bg-surface-muted [&.primary]:text-fg-on-muted
-            [&.primary:hover:not(:disabled)]:bg-surface-muted [&.primary:hover:not(:disabled)]:[opacity:0.9]
-            [&.primary:disabled]:bg-surface-disable [&.primary:disabled]:text-fg-on-muted" type="button" onClick={comparison.clear}>Poništi odabir</button>
-          <button className="more primary flex-none h-9 [padding:0_14px] border border-border rounded-[10px] bg-card text-fg-loud
-            [font-family:inherit] text-[12px] font-semibold [font-style:inherit] leading-[inherit] cursor-pointer
-            [&:hover:not(:disabled)]:bg-surface-subdued [&:focus-visible]:[outline:none]
-            [&:focus-visible]:shadow-focus [&:disabled]:text-fg-soft [&:disabled]:cursor-progress
-            [&.primary]:[border-color:transparent] [&.primary]:bg-surface-muted [&.primary]:text-fg-on-muted
-            [&.primary:hover:not(:disabled)]:bg-surface-muted [&.primary:hover:not(:disabled)]:[opacity:0.9]
-            [&.primary:disabled]:bg-surface-disable [&.primary:disabled]:text-fg-on-muted" type="button" disabled={!comparison.canCompare}
+          <Button variant="outline" size="lg" className="more" type="button" onClick={comparison.clear}>Poništi odabir</Button>
+          <Button variant="default" size="lg" className="more primary" type="button" disabled={!comparison.canCompare}
             onClick={() => void comparison.submit()}>
             Usporedi odabrane ({comparison.count})
-          </button>
+          </Button>
         </div>
       )}
       <Warning text={error} />
@@ -60,19 +49,13 @@ export function JobCards({ data, cards, loading, error, actions, comparison,
         <div className="cards-foot flex items-center gap-3 [&_.soft]:flex-1">
           <p className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft">Prikazano {formatAds(cards.length)}</p>
           {loadMore && (
-            <button className="more flex-none h-9 [padding:0_14px] border border-border rounded-[10px] bg-card text-fg-loud
-              [font-family:inherit] text-[12px] font-semibold [font-style:inherit] leading-[inherit]
-              cursor-pointer [&:hover:not(:disabled)]:bg-surface-subdued [&:focus-visible]:[outline:none]
-              [&:focus-visible]:shadow-focus [&:disabled]:text-fg-soft [&:disabled]:cursor-progress
-              [&.primary]:[border-color:transparent] [&.primary]:bg-surface-muted [&.primary]:text-fg-on-muted
-              [&.primary:hover:not(:disabled)]:bg-surface-muted [&.primary:hover:not(:disabled)]:[opacity:0.9]
-              [&.primary:disabled]:bg-surface-disable [&.primary:disabled]:text-fg-on-muted" type="button" disabled={loading} onClick={(event) => {
+            <Button variant="outline" size="lg" className="more" type="button" disabled={loading} onClick={(event) => {
               finish(animate(event.currentTarget, { scale: [0.94, 1], duration: 400, ease: 'outBack(2)',
                 onComplete: releaseStyles('transform') }))
               void loadMore()
             }}>
               {loading ? 'Učitavanje…' : 'Prikaži još oglasa'}
-            </button>
+            </Button>
           )}
         </div>
       )}

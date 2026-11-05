@@ -85,6 +85,26 @@ function withCounts(counts) {
   return data
 }
 
+test('legend keyboard toggles retain at least one positive group and restore original shares', async () => {
+  const { page, frame } = await open(320, { reducedMotion: 'reduce' })
+  try {
+    await deliver(page, frame, withCounts([2, 7, 0]))
+    const groups = frame.locator('.allocation-legend-item')
+    await groups.nth(0).focus()
+    await groups.nth(0).press('Space')
+    assert.equal(await groups.nth(0).getAttribute('aria-pressed'), 'false')
+    await groups.nth(1).focus()
+    await groups.nth(1).press('Space')
+    assert.equal(await groups.nth(1).getAttribute('aria-pressed'), 'true')
+    assert.equal(await groups.nth(2).isDisabled(), true)
+    await groups.nth(0).focus()
+    await groups.nth(0).press('Space')
+    assert.equal(await groups.nth(0).getAttribute('aria-pressed'), 'true')
+    assert.equal(await frame.locator('.allocation-filter-note').count(), 0)
+    assert.deepEqual(await frame.locator('.allocation-legend-count').allTextContents(), ['2', '7', '0'])
+  } finally { await page.close() }
+})
+
 test('real sample renders counts, percentages, source, filters and freshness with reference ring and glass pills', async () => {
   const { page, frame } = await open()
   try {

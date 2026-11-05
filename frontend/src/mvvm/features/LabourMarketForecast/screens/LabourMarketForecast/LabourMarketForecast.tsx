@@ -12,7 +12,7 @@ export function LabourMarketForecast({ data, onOpenLink, children }: {
     dark:[--forecast-line:#5dd7de] dark:[--forecast-history:#b0bdcf] dark:[--forecast-wash:#163437]
     [&_.title]:whitespace-normal [&_.title]:overflow-visible [&_.titles_>_.soft]:whitespace-normal
     [&_.titles_>_.soft]:overflow-visible [&_.body]:min-w-0 [@media(max-width:_420px)]:[&_.card]:p-3.5">
-    <Card title={data?.title ?? 'Chronos prognoza za županiju'} description={data?.description ?? 'Učitavanje…'}>
+    <Card loading={!data} title={data?.title ?? 'Chronos prognoza za županiju'} description={data?.description ?? 'Učitavanje…'}>
       {data && <>
         <Warning text={data.unavailable_label} />
         {children}

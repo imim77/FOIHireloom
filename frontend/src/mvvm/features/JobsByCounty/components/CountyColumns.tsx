@@ -1,3 +1,5 @@
+import { Button } from '@/components/ui/button'
+import { cn } from 'cn'
 // The counties as 3D columns, after the "Investment App User Age Chart" from the Keitoto library: the active county
 // is orange with its count in orange and its name in a dark pill, the others grey; the selected county's workers sought
 // stand over the chart. Hover previews a county, click or the arrow keys select one. Animated with anime.js: the
@@ -225,9 +227,7 @@ export function CountyColumns({ counties, values, selected, active, county, work
             onPointerLeave={() => hoverCounty(null)}>
             <BarGradients ids={ids} />
             {counties.map((county, i) => (
-              <button key={i} type="button" data-slot="column" className={`column [font-family:Arial,sans-serif] relative flex-1 min-w-0 p-0 [border:0] [background:none]
-                cursor-pointer [outline:none] [&.active_.value]:font-semibold [&.active_.value]:text-orange-500
-                [&:focus-visible_.focus-ring]:[opacity:1] ${i === active ? ' active' : ''}`}
+              <Button variant="ghost" key={i} type="button" data-slot="column" className={cn('column relative h-full min-w-0 flex-1 p-0', i === active && 'active')}
                 aria-label={`${county.name}: ${formatAds(county.jobs)}, ${formatWorkers(county.workers_needed)}, `
                   + formatShare(county.share)}
                 aria-pressed={i === selected} tabIndex={i === selected ? 0 : -1}
@@ -250,7 +250,7 @@ export function CountyColumns({ counties, values, selected, active, county, work
                 {/* keyboard focus rings the column */}
                 <span className="focus-ring absolute [inset:-4px] [z-index:1] rounded-[12px] pointer-events-none [opacity:0]
                   shadow-focus [transition:opacity_150ms]" aria-hidden="true" />
-              </button>
+              </Button>
             ))}
           </div>
           <div className="axis relative flex gap-2" aria-hidden="true">

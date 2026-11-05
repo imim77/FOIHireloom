@@ -14,7 +14,7 @@ export function JobComparison({ data, expanded, toggle, onOpenLink }: {
   toggle: () => void
   onOpenLink: (url: string) => void
 }) {
-  if (!data) return <Card sunken title="Usporedba oglasa" description="Učitavanje…" />
+  if (!data) return <Card sunken title="Usporedba oglasa" description="Učitavanje…" loading />
   return (
     <Card sunken title={data.title} description={data.description} actions={(
       <ExpandButton expanded={expanded} label={expanded ? 'Smanji prikaz' : 'Prikaži usporedbu preko cijelog zaslona'}

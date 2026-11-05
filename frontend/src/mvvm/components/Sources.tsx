@@ -1,3 +1,4 @@
+import { Button } from './ui/button'
 import type { ReactNode } from 'react'
 import type { SourceLink } from '../types'
 
@@ -17,13 +18,9 @@ export function Sources({ onOpenLink, links, children }: {
             <span key={link.label}>
               {i > 0 && ', '}
               {link.url ? (
-                <button type="button" className="link inline p-0 [border:0] [background:none] [font-family:inherit] text-[inherit]
-                  [font-weight:inherit] [font-style:inherit] leading-[inherit] text-fg-loud underline
-                  [text-decoration-color:var(--surface-disable)] [text-underline-offset:2px] cursor-pointer
-                  text-left [&:hover]:[text-decoration-color:currentColor] [&:focus-visible]:[outline:none]
-                  [&:focus-visible]:rounded-[4px] [&:focus-visible]:shadow-focus" title={link.url} onClick={() => onOpenLink(link.url!)}>
+                <Button type="button" variant="link" size="xs" className="link h-auto p-0" title={link.url} onClick={() => onOpenLink(link.url!)}>
                   {link.label}
-                </button>
+                </Button>
               ) : link.label}
             </span>
           ))}
