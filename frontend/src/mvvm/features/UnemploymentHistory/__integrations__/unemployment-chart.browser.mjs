@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
-import { sample } from '../src/mvvm/features/UnemploymentHistory/utils/sample.ts'
+import { sample } from '../utils/sample.ts'
 
 // Exercise the production single-file page over the same postMessage protocol as an MCP Apps host.
 // No dev-server globals or React state injection: every update arrives as a tool-result notification.
@@ -39,7 +39,7 @@ let server, browser, base
 const errors = []
 const remoteRequests = []
 before(async () => {
-  const html = await readFile(new URL('../dist/unemployment-history.html', import.meta.url), 'utf8')
+  const html = await readFile(new URL('../../../../../dist/unemployment-history.html', import.meta.url), 'utf8')
   server = createServer((req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8')
     res.end(req.url === '/view' ? html : host)

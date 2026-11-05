@@ -4,8 +4,8 @@ import { createServer } from 'node:http'
 import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
-import { sample } from '../src/mvvm/features/AccommodationComparison/utils/sample.ts'
-import { INNER, layoutRing } from '../src/mvvm/features/AccommodationComparison/utils/ring-geometry.ts'
+import { sample } from '../utils/sample.ts'
+import { INNER, layoutRing } from '../utils/ring-geometry.ts'
 
 // A minimal MCP Apps host sends actual protocol messages into the built page; no app-state injection.
 const host = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0">
@@ -26,7 +26,7 @@ addEventListener('message',event=>{
 let server, browser, base
 const errors = [], remote = []
 before(async () => {
-  const html = await readFile(new URL('../dist/accommodation-comparison.html', import.meta.url), 'utf8')
+  const html = await readFile(new URL('../../../../../dist/accommodation-comparison.html', import.meta.url), 'utf8')
   server = createServer((req, res) => { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(req.url === '/view' ? html : host) })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   base = `http://127.0.0.1:${server.address().port}`

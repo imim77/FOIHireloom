@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { INNER, SIZE, interpolateGeometry, layoutRing, pillPlace, sliceAt, slicePath } from '../src/mvvm/features/AccommodationComparison/utils/ring-geometry.ts'
+import { INNER, SIZE, interpolateGeometry, layoutRing, pillPlace, sliceAt, slicePath } from './ring-geometry.ts'
 
 test('three statuses partition the ring by ad count, preserving the reference stepped bands', () => {
   const geometry = layoutRing([2, 7, 1])

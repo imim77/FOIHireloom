@@ -7,8 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && node build-views.mjs",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types --test tests/*.test.mjs",
-    "test:browser": "node --experimental-strip-types --test tests/*.browser.mjs",
+    "test": "node --experimental-strip-types --test src/mvvm/features/*/utils/*.test.mjs",
+    "test:browser": "node --experimental-strip-types --test src/mvvm/features/*/__integrations__/*.browser.mjs tests/*.browser.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
