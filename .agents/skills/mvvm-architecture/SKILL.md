@@ -30,24 +30,50 @@ Views may use hooks for presentation concerns such as focus, measurement, or
 animation. Keep business decisions and external communication in the ViewModel
 or adapters. Static components do not need an empty ViewModel or container.
 
-## Fit the existing project
+## Project structure
 
-- Keep screen code under `frontend/src/views/<view-name>/` and reusable frontend
-  code under `frontend/src/shared/`. Share code only when there is a concrete
-  reuse need; keep screen-specific helpers close to their screen.
+Use `frontend/src/mvvm/` with these ownership boundaries:
+
+```text
+mvvm/
+├── features/<FeatureName>/
+│   ├── __integrations__/       # Required browser integration tests
+│   ├── components/             # Feature presentation components
+│   ├── screens/<ScreenName>/   # Container, screen View, and main.tsx
+│   ├── hooks/                  # ViewModels and feature motion hooks
+│   ├── utils/                  # Pure helpers, unit tests, preview samples
+│   └── types.ts                # Feature tool-result contracts
+├── components/                 # App-wide UI
+├── hooks/                      # Host connection, requests, expansion, motion
+├── utils/                      # Host actions, formatting, mounting, job contracts
+├── types.ts                    # Shared tool-result contracts
+└── tailwind.css                # Shared theme and Tailwind entry
+```
+
+- Keep the seven existing feature names: `JobCards`, `JobComparison`,
+  `CountyComparison`, `JobsByCounty`, `UnemploymentHistory`,
+  `AccommodationComparison`, and `LabourMarketForecast`. Choose ownership by
+  responsibility when adding code; create subfolders when they hold code.
+- Every feature must have meaningful browser tests in `__integrations__/`.
+  Exercise user behavior and host integration, rather than asserting folders.
+  Shared browser-host support lives in `frontend/test-support/`; tests spanning
+  several features remain in `frontend/tests/`.
+- Keep HTML entries in `frontend/src/pages/<view-name>.html`. They reference
+  the screen's `main.tsx`, which mounts its `<ScreenName>App.tsx` container.
 - Follow existing names: PascalCase components, kebab-case hook files such as
   `use-job-cards.ts`, and local `types.ts` contracts. Name new hooks after their
   screen responsibility; a `ViewModel` suffix is optional.
-- Use `frontend/src/views/job-cards/use-job-cards.ts` as an existing example of
+- Use `features/JobCards/hooks/use-job-cards.ts` as an existing example of
   screen behavior, rather than introducing a parallel state architecture.
-- Reuse `frontend/src/shared/use-server-tool.ts` for server-tool requests and
-  `frontend/src/shared/mcp.ts` for host interactions where appropriate. Pass
+- Reuse `mvvm/hooks/use-server-tool.ts` for server-tool requests,
+  `mvvm/hooks/use-mcp-app.ts` for connections, `mvvm/hooks/use-expanded.ts` for
+  expansion, and `mvvm/utils/mcp.ts` for host actions. Pass
   dependencies through hook arguments or existing composition boundaries so
   behavior can be tested with substitutes.
 - Keep `main.tsx` and existing mount helpers as entry points. Extract a separate
   container component only when it clarifies ownership.
 - Style views with Tailwind utilities and the shared theme in
-  `frontend/src/shared/tailwind.css`. Preserve accessible HTML and existing
+  `frontend/src/mvvm/tailwind.css`. Preserve accessible HTML and existing
   responsive behavior.
 - Follow existing relative imports. Add no state library, UI framework, path
   aliases, monorepo packages, or platform-specific view variants for MVVM alone.
@@ -86,6 +112,6 @@ handling as relevant. Verify that Views render their props and invoke callbacks;
 use browser coverage when the change affects user interaction or layout.
 
 Use the existing frontend scripts (`npm test`, `npm run lint`, `npm run build`,
-and `npm run test:browser`) from `frontend/` as appropriate to the change. Keep
-the existing test layout; do not add empty test directories or tests that only
-assert this file structure.
+and `npm run test:browser`) from `frontend/` as appropriate to the change.
+Both commands discover feature-local suites. Do not add empty test
+directories or tests that only assert this file structure.

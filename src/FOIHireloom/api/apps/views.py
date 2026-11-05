@@ -18,7 +18,7 @@ BUILD_HINT = "run npm install and npm run build in frontend/"
 
 @dataclass(frozen=True)
 class AppView:
-    # The page's file name in frontend/dist/ without .html, as in frontend/src/views/.
+    # The page's file name in frontend/dist/ without .html, as in frontend/src/pages/.
     name: str
     description: str
 

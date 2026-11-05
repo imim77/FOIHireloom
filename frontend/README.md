@@ -1,11 +1,10 @@
 # FOIHireloom MCP App views
 
 The charts that Claude, ChatGPT and other MCP Apps hosts show inside the conversation. Each view is a React page
-under `src/views/<name>.html`; `src/shared/` holds the card, theme, formatting, animations and the host connection
-(`useMcpApp`).
+under `src/pages/<name>.html`; application code lives in `src/mvvm/`, grouped by feature and responsibility.
 
 Styling uses Tailwind CSS v4 through the official `@tailwindcss/vite` plugin. Every view imports
-`shared/mount.tsx`, which loads the single `shared/tailwind.css` entry. That entry contains Tailwind's
+`mvvm/utils/mount.tsx`, which loads the single `mvvm/tailwind.css` entry. That entry contains Tailwind's
 import, semantic theme tokens, the host's dark-theme overrides, and shared animation keyframes.
 Layout, typography, interaction states, and responsive/container rules live in component utility classes;
 there are no separate component style sheets. Existing named classes remain as animation and test hooks.
@@ -14,20 +13,46 @@ Use complete utility names in source so Tailwind can discover them; the entry ex
 calculated from data remain dynamic styles or SVG attributes. The county column buttons retain Arial's
 number metrics from the reference design.
 
-Shared job conditions and search filters live in `src/shared/jobs.ts`, independent of any view.
+Shared job conditions and search filters live in `src/mvvm/utils/jobs.ts`, independent of any view.
 `FilterChips` renders removable filters, and `useServerTool` owns request status and ignores replies after
-unmount. Job cards keep pagination and comparison selection in `use-job-cards.ts` and grid animation in
-`use-job-grid-motion.ts`; county comparison keeps its row definitions and value formatting in `county-rows.ts`.
+unmount. Job cards keep pagination and comparison selection in `features/JobCards/hooks/use-job-cards.ts` and grid
+animation in `use-job-grid-motion.ts`; county comparison keeps its row definitions and value formatting in
+`features/CountyComparison/utils/county-rows.ts` (paths relative to `src/mvvm/`).
 Stateful content uses the MCP result's `revision` as its React key so a new host result discards local state
 and pending replies. Expansion controls stay outside that reset.
 
-The frontend follows Container → ViewModel → View. Each `main.tsx` mounts its `<Name>App.tsx`
-container, which owns the MCP connection and composes the screen. Interaction sessions are keyed by
-host revision, while expansion remains in the outer container. Stateful screens use `use-job-cards`,
-`use-county-comparison`, `use-jobs-by-county`, `use-allocation`, `use-history-chart`, and `use-forecast`
-hooks for screen state, derived values, capability checks, and actions. Views receive typed props
-and callbacks; neither screen markup nor shared `Sources` controls access the host directly.
-Static comparison rendering uses the existing expansion hook without an empty screen ViewModel.
+The frontend follows Container → ViewModel → View with this physical structure:
+
+```text
+src/
+├── pages/                                  # Seven HTML entries; preview URLs stay unchanged
+└── mvvm/
+    ├── features/
+    │   └── JobCards/                       # Same ownership rules for all seven features
+    │       ├── __integrations__/           # Browser behavior and MCP host tests
+    │       ├── components/                 # JobCardView.tsx
+    │       ├── screens/JobCards/           # JobCardsApp.tsx, JobCards.tsx, main.tsx
+    │       ├── hooks/                      # use-job-cards.ts, use-job-grid-motion.ts
+    │       ├── utils/                      # Formatting, preview samples, pure helpers
+    │       └── types.ts                    # Tool-result contracts
+    ├── components/                         # Card, FilterChips, Sources
+    ├── hooks/                              # Host connection, expansion, requests, motion
+    ├── utils/                              # Host actions, mounting, formatting, job contracts
+    ├── types.ts                            # Shared tool-result contracts
+    └── tailwind.css                        # Tailwind entry and semantic theme
+```
+
+The other features are `JobComparison`, `CountyComparison`, `JobsByCounty`, `UnemploymentHistory`,
+`AccommodationComparison`, and `LabourMarketForecast`. Every feature has an `__integrations__/` suite;
+other subfolders exist where there is code to own. Unit tests sit next to their pure utilities.
+Shared browser-host support is in `test-support/`, and cross-feature smoke tests remain in `tests/`.
+
+Each screen's `main.tsx` mounts its `<Name>App.tsx` container, which owns the MCP connection and
+composes the screen. Interaction sessions are keyed by host revision, while expansion remains in the
+outer container. Feature `hooks/` modules own screen state, derived values, capability checks, and actions.
+Views receive typed props and callbacks; neither screen markup nor shared `Sources` controls access
+the host directly. Static comparison rendering uses the shared expansion hook without an empty
+screen ViewModel.
 
 Keep DOM measurement, pointer coordinates, focus, SVG geometry, and animation in presentation
 components and motion hooks. Keep MCP requests in adapters and ViewModels, and authoritative
@@ -69,8 +94,10 @@ gaps, provisional segments stay dashed, and all 1–6 counties share consistent 
 Optionally set `CHART_LIVE_DATA_FILE` to a saved `show_unemployment_history` structured JSON response to verify its
 rates against the rendered nodes as well.
 
-To add a view: create `src/views/<name>.html` and `src/views/<name>/`, add an `AppView` to `VIEWS` in
-`api/apps/views.py`, and point its tool at it with `AppConfig(resource_uri=VIEW.uri)`.
+To add a view: create `src/pages/<name>.html` and its feature under `src/mvvm/features/`, wire the HTML
+entry to `screens/<ScreenName>/main.tsx`, and add meaningful tests in the feature’s `__integrations__/`.
+Add an `AppView` to `VIEWS` in `api/apps/views.py`, and point its tool at it with
+`AppConfig(resource_uri=VIEW.uri)`.
 
 The accommodation comparison at `/accommodation-comparison.html` adapts the supplied `PortfolioAllocationChart`.
 `show_accommodation_comparison` accepts county, query, category and the other job-condition filters, excluding
