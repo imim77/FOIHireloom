@@ -115,10 +115,12 @@ class CountyIndicatorServiceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_filtered_counts_and_county_wide_counts_remain_separate_without_dzs(self) -> None:
         compared = await self.service.compare_counties(CountyComparisonRequestDTO(
-            counties=(COUNTY.code, OTHER.name), filters=JobCountFiltersDTO(query="kuharica", full_time=False)))
+            counties=(COUNTY.code, OTHER.name), filters=JobCountFiltersDTO(query="kuharica", full_time=False, skills=("excel",))))
         filtered, everything = [call.args[0] for call in self.work.jobs.county_job_counts.call_args_list]
         self.assertEqual((filtered.terms, filtered.full_time, filtered.county_ids), (("kuhar",), False, (1, 2)))
         self.assertEqual((everything.terms, everything.full_time), ((), None))
+        self.assertEqual(filtered.skills, ("excel",))
+        self.assertIsNone(everything.skills)
         self.assertEqual((compared.counties[0].filtered_jobs.jobs, compared.counties[0].all_active_jobs.jobs), (1, 5))
         self.assertEqual(compared.counties[0].unemployed_per_worker.unavailable_reason, "no_dzs_data")
         self.assertEqual([county.code for county in compared.counties], [COUNTY.code, OTHER.code])

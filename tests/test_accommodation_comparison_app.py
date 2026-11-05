@@ -103,6 +103,7 @@ class AccommodationMcpTests(unittest.IsolatedAsyncioTestCase):
                 'county': 'varazdinska', 'query': 'kuhar', 'category': 'UGOSTITELJI', 'full_time': True,
                 'contract': 'permanent', 'education': 'secondary_3', 'max_experience_months': 12,
                 'employment_tags': ['seasonal'], 'place': 'Varaždin', 'include_expired': True,
+                'skills': ['excel'],
             })
             filters = service.market_filters[-1]
             self.assertEqual((filters.county, filters.query, filters.category), ('varazdinska', 'kuhar', 'UGOSTITELJI'))
@@ -110,6 +111,7 @@ class AccommodationMcpTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((filters.education, filters.max_experience_months, filters.employment_tags),
                              ('secondary_3', 12, ('seasonal',)))
             self.assertEqual((filters.place, filters.include_expired), ('Varaždin', True))
+            self.assertEqual(filters.skills, ('excel',))
             self.assertEqual(result.structured_content['total_jobs'], 0)
             self.assertEqual(len(result.structured_content['groups']), 3)
             service.error = InvalidJobSearchError('Unknown county')

@@ -37,6 +37,21 @@ Responsibilities that change independently have their own modules:
 Import implementations and contracts from their defining modules. Service and
 factory package initializers do not eagerly import unrelated implementations.
 
+Use `show_jobs(skills=["csharp", "python"])` for programming languages or tools.
+An ad must mention at least one requested skill; title matches come first when
+`query` is also set, then ads with more requested skills, then newest ads.
+`matched_skills` identifies the explicit matches. The same filter is available
+in job statistics and county comparisons; it does not affect county-wide ratios.
+An empty skill list leaves search unfiltered. Text queries keep their AND-prefix
+semantics, so use `query` for occupations or foreign languages.
+
+Skill tags come from a generated database column over page text, falling back
+to feed text. Apply Alembic revision `f3b5d7e9a1c2` before running this version.
+Changes to `domain/skill_catalog.py` require a new migration with a frozen
+expression. When direct matches are sparse, tool guidance asks the model to
+offer related occupation/category results in a separate search without skills.
+That fallback is model behavior; the server returns only direct matches.
+
 Run `.venv/bin/python -m unittest discover -s tests` from the repository root.
 HTTP transport tests need local loopback sockets. Tests for service orchestration,
 calculations, command injection and resource cleanup use injected dependencies

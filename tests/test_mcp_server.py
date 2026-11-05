@@ -11,6 +11,7 @@ from unittest import mock
 import httpx
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
+from jsonschema import validate
 from pydantic import ValidationError
 
 from FOIHireloom.api.apps.views import JOB_CARDS, JOB_COMPARISON, JOBS_BY_COUNTY
@@ -158,6 +159,67 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tools["job_market_stats"].inputSchema["properties"]["top"]["maximum"], 50)
         # The data tool has no view; show_job_comparison draws it.
         self.assertNotIn("ui", tools["compare_jobs"].meta or {})
+
+    async def test_all_seven_job_filters_publish_skill_codes_and_reject_unknown_skills(self) -> None:
+        from FOIHireloom.domain.skill_catalog import SKILL_PATTERNS
+
+        names = ("search_jobs", "show_jobs", "job_market_stats", "show_accommodation_comparison",
+                 "show_jobs_by_county", "compare_counties", "show_county_comparison")
+        async with Client(self.server) as client:
+            tools = {tool.name: tool for tool in await client.list_tools()}
+            for name in names:
+                with self.subTest(tool=name):
+                    field = tools[name].inputSchema["properties"]["skills"]
+                    array = next(option for option in field["anyOf"] if option.get("type") == "array")
+                    self.assertEqual(set(array["items"]["enum"]), set(SKILL_PATTERNS))
+                    self.assertIn("not query", field["description"])
+                    self.assertIn("without skills", field["description"])
+                    self.assertIn("skills", tools[name].inputSchema["properties"]["query"]["description"])
+                    arguments = {"skills": ["csharp", "python"]}
+                    if name in ("compare_counties", "show_county_comparison"):
+                        arguments["counties"] = ["istarska", "varazdinska"]
+                    validate(arguments, tools[name].inputSchema)
+                    with self.assertRaises(ToolError):
+                        await client.call_tool(name, arguments | {"skills": ["unknown"]})
+        self.assertEqual(self.service.filters, [])
+        self.assertEqual(self.service.market_filters, [])
+
+    async def test_county_tools_preserve_skills_in_filtered_job_counts(self) -> None:
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock
+        from test_county_comparison_app import comparison
+
+        indicators = SimpleNamespace(compare_counties=AsyncMock(return_value=comparison()))
+
+        @asynccontextmanager
+        async def open_indicators():
+            yield indicators
+
+        server = McpServer(SETTINGS, job_search_service=self.open_service,
+                           county_indicator_service=open_indicators).server
+        async with Client(server) as client:
+            for name in ("compare_counties", "show_county_comparison"):
+                await client.call_tool(name, {"counties": ["istarska", "varazdinska"],
+                                              "skills": ["excel", "autocad"], "place": "Split"})
+        self.assertEqual(indicators.compare_counties.await_count, 2)
+        for call in indicators.compare_counties.call_args_list:
+            self.assertEqual(call.args[0].filters.skills, ("excel", "autocad"))
+            self.assertEqual(call.args[0].filters.place, "Split")
+
+    async def test_skill_routing_cases_use_show_jobs_with_valid_filters(self) -> None:
+        import json
+        from pathlib import Path
+        from jsonschema import validate
+
+        cases = json.loads((Path(__file__).resolve().parents[1] / "evals/tool-routing-cases.json").read_text())
+        async with Client(self.server) as client:
+            tools = {tool.name: tool for tool in await client.list_tools()}
+        skill_cases = [case for case in cases if case["id"].startswith("jobs_skills_")]
+        self.assertEqual(len(skill_cases), 2)
+        for case in skill_cases:
+            self.assertEqual(case["tool"], "show_jobs")
+            self.assertNotIn("query", case["arguments"])
+            validate(case["arguments"], tools[case["tool"]].inputSchema)
 
     async def test_compare_jobs_takes_two_or_three_ids_and_the_users_conditions(self) -> None:
         async with Client(self.server) as client:
@@ -339,7 +401,8 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
     async def test_condition_filters_reach_the_service_and_the_cards_keep_them_for_the_next_page(self) -> None:
         conditions = {"max_experience_months": 0, "contract": "permanent", "full_time": True,
                       "education": "secondary_4", "accommodation": False,
-                      "employment_tags": ["new_position", "retirees"], "place": "Varaždin"}
+                      "employment_tags": ["new_position", "retirees"], "place": "Varaždin",
+                      "skills": ["csharp", "python"]}
         async with Client(self.server) as client:
             await client.call_tool("search_jobs", conditions)
             cards = (await client.call_tool("show_jobs", conditions | {"cursor": "abc"})).structured_content

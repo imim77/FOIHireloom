@@ -24,7 +24,6 @@ from FOIHireloom.dto.job_market import (
 )
 from FOIHireloom.dto.job_search import (
     MAX_PAGE_SIZE,
-    MAX_QUERY_LENGTH,
     CategoryDTO,
     JobCardsDTO,
     JobDetailsDTO,
@@ -39,7 +38,7 @@ from .apps import accommodation_comparison, job_cards, job_comparison, jobs_by_c
 from .apps.views import ACCOMMODATION_COMPARISON, JOB_CARDS, JOB_COMPARISON, JOBS_BY_COUNTY
 from .job_filters import (
     CATEGORY_DESCRIPTION, Accommodation, ContractFilter, Education, EmploymentTags,
-    FullTime, MaxExperienceMonths, Place, Skills,
+    FullTime, MaxExperienceMonths, Place, SearchQuery, Skills,
 )
 from .tool_provider import READ_ONLY, ToolGroup
 
@@ -88,16 +87,7 @@ class JobTools(ToolGroup):
         @server.tool(annotations=READ_ONLY)
         async def search_jobs(
             ctx: Context,
-            query: Annotated[str | None, Field(
-                max_length=MAX_QUERY_LENGTH,
-                description="Words to find, e.g. 'kuhar', 'medicinska sestra', 'njemački' or 'Pula'. Searches "
-                            "the title, the full description, the employer, the place of work and the required "
-                            "education. Each word matches the start of a word, with or without Croatian "
-                            "diacritics, and all words must match. Case endings and feminine -ica forms are "
-                            "removed, so 'njemački' also finds 'njemačkog' and 'kuharica' finds 'KUHAR/ICA'. "
-                            "Forms with sound changes are not, so write places in the base form ('Rijeka', not "
-                            "'Rijeci') or use county.",
-            )] = None,
+            query: SearchQuery = None,
             county: Annotated[str | None, Field(
                 description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
             )] = None,
@@ -175,10 +165,7 @@ class JobTools(ToolGroup):
         @server.tool(app=AppConfig(resource_uri=JOB_CARDS.uri), annotations=READ_ONLY)
         async def show_jobs(
             ctx: Context,
-            query: Annotated[str | None, Field(
-                max_length=MAX_QUERY_LENGTH,
-                description="Words chosen as for search_jobs, e.g. 'kuhar' or 'njemački'; leave out for the newest jobs.",
-            )] = None,
+            query: SearchQuery = None,
             county: Annotated[str | None, Field(
                 description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
             )] = None,
@@ -231,6 +218,12 @@ class JobTools(ToolGroup):
             the results may be outdated or incomplete. active_filters,
             coverage_note and unknown_note are the Croatian wording the view
             shows for the filters, coverage.warning and unknown_total.
+
+            Put programming languages and tools in skills, not query. Title matches
+            rank first, then the number of requested skills mentioned, then newest
+            publication. When direct skill matches are few, also offer a separate
+            search without skills for a related occupation or category, keeping the
+            user's other filters. Label those as related jobs.
             """
             filters = JobSearchFiltersDTO(
                 query=query, county=county, category=category, max_experience_months=max_experience_months,
@@ -243,10 +236,7 @@ class JobTools(ToolGroup):
         @server.tool(annotations=READ_ONLY)
         async def job_market_stats(
             ctx: Context,
-            query: Annotated[str | None, Field(
-                max_length=MAX_QUERY_LENGTH,
-                description="Words chosen as for search_jobs, e.g. 'kuhar' or 'njemački'; leave out for all jobs.",
-            )] = None,
+            query: SearchQuery = None,
             county: Annotated[str | None, Field(
                 description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
             )] = None,
@@ -319,8 +309,7 @@ class JobTools(ToolGroup):
         @server.tool(app=AppConfig(resource_uri=ACCOMMODATION_COMPARISON.uri), annotations=READ_ONLY)
         async def show_accommodation_comparison(
             ctx: Context,
-            query: Annotated[str | None, Field(max_length=MAX_QUERY_LENGTH,
-                description="Words as for search_jobs, e.g. 'kuhar'; leave out for all occupations.")] = None,
+            query: SearchQuery = None,
             county: Annotated[str | None, Field(
                 description="County code or name from list_regions; leave out for all counties.")] = None,
             category: Annotated[str | None, Field(description=CATEGORY_DESCRIPTION)] = None,
@@ -364,10 +353,7 @@ class JobTools(ToolGroup):
         @server.tool(app=AppConfig(resource_uri=JOBS_BY_COUNTY.uri), annotations=READ_ONLY)
         async def show_jobs_by_county(
             ctx: Context,
-            query: Annotated[str | None, Field(
-                max_length=MAX_QUERY_LENGTH,
-                description="Words chosen as for search_jobs, e.g. 'kuhar' or 'njemački'; leave out for all jobs.",
-            )] = None,
+            query: SearchQuery = None,
             category: Annotated[str | None, Field(description=CATEGORY_DESCRIPTION)] = None,
             max_experience_months: MaxExperienceMonths = None,
             contract: ContractFilter = None,

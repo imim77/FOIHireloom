@@ -11,8 +11,24 @@ CATEGORY_DESCRIPTION = (
     "description or filled in from an HZZ occupation feed verified on its jobs. Jobs without one do not match, "
     "so also use query when every job of an occupation matters."
 )
+SearchQuery = Annotated[str | None, Field(
+    max_length=MAX_QUERY_LENGTH,
+    description="Occupation, foreign language or keywords, e.g. 'kuhar', 'medicinska sestra' or 'njemački'. Every word "
+                "must match a word prefix in the title, description, employer, location or education. Croatian "
+                "diacritics and common endings are normalized. Use nominative words ('Rijeka', not 'Rijeci'). "
+                "Put programming languages and tools in skills. Put location and job conditions in their "
+                "dedicated filters, not in query: for cooks with "
+                "accommodation use query='kuhar', accommodation=true. Omit for all occupations.",
+)]
 Skills = Annotated[tuple[Skill, ...] | None, Field(
-    description="Skills explicitly mentioned by the ad; at least one must match. More matches rank first.",
+    description="The user's programming languages or tools, e.g. C# -> 'csharp', .NET -> 'dotnet', "
+                "TypeScript -> 'javascript'. Put these in skills, not query. An ad must explicitly mention "
+                "at least one requested skill (OR); within the title-match rank, more matching skills come first. "
+                "Other filters still apply. Ads rarely state technologies: when direct matches are few, also "
+                "offer related jobs in a separate search without skills, using occupation query='programer' "
+                "or 'informatičar', or category='INFORMATIČKI, RAČUNALNI I STRUČNJACI ZA INTERNET' for IT skills. "
+                "Keep the user's location and other conditions, and distinguish related jobs from direct matches. "
+                "An empty list applies no skill filter.",
 )]
 # The condition filters, shared by the tools that choose jobs as search_jobs does.
 MaxExperienceMonths = Annotated[int | None, Field(

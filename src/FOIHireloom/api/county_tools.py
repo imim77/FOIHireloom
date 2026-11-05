@@ -22,7 +22,6 @@ from FOIHireloom.dto.county_indicators import (
 )
 from FOIHireloom.dto.dzs import DzsSex
 from FOIHireloom.dto.job_market import JobCountFiltersDTO
-from FOIHireloom.dto.job_search import MAX_QUERY_LENGTH
 from FOIHireloom.exceptions import InvalidIndicatorRequestError, InvalidJobSearchError, PersistenceError
 from FOIHireloom.services.interfaces.county_indicators import CountyIndicatorServiceInterface
 
@@ -39,6 +38,7 @@ from .job_filters import (
     FullTime,
     MaxExperienceMonths,
     Place,
+    SearchQuery,
     Skills,
 )
 from .tool_provider import READ_ONLY, ToolGroup
@@ -53,10 +53,6 @@ ComparedCounties = Annotated[list[CountyLabel], Field(
     min_length=MIN_COMPARED_COUNTIES, max_length=MAX_COMPARED_COUNTIES,
     description=f"{MIN_COMPARED_COUNTIES} to {MAX_COMPARED_COUNTIES} different counties to compare, as codes or names "
                 "from list_regions, e.g. ['varazdinska', 'medimurska'], in the order to show them.",
-)]
-CountyQuery = Annotated[str | None, Field(
-    max_length=MAX_QUERY_LENGTH,
-    description="Words chosen as for search_jobs, e.g. 'kuhar'; leave out to count all jobs.",
 )]
 CountyCategory = Annotated[str | None, Field(description=CATEGORY_DESCRIPTION)]
 CountyIncludeExpired = Annotated[bool, Field(
@@ -101,7 +97,7 @@ class CountyIndicatorTools(ToolGroup):
         async def compare_counties(
             ctx: Context,
             counties: ComparedCounties,
-            query: CountyQuery = None,
+            query: SearchQuery = None,
             category: CountyCategory = None,
             max_experience_months: MaxExperienceMonths = None,
             contract: ContractFilter = None,
@@ -167,7 +163,7 @@ class CountyIndicatorTools(ToolGroup):
         async def show_county_comparison(
             ctx: Context,
             counties: ComparedCounties,
-            query: CountyQuery = None,
+            query: SearchQuery = None,
             category: CountyCategory = None,
             max_experience_months: MaxExperienceMonths = None,
             contract: ContractFilter = None,
