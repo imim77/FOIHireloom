@@ -27,6 +27,9 @@ numeric formatting; the slider forwards accessible labels and value text to its 
 Use component variants for appearance and `className` for layout; pass actions from ViewModels.
 Add future primitives from the frontend directory with `npx shadcn@latest add @shadcn/<component>`.
 
+Every view follows [`DESIGN.md`](../DESIGN.md), which takes the jobs-by-county chart as its reference: grey data
+with one orange focus, a readout over the chart, a 28/16/14/12 px type scale and tokens only.
+
 Shared job conditions and search filters live in `src/mvvm/utils/jobs.ts`, independent of any view.
 `FilterChips` renders removable filters, and `useServerTool` owns request status and ignores replies after
 unmount. Job cards keep pagination and comparison selection in `features/JobCards/hooks/use-job-cards.ts` and grid
@@ -102,9 +105,11 @@ comparison messages and retries, source/advertisement link callbacks, request fa
 selection/expansion, loading skeletons, keyboard-operated selection/toggles, and replacement results
 arriving before pending tool replies.
 
-The unemployment chart adapts the supplied `RevenueGrowthChart` to monthly DZS rates. Its stat tiles follow the
-inspected month; the annual comparison tiles stay anchored to the server's latest month. Missing values remain
-gaps, provisional segments stay dashed, and all 1–6 counties share consistent colours. The tool still returns
+The unemployment chart adapts the supplied `RevenueGrowthChart` to monthly DZS rates. One county is lit orange
+and the others stay grey; the legend selects it by pointer or arrow keys, and each legend item shows its rate for
+the inspected month. The readout over the chart follows the lit county and inspected month; the annual comparison
+tiles stay anchored to the server's latest month. Missing values remain gaps, provisional segments stay dashed,
+and a new result lights the first county again. The tool still returns
 12–24 months. To save screenshots while testing, set `CHART_ARTIFACT_DIR` to an output directory.
 Optionally set `CHART_LIVE_DATA_FILE` to a saved `show_unemployment_history` structured JSON response to verify its
 rates against the rendered nodes as well.
@@ -119,7 +124,8 @@ The accommodation comparison at `/accommodation-comparison.html` adapts the supp
 the accommodation filter itself, so the population always includes all three statuses. It partitions matching
 ads into offered (shared/single/family), explicitly not offered, and unknown. The stored shares use all matching
 ads. Legend buttons can temporarily hide groups; the view then names its visible denominator and offers a reset.
-Mouse, touch and keyboard selection expose the count and share in the ring's centre. Zero groups stay in the
+Mouse, touch and keyboard selection (each segment is a button) show the count and share in the readout over
+the ring; offered is orange, not offered and unknown are grey. Zero groups stay in the
 legend, and the last visible positive group cannot be hidden. The preview uses the real local response for
 Varaždinska and query `kuhar` (2/7/1 ads), with its freshness warning.
 
