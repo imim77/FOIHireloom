@@ -1,15 +1,14 @@
 import { Card, ExpandButton, Notes } from '../../shared/Card'
 import { formatAds, formatWorkers } from '../../shared/format'
-import { useExpanded, useMcpApp } from '../../shared/mcp'
 import { CountyColumns } from './CountyColumns'
-import { sample } from './sample'
 import type { JobsByCountyData } from './types'
 
 /** show_jobs_by_county: the top counties as 3D columns, every county once expanded. */
-export function JobsByCounty() {
-  const mcp = useMcpApp<JobsByCountyData>('FOIHireloom jobs by county', sample)
-  const { expanded, toggle } = useExpanded(mcp)
-  const data = mcp.data
+export function JobsByCounty({ data, expanded, toggle }: {
+  data: JobsByCountyData | null
+  expanded: boolean
+  toggle: () => void
+}) {
   if (!data) return <Card title="Broj oglasa po županijama" description="Učitavanje…" />
 
   const all = data.counties ?? []

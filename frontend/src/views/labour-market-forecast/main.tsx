@@ -1,4 +1,4 @@
 import { mount } from '../../shared/mount'
-import { LabourMarketForecast } from './LabourMarketForecast'
+import { LabourMarketForecastApp } from './LabourMarketForecastApp'
 
-mount(LabourMarketForecast)
+mount(LabourMarketForecastApp)

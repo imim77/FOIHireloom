@@ -1,33 +1,16 @@
-import type { App } from '@modelcontextprotocol/ext-apps'
 import { animate } from 'animejs'
 import { Card, ExpandButton, Notes, Warning } from '../../shared/Card'
 import { FilterChips } from '../../shared/FilterChips'
 import { finish, releaseStyles } from '../../shared/chart-motion'
 import { formatAds } from '../../shared/format'
-import { useExpanded, useMcpApp } from '../../shared/mcp'
 import { JobCardView } from './JobCardView'
-import { sample } from './sample'
-import { MAX_COMPARED, MIN_COMPARED, pickedHint, useJobCards } from './use-job-cards'
+import { MAX_COMPARED, MIN_COMPARED, pickedHint, type useJobCards } from './use-job-cards'
 import { useJobGridMotion } from './use-job-grid-motion'
-import type { JobCardsData } from './types'
 
 /** show_jobs: the found jobs as cards, with more on request; expanded (full screen) they fill several columns. */
-export function JobCards() {
-  const mcp = useMcpApp<JobCardsData>('FOIHireloom job cards', sample)
-  const { expanded, toggle } = useExpanded(mcp)
-  if (!mcp.data) return <Card sunken title="Oglasi" description="Učitavanje…" />
-  // New host results discard local pages, filter changes and comparison picks.
-  return <JobCardsContent key={mcp.revision} initial={mcp.data} app={mcp.app} expanded={expanded} toggle={toggle} />
-}
-
-function JobCardsContent({ initial, app, expanded, toggle }: {
-  initial: JobCardsData
-  app: App | null
-  expanded: boolean
-  toggle: () => void
-}) {
-  const { data, cards, cursor, chosen, loading, error, tools, messages, actions,
-    loadMore, removeFilter, togglePicked, clearPicked, compare } = useJobCards(app, initial)
+export function JobCards({ data, cards, cursor, chosen, loading, error, tools, messages, actions,
+  loadMore, removeFilter, togglePicked, clearPicked, compare, expanded, toggle }:
+  ReturnType<typeof useJobCards> & { expanded: boolean; toggle: () => void }) {
   const list = useJobGridMotion(expanded)
 
   return (

@@ -1,4 +1,4 @@
 import { mount } from '../../shared/mount'
-import { JobCards } from './JobCards'
+import { JobCardsApp } from './JobCardsApp'
 
-mount(JobCards)
+mount(JobCardsApp)

@@ -1,16 +1,16 @@
-import { useId, useState } from 'react'
+import { type ReactNode, useId } from 'react'
 import { Card, Notes, Warning } from '../../shared/Card'
-import { useMcpApp } from '../../shared/mcp'
 import { Sources } from '../../shared/Sources'
 import { useChartWidth } from '../../shared/use-chart-size'
 import { forecastChart, formatChange, formatPeriod, formatValue } from './forecast-chart'
-import { sample } from './sample'
+import type { useForecast } from './use-forecast'
 import type { CountyForecast, ForecastData, ObservedPoint } from './types'
 
-export function LabourMarketForecast() {
-  const mcp = useMcpApp<ForecastData>('FOIHireloom labour market forecast', sample)
-  const data = mcp.data
-  const county = data?.counties[0]
+export function LabourMarketForecast({ data, onOpenLink, children }: {
+  data: ForecastData | null
+  onOpenLink: (url: string) => void
+  children: ReactNode
+}) {
   return <div className="forecast-view [--forecast-line:#087f8c] [--forecast-history:#64748b] [--forecast-wash:#e6f4f5]
     dark:[--forecast-line:#5dd7de] dark:[--forecast-history:#b0bdcf] dark:[--forecast-wash:#163437]
     [&_.title]:whitespace-normal [&_.title]:overflow-visible [&_.titles_>_.soft]:whitespace-normal
@@ -18,8 +18,8 @@ export function LabourMarketForecast() {
     <Card title={data?.title ?? 'Chronos prognoza za županiju'} description={data?.description ?? 'Učitavanje…'}>
       {data && <>
         <Warning text={data.unavailable_label} />
-        {county && <Forecast key={mcp.revision} data={data} county={county} />}
-        <Sources app={mcp.app} links={data.source_links}><span>Model: {data.model}</span></Sources>
+        {children}
+        <Sources onOpenLink={onOpenLink} links={data.source_links}><span>Model: {data.model}</span></Sources>
         <Notes warning={null} note={data.view_notes} />
       </>}
     </Card>
@@ -33,14 +33,8 @@ function Flags({ point }: { point: ObservedPoint }) {
       whitespace-nowrap text-fg-soft [outline:1px_dashed_var(--fg-soft)] [outline-offset:-1px]">privremeno</span>}</>
 }
 
-function Forecast({ data, county }: { data: ForecastData; county: CountyForecast }) {
-  const [selected, setSelected] = useState(Math.max(0, county.forecast.length - 1))
-  const point = county.forecast[selected]
-  const last = county.last_observed
-  const end = county.forecast.at(-1)
-  const value = (n: number) => formatValue(n, data.unit)
-  const period = (iso: string) => formatPeriod(iso, data.frequency)
-  const interval = `${Math.round(data.interval * 100)}% interval`
+export function ForecastView(model: ReturnType<typeof useForecast>) {
+  const { data, county, selected, selectPeriod, point, last, end, value, period, interval } = model
   const sliderId = useId()
   return <div className="forecast-content min-w-0 flex flex-col gap-5">
     {point && <>
@@ -64,7 +58,7 @@ function Forecast({ data, county }: { data: ForecastData; county: CountyForecast
       </div>
     </>}
     {county.history.some((p) => p.value !== null) || point ?
-      <ForecastChart data={data} county={county} selected={selected} onSelect={setSelected} /> : null}
+      <ForecastChart data={data} county={county} selected={selected} onSelect={selectPeriod} /> : null}
     {point && <div className="forecast-control grid [grid-template-columns:auto_1fr] gap-4 items-center text-[12px] [&_input]:w-full
       [&_input]:min-w-0 [&_input]:m-0 [&_input]:[accent-color:var(--forecast-line)] [&_input]:cursor-pointer
       [&_input:focus-visible]:[outline:2px_solid_var(--forecast-line)]
@@ -73,7 +67,7 @@ function Forecast({ data, county }: { data: ForecastData; county: CountyForecast
       <label htmlFor={sliderId}>{data.frequency === 'month' ? 'Mjesec prognoze' : 'Tjedan prognoze'}</label>
       <input id={sliderId} type="range" min={0} max={county.forecast.length - 1} step={1} value={selected}
         aria-valuetext={`${period(point.period)}: ${value(point.median)}, ${interval} ${value(point.low)} – ${value(point.high)}`}
-        onChange={(event) => setSelected(Number(event.target.value))} />
+        onChange={(event) => selectPeriod(Number(event.target.value))} />
     </div>}
     {end && county.change_to_horizon !== null && <p className="forecast-change flex flex-wrap items-baseline [gap:6px_12px] m-0 text-[12px] leading-[1.5] text-fg-soft
       [&_strong]:text-fg-loud [&_strong]:text-[15px] [&_strong]:font-semibold [&_strong]:tabular-nums">

@@ -1,4 +1,4 @@
 import { mount } from '../../shared/mount'
-import { AccommodationComparison } from './AccommodationComparison'
+import { AccommodationComparisonApp } from './AccommodationComparisonApp'
 
-mount(AccommodationComparison)
+mount(AccommodationComparisonApp)

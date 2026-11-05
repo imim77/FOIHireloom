@@ -4,13 +4,10 @@
 // narrow frame the table scrolls sideways under its sticky aspect column. Animated like the job cards: the columns'
 // headings rise in one after another, then the rows.
 
-import type { App } from '@modelcontextprotocol/ext-apps'
 import type { CSSProperties } from 'react'
 import { Card, ExpandButton, Notes } from '../../shared/Card'
 import { useComparisonEntrance } from '../../shared/use-comparison-entrance'
-import { openLink, useExpanded, useMcpApp } from '../../shared/mcp'
 import { capitalise, FEED_CATEGORY, sentenceCase, titleCase } from '../../shared/text'
-import { sample } from './sample'
 import type { ComparedJob, ComparisonCell, ComparisonRow, JobComparisonData } from './types'
 
 const ROW_STAGGER = 60
@@ -31,24 +28,26 @@ function where(job: ComparedJob): string | null {
   return parts.length ? [...new Set(parts)].join(' · ') : null
 }
 
-export function JobComparison() {
-  const mcp = useMcpApp<JobComparisonData>('FOIHireloom job comparison', sample)
-  const { expanded, toggle } = useExpanded(mcp)
-  const data = mcp.data
+export function JobComparison({ data, expanded, toggle, onOpenLink }: {
+  data: JobComparisonData | null
+  expanded: boolean
+  toggle: () => void
+  onOpenLink: (url: string) => void
+}) {
   if (!data) return <Card sunken title="Usporedba oglasa" description="Učitavanje…" />
   return (
     <Card sunken title={data.title} description={data.description} actions={(
       <ExpandButton expanded={expanded} label={expanded ? 'Smanji prikaz' : 'Prikaži usporedbu preko cijelog zaslona'}
         onClick={toggle} />
     )}>
-      <ComparisonTable data={data} app={mcp.app} expanded={expanded} />
+      <ComparisonTable data={data} onOpenLink={onOpenLink} expanded={expanded} />
       <Notes warning={null} note={[data.unknown_note, data.disclaimer]} />
     </Card>
   )
 }
 
 /** Mounted once the data is there, so its entrance plays with the data. */
-function ComparisonTable({ data, app, expanded }: { data: JobComparisonData; app: App | null; expanded: boolean }) {
+function ComparisonTable({ data, onOpenLink, expanded }: { data: JobComparisonData; onOpenLink: (url: string) => void; expanded: boolean }) {
   const root = useComparisonEntrance('job', ROW_STAGGER)
 
   return (
@@ -71,7 +70,7 @@ function ComparisonTable({ data, app, expanded }: { data: JobComparisonData; app
         <thead>
           <tr>
             <td className="corner" />
-            {data.jobs.map((job) => <JobHead key={job.id} job={job} app={app} />)}
+            {data.jobs.map((job) => <JobHead key={job.id} job={job} onOpenLink={onOpenLink} />)}
           </tr>
         </thead>
         <tbody>
@@ -89,7 +88,7 @@ function ComparisonTable({ data, app, expanded }: { data: JobComparisonData; app
   )
 }
 
-function JobHead({ job, app }: { job: ComparedJob; app: App | null }) {
+function JobHead({ job, onOpenLink }: { job: ComparedJob; onOpenLink: (url: string) => void }) {
   const title = sentenceCase(job.display_title)
   // Employers in capitals, as on the cards; the placeholder is not a name and stays as it is.
   const employer = job.employer_name?.toLocaleUpperCase('hr-HR') ?? 'Poslodavac nije naveden'
@@ -112,7 +111,7 @@ function JobHead({ job, app }: { job: ComparedJob; app: App | null }) {
           <button className="icon-button grid place-items-center flex-none w-9 h-9 p-0 rounded-[10px] border border-border bg-card
             text-fg-loud cursor-pointer [&:hover]:bg-surface-subdued [&:focus-visible]:[outline:none]
             [&:focus-visible]:shadow-focus [&_svg]:w-4.5 [&_svg]:h-4.5" type="button" title="Otvori oglas na HZZ-u"
-            aria-label={`Otvori oglas ${title} na HZZ-u`} onClick={() => openLink(app, job.canonical_url)}>
+            aria-label={`Otvori oglas ${title} na HZZ-u`} onClick={() => onOpenLink(job.canonical_url)}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
               strokeLinejoin="round" aria-hidden="true">
               {OPEN_ICON.map((d) => <path key={d} d={d} />)}

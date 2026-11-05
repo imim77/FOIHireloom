@@ -1,4 +1,4 @@
 import { mount } from '../../shared/mount'
-import { CountyComparison } from './CountyComparison'
+import { CountyComparisonApp } from './CountyComparisonApp'
 
-mount(CountyComparison)
+mount(CountyComparisonApp)

@@ -2,32 +2,30 @@
 // explains the provisional band and the gaps, and per county the latest rate against the same month a year earlier.
 // The tiles fade in one after another once the lines have drawn in.
 
-import type { App } from '@modelcontextprotocol/ext-apps'
 import { stagger } from 'animejs'
 import { useRef } from 'react'
 import { Card, Notes, Warning } from '../../shared/Card'
 import { fadeIn, useChartEntrance } from '../../shared/chart-motion'
 import { formatDay, formatMonth, formatPoints, formatRate, plural } from '../../shared/format'
-import { useMcpApp } from '../../shared/mcp'
 import { Sources } from '../../shared/Sources'
 import { UnemploymentGrowthChart } from './UnemploymentGrowthChart'
-import { sample } from './sample'
 import type { CountyHistory, UnemploymentHistoryData } from './types'
 
 const TILES_AT = 700
 const TILE_STAGGER = 80
 
-export function UnemploymentHistory() {
-  const mcp = useMcpApp<UnemploymentHistoryData>('FOIHireloom unemployment history', sample)
-  const data = mcp.data
+export function UnemploymentHistory({ data, onOpenLink }: {
+  data: UnemploymentHistoryData | null
+  onOpenLink: (url: string) => void
+}) {
   if (!data) return <Card title="Stopa registrirane nezaposlenosti" description="Učitavanje…" />
   const charted = data.counties.some((county) => county.series.length)
   return (
     <Card title={data.title} description={data.description}>
-      {charted ? <History key={mcp.revision} data={data} app={mcp.app} /> : (
+      {charted ? <History data={data} onOpenLink={onOpenLink} /> : (
         <>
           <Warning text={data.unavailable_label ?? 'Podaci o nezaposlenosti nisu dostupni.'} />
-          <Footer data={data} app={mcp.app} />
+          <Footer data={data} onOpenLink={onOpenLink} />
         </>
       )}
     </Card>
@@ -35,7 +33,7 @@ export function UnemploymentHistory() {
 }
 
 /** Mounted once the data is there, so its entrance plays with the data. */
-function History({ data, app }: { data: UnemploymentHistoryData; app: App | null }) {
+function History({ data, onOpenLink }: { data: UnemploymentHistoryData; onOpenLink: (url: string) => void }) {
   const root = useRef<HTMLDivElement>(null)
 
   useChartEntrance(root, (timeline) => {
@@ -62,7 +60,7 @@ function History({ data, app }: { data: UnemploymentHistoryData; app: App | null
       <div className="tiles grid [grid-template-columns:repeat(auto-fill,_minmax(190px,_1fr))] gap-2">
         {data.counties.map((county, index) => <Tile key={county.code} county={county} index={index} />)}
       </div>
-      <Footer data={data} app={app} />
+      <Footer data={data} onOpenLink={onOpenLink} />
     </div>
   )
 }
@@ -127,10 +125,10 @@ function Tile({ county, index }: { county: CountyHistory; index: number }) {
   )
 }
 
-function Footer({ data, app }: { data: UnemploymentHistoryData; app: App | null }) {
+function Footer({ data, onOpenLink }: { data: UnemploymentHistoryData; onOpenLink: (url: string) => void }) {
   return (
     <>
-      <Sources app={app} links={data.source_links}>
+      <Sources onOpenLink={onOpenLink} links={data.source_links}>
         {data.dzs && <span>DZS podaci uvezeni {formatDay(data.dzs.finished_at)}</span>}
       </Sources>
       <Notes warning={null} note={data.view_notes} />
