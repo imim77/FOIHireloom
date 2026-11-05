@@ -22,6 +22,7 @@ from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from FOIHireloom.domain.search_text import SEARCH_FOLD_FROM, SEARCH_FOLD_TO
+from FOIHireloom.domain.skill_catalog import SKILL_FOLD_FROM, SKILL_FOLD_TO, SKILL_PATTERNS, URL_PATTERN
 
 from .base import Base
 
@@ -38,6 +39,17 @@ SEARCH_DOCUMENT = (
     "coalesce(page_work_place, '') || ' ' || coalesce(page_education, ''), "
     f"'{SEARCH_FOLD_FROM}', '{SEARCH_FOLD_TO}'))"
 )
+# URLs must be removed before punctuation-sensitive skills are matched.
+_SKILL_TEXT = (
+    "regexp_replace(lower(translate("
+    "coalesce(page_title, title, '') || ' ' || coalesce(page_description_text, description_text, ''), "
+    f"'{SKILL_FOLD_FROM}', '{SKILL_FOLD_TO}')), '{URL_PATTERN}', ' ', 'g')"
+)
+SKILLS_DOCUMENT = "array_remove(ARRAY[" + ", ".join(
+    f"CASE WHEN {_SKILL_TEXT} ~ '{pattern}' THEN '{code}' END"
+    for code, pattern in SKILL_PATTERNS.items()
+) + "], NULL)"
+
 # Codes JobConditionsNormalizer stores, by column; a new code needs a
 # migration. conditions_unrecognised names RawJobConditionsDTO fields.
 CONDITION_CODES = {
@@ -102,6 +114,7 @@ class Job(Base):
             name="content_change_within_observation",
         ),
         Index("ix_jobs_search_vector", "search_vector", postgresql_using="gin"),
+        Index("ix_jobs_skills", "skills", postgresql_using="gin"),
         CheckConstraint(
             "page_status IN ('pending', 'fetched', 'unavailable', 'failed')", name="page_status_known"
         ),
@@ -158,6 +171,7 @@ class Job(Base):
     search_vector: Mapped[str | None] = mapped_column(
         TSVECTOR, Computed(SEARCH_DOCUMENT, persisted=True), deferred=True
     )
+    skills: Mapped[list[str]] = mapped_column(ARRAY(Text), Computed(SKILLS_DOCUMENT, persisted=True))
     # Fields from the job's HZZ detail page, kept apart from the feed's values.
     # A later failed check keeps the last fetched values; page_source_hash is
     # the feed content hash they were fetched for.
