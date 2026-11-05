@@ -4,12 +4,36 @@ The charts that Claude, ChatGPT and other MCP Apps hosts show inside the convers
 under `src/views/<name>.html`; `src/shared/` holds the card, theme, formatting, animations and the host connection
 (`useMcpApp`).
 
+Styling uses Tailwind CSS v4 through the official `@tailwindcss/vite` plugin. Every view imports
+`shared/mount.tsx`, which loads the single `shared/tailwind.css` entry. That entry contains Tailwind's
+import, semantic theme tokens, the host's dark-theme overrides, and shared animation keyframes.
+Layout, typography, interaction states, and responsive/container rules live in component utility classes;
+there are no separate component style sheets. Existing named classes remain as animation and test hooks.
+Use complete utility names in source so Tailwind can discover them; the entry explicitly scans all of
+`src/`, including shared controls outside Vite's views directory. Chart coordinates and animation frames
+calculated from data remain dynamic styles or SVG attributes. The county column buttons retain Arial's
+number metrics from the reference design.
+
 Shared job conditions and search filters live in `src/shared/jobs.ts`, independent of any view.
 `FilterChips` renders removable filters, and `useServerTool` owns request status and ignores replies after
 unmount. Job cards keep pagination and comparison selection in `use-job-cards.ts` and grid animation in
 `use-job-grid-motion.ts`; county comparison keeps its row definitions and value formatting in `county-rows.ts`.
 Stateful content uses the MCP result's `revision` as its React key so a new host result discards local state
 and pending replies. Expansion controls stay outside that reset.
+
+The frontend follows Container → ViewModel → View. Each `main.tsx` mounts its `<Name>App.tsx`
+container, which owns the MCP connection and composes the screen. Interaction sessions are keyed by
+host revision, while expansion remains in the outer container. Stateful screens use `use-job-cards`,
+`use-county-comparison`, `use-jobs-by-county`, `use-allocation`, `use-history-chart`, and `use-forecast`
+hooks for screen state, derived values, capability checks, and actions. Views receive typed props
+and callbacks; neither screen markup nor shared `Sources` controls access the host directly.
+Static comparison rendering uses the existing expansion hook without an empty screen ViewModel.
+
+Keep DOM measurement, pointer coordinates, focus, SVG geometry, and animation in presentation
+components and motion hooks. Keep MCP requests in adapters and ViewModels, and authoritative
+business rules in the Python backend. New screens should follow the project-local
+[`mvvm-architecture` skill](../.agents/skills/mvvm-architecture/SKILL.md). No additional state library
+or platform-specific view files are required.
 
 ```bash
 npm install
@@ -34,8 +58,9 @@ npx playwright install chromium  # once, for browser tests
 npm run test:browser           # production page in an MCP Apps iframe; mouse, keyboard, touch and themes
 ```
 
-Browser tests also cover all six standalone previews, host capabilities, pagination, filter removal,
-comparison messages, request failures and replacement results arriving before pending tool replies.
+Browser tests also cover all seven standalone previews, host capabilities, pagination, filter removal,
+comparison messages and retries, source/advertisement link callbacks, request failures, county ranking
+selection/expansion, and replacement results arriving before pending tool replies.
 
 The unemployment chart adapts the supplied `RevenueGrowthChart` to monthly DZS rates. Its stat tiles follow the
 inspected month; the annual comparison tiles stay anchored to the server's latest month. Missing values remain

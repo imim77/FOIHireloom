@@ -1,4 +1,4 @@
 import { mount } from '../../shared/mount'
-import { UnemploymentHistory } from './UnemploymentHistory'
+import { UnemploymentHistoryApp } from './UnemploymentHistoryApp'
 
-mount(UnemploymentHistory)
+mount(UnemploymentHistoryApp)
