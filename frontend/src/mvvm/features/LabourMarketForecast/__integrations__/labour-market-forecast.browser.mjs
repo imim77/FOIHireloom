@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { open, deliver } from '../../../../../test-support/mcp-host.mjs'
 import { sample as forecastSample } from '../utils/sample.ts'
 
-test('Chronos displays exact medians and intervals, preserves gaps and supports keyboard selection', async () => {
+test('Chronos displays exact medians and intervals, preserves gaps and supports keyboard and pointer selection', async () => {
   const data = forecastSample()
   const county = data.counties[0]
   county.history[3].value = null
@@ -23,11 +23,33 @@ test('Chronos displays exact medians and intervals, preserves gaps and supports 
     assert.match(await frame.locator('[data-slot="forecast-interval"]').textContent(), /2,3.*2,9.*80%/)
     await slider.press('ArrowRight')
     await frame.waitForFunction(() => document.querySelector('[data-slot="forecast-cursor"]').dataset.period === '2026-11-01')
+    // Hover previews the last period, leaving falls back to the selection, a click selects.
+    const cursor = (period) => frame.waitForFunction((period) =>
+      document.querySelector('[data-slot="forecast-cursor"]').dataset.period === period, period)
+    const plot = await frame.locator('.forecast-plot').boundingBox()
+    await page.mouse.move(plot.x + plot.width - 2, plot.y + plot.height / 2)
+    await cursor('2027-03-01')
+    assert.match(await frame.locator('[data-slot="forecast-median"]').textContent(), /2,7.*%/)
+    assert.match(await frame.locator('[data-slot="forecast-period"]').textContent(), /ožujak 2027/)
+    assert.match(await slider.getAttribute('aria-valuetext'), /studeni 2026/)
+    await page.mouse.move(plot.x + plot.width / 2, plot.y - 200)
+    await cursor('2026-11-01')
+    await page.mouse.click(plot.x + plot.width - 2, plot.y + plot.height / 2)
+    await page.mouse.move(plot.x + plot.width / 2, plot.y - 200)
+    await cursor('2027-03-01')
+    assert.match(await slider.getAttribute('aria-valuetext'), /ožujak 2027/)
     await frame.getByText('Povijesni podaci (24)', { exact: true }).click()
     assert.ok(await frame.getByRole('region', { name: 'Povijesne vrijednosti' }).getByText('procijenjeno', { exact: true }).count())
+    // Grey history, dashed orange projection, in both themes.
+    const strokes = () => frame.evaluate(() => ({
+      history: getComputedStyle(document.querySelector('.forecast-observed')).stroke,
+      forecast: getComputedStyle(document.querySelector('.forecast-predicted')).stroke,
+      dashed: document.querySelector('.forecast-predicted').getAttribute('stroke-dasharray') !== null,
+    }))
+    assert.deepEqual(await strokes(), { history: 'rgb(113, 113, 122)', forecast: 'rgb(242, 100, 25)', dashed: true })
     await page.evaluate(() => window.setTheme('dark'))
     await frame.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
-    assert.notEqual(await frame.locator('.forecast-predicted').evaluate((el) => getComputedStyle(el).stroke), 'none')
+    assert.deepEqual(await strokes(), { history: 'rgb(161, 161, 170)', forecast: 'rgb(242, 100, 25)', dashed: true })
     const replacement = { ...data, title: 'Prognoza nije dostupna', unavailable_label: 'Potrebna su 24 mjeseca podataka.',
       counties: [{ ...county, forecast: [], change_to_horizon: null, unavailable_reason: 'not_enough_history' }] }
     await deliver(page, frame, replacement)
