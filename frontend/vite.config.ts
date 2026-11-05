@@ -14,7 +14,10 @@ export default defineConfig({
   root: 'src/pages',
   resolve: {
     // HTML module URLs resolve from the page root during development.
-    alias: { '/mvvm': fileURLToPath(new URL('./src/mvvm', import.meta.url)) },
+    alias: {
+      '/mvvm': fileURLToPath(new URL('./src/mvvm', import.meta.url)),
+      '@': fileURLToPath(new URL('./src/mvvm', import.meta.url)),
+    },
   },
   plugins: [
     tailwindcss(),
