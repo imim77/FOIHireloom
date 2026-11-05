@@ -74,9 +74,13 @@ mvvm/
   container component only when it clarifies ownership.
 - Style views with Tailwind utilities and the shared theme in
   `frontend/src/mvvm/tailwind.css`. Preserve accessible HTML and existing
-  responsive behavior.
-- Follow existing relative imports. Add no state library, UI framework, path
-  aliases, monorepo packages, or platform-specific view variants for MVVM alone.
+  responsive behavior. Use the installed shadcn primitives in
+  `mvvm/components/ui/` for standard UI; use the shadcn skill when adding or
+  changing them. Component variants own appearance; screen classes own layout.
+  Keep chart geometry and motion separate from these controls.
+- Use the configured `@/` alias for shared UI and nearby relative imports
+  within features. Add no state library, monorepo packages, or
+  platform-specific view variants for MVVM alone.
 
 ## Implement and review
 

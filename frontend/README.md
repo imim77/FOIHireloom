@@ -9,9 +9,23 @@ import, semantic theme tokens, the host's dark-theme overrides, and shared anima
 Layout, typography, interaction states, and responsive/container rules live in component utility classes;
 there are no separate component style sheets. Existing named classes remain as animation and test hooks.
 Use complete utility names in source so Tailwind can discover them; the entry explicitly scans all of
-`src/`, including shared controls outside Vite's views directory. Chart coordinates and animation frames
-calculated from data remain dynamic styles or SVG attributes. The county column buttons retain Arial's
-number metrics from the reference design.
+`src/`, including shared controls outside Vite's pages directory. Chart coordinates and animation frames
+calculated from data remain dynamic styles or SVG attributes. Chart controls use the same shadcn button
+primitives as other actions.
+
+Reusable UI comes from the official shadcn/ui Nova registry with Base UI primitives. `components.json`
+places the owned source in `src/mvvm/components/ui/`; the `@/` import alias resolves to `src/mvvm/`.
+Screens compose those primitives through the shared `Card`, `FilterChips`, and `Sources` adapters.
+Buttons, badges, alerts, empty states, loading skeletons, checkboxes, forecast sliders, tables,
+collapsible history, and accommodation toggles use shadcn components. Specialized chart geometry,
+hover inspection, and animation remain in the existing chart components and hooks.
+
+The Tailwind entry maps shadcn's semantic colors to the existing host-aware tokens, so
+`data-theme="dark"` updates both controls and charts. Local badge variants cover success, warning,
+and provisional values. Table variants preserve comparison wrapping, sticky headers/columns, and
+numeric formatting; the slider forwards accessible labels and value text to its focusable thumb.
+Use component variants for appearance and `className` for layout; pass actions from ViewModels.
+Add future primitives from the frontend directory with `npx shadcn@latest add @shadcn/<component>`.
 
 Shared job conditions and search filters live in `src/mvvm/utils/jobs.ts`, independent of any view.
 `FilterChips` renders removable filters, and `useServerTool` owns request status and ignores replies after
@@ -85,7 +99,8 @@ npm run test:browser           # production page in an MCP Apps iframe; mouse, k
 
 Browser tests also cover all seven standalone previews, host capabilities, pagination, filter removal,
 comparison messages and retries, source/advertisement link callbacks, request failures, county ranking
-selection/expansion, and replacement results arriving before pending tool replies.
+selection/expansion, loading skeletons, keyboard-operated selection/toggles, and replacement results
+arriving before pending tool replies.
 
 The unemployment chart adapts the supplied `RevenueGrowthChart` to monthly DZS rates. Its stat tiles follow the
 inspected month; the annual comparison tiles stay anchored to the server's latest month. Missing values remain
