@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 // Domain adaptation of the supplied PortfolioAllocationChart. Geometry, stepped bands, sweep, morphing,
 // glass pills and interactive legend follow the reference; values count ads instead of currency.
-// Styled after the jobs-by-county chart: one ramp (offered orange, not offered dark grey, unknown grey), a readout
+// Styled after the jobs-by-county chart: one ramp (offered orange, not offered grey, unknown light grey), a readout
 // over the ring with the active segment's name, share and ad count, and the other segments dimmed. Each segment is
 // a button: hover previews, click or the arrow keys select. The readout fades in and counts up with the sweep, and
 // counts to the new number when another segment becomes active.
@@ -191,15 +191,16 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
   }
 
   // One ramp for the parts of the whole: offered lights up orange (a lighter top, as on the lit columns), not offered
-  // is the dark pill grey and unknown the light grey. Inks keep 12px shares legible on each fill in both themes; on
-  // dark orange-300 the near-black fg-on-muted reads, fg-loud (near-white there) would not. Card-coloured strokes part
+  // is the darker grey and unknown the lighter one, so only the orange stands out. The greys stay flat: a
+  // disable-to-subdued face would end not offered in unknown's colour. Inks keep 12px shares legible on each fill in
+  // both themes; on dark orange-300 the near-black fg-on-muted reads, fg-loud (near-white there) would not. Card-coloured strokes part
   // neighbouring slices; the veil leaves inactive slices at the 32 % of the county chart's grey columns.
   return <div className="portfolio-allocation
     [&_.allocation-offered]:[--allocation-color:var(--orange-300)] [&_.allocation-offered]:[--allocation-top:var(--orange-100)]
     [&_.allocation-offered]:[--allocation-ink:var(--fg-loud)] dark:[&_.allocation-offered]:[--allocation-ink:var(--fg-on-muted)]
-    [&_.allocation-not\_offered]:[--allocation-color:var(--surface-muted)] [&_.allocation-not\_offered]:[--allocation-top:var(--surface-muted)]
-    [&_.allocation-not\_offered]:[--allocation-ink:var(--fg-on-muted)]
-    [&_.allocation-unknown]:[--allocation-color:var(--surface-disable)] [&_.allocation-unknown]:[--allocation-top:var(--surface-disable)]
+    [&_.allocation-not\_offered]:[--allocation-color:var(--surface-disable)] [&_.allocation-not\_offered]:[--allocation-top:var(--surface-disable)]
+    [&_.allocation-not\_offered]:[--allocation-ink:var(--fg-loud)]
+    [&_.allocation-unknown]:[--allocation-color:var(--surface-subdued)] [&_.allocation-unknown]:[--allocation-top:var(--surface-subdued)]
     [&_.allocation-unknown]:[--allocation-ink:var(--fg-loud)] flex flex-col items-center gap-6 min-w-0 w-full
     [&_.allocation-drop]:[fill:var(--allocation-color)] [&_.allocation-glow]:[fill:var(--allocation-color)]
     [&_.allocation-shape]:[stroke:var(--card)] [&_.allocation-shape]:[stroke-width:1]

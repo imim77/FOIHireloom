@@ -125,9 +125,9 @@ test('real sample renders counts, percentages, source, filters and freshness wit
     assert.deepEqual(await frame.locator('.allocation-legend-count').allTextContents(), ['2', '7', '1'])
     assert.deepEqual(await frame.locator('[data-slot="allocation-share"]').allTextContents(), ['20 %', '70 %', '10 %'])
     assert.equal(await frame.locator('[data-slot="allocation-slice-button"]').count(), 3)
-    // orange-300 / surface-muted / surface-disable, with dark ink on orange and light ink on the dark grey.
+    // orange-300 / surface-disable / surface-subdued, with fg-loud ink on all three.
     assert.deepEqual(await ramp(frame), [['rgb(255, 154, 92)', 'rgb(24, 24, 27)'],
-      ['rgb(39, 39, 42)', 'rgb(255, 255, 255)'], ['rgb(196, 200, 208)', 'rgb(24, 24, 27)']])
+      ['rgb(196, 200, 208)', 'rgb(24, 24, 27)'], ['rgb(236, 238, 242)', 'rgb(24, 24, 27)']])
     assert.match(await frame.locator('.header .soft').textContent(), /kuhar.*Varaždinska/)
     assert.match(await frame.locator('.sources').textContent(), /HZZ/)
     assert.match(await frame.locator('.warning').textContent(), /stariji od 6 sati/)
@@ -213,7 +213,7 @@ test('320px dark mobile supports touch selection, second-tap clearing and reduce
     await frame.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
     // The same ramp in dark tokens; near-black ink on the darker orange, where fg-loud would be too faint.
     assert.deepEqual(await ramp(frame), [['rgb(232, 116, 47)', 'rgb(24, 24, 27)'],
-      ['rgb(244, 244, 245)', 'rgb(24, 24, 27)'], ['rgb(113, 113, 122)', 'rgb(250, 250, 250)']])
+      ['rgb(113, 113, 122)', 'rgb(250, 250, 250)'], ['rgb(63, 63, 70)', 'rgb(250, 250, 250)']])
     await frame.locator('.allocation-ring').scrollIntoViewIfNeeded()
     const point = await pointOn(frame, 2)
     await page.touchscreen.tap(point.x, point.y)
