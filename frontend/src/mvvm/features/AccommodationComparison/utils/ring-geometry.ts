@@ -90,13 +90,7 @@ export function interpolateGeometry(a: SliceGeometry, b: SliceGeometry, t: numbe
     band: lerp(a.band, b.band), tuckStart: lerp(a.tuckStart, b.tuckStart), tuckEnd: lerp(a.tuckEnd, b.tuckEnd) }
 }
 
-/** Pointer coordinates in the ring's own 400px square; the hole and space outside it are not selectable. */
-export function sliceAt(x: number, y: number, geometry: SliceGeometry[]) {
-  const dx = x - CENTER
-  const dy = y - CENTER
-  const radius = Math.hypot(dx, dy)
-  if (radius < INNER - 10) return null
-  const angle = Math.atan2(dx, -dy) * 180 / Math.PI
-  const index = geometry.findIndex((g) => g.span > 0 && mod(angle - g.start, 360) < g.span && radius <= g.outer + 6)
-  return index < 0 ? null : index
+/** A slice without its tucked ends: its own angular range, which no neighbour overlaps, for pointer and focus. */
+export function untucked(g: SliceGeometry): SliceGeometry {
+  return { ...g, tuckStart: 0, tuckEnd: 0 }
 }

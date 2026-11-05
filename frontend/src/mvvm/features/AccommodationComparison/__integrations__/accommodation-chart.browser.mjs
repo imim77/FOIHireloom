@@ -63,12 +63,24 @@ async function checkLayout(frame) {
   assert.ok(await frame.locator('svg path').evaluateAll((paths) => paths.every((p) => !/NaN|Infinity/.test(p.getAttribute('d') ?? ''))))
 }
 async function pointOn(frame, index, values = [2, 7, 1]) {
-  const box = await frame.getByRole('slider').boundingBox()
+  const box = await frame.locator('.allocation-ring').boundingBox()
   const g = layoutRing(values)[index]
   const angle = (g.start + g.span / 2) * Math.PI / 180
   const radius = (INNER + g.outer) / 2
   return { x: box.x + (200 + radius * Math.sin(angle)) / 400 * box.width,
     y: box.y + (200 - radius * Math.cos(angle)) / 400 * box.height }
+}
+const segment = (frame, name) => frame.getByRole('group', { name: 'Udjeli skupina smještaja' })
+  .getByRole('button', { name: new RegExp(`^${name}:`) })
+const context = (frame) => frame.locator('.allocation-context').textContent()
+async function amountIs(frame, text) {
+  await frame.waitForFunction((text) => document.querySelector('.allocation-amount')?.textContent === text, text)
+}
+// Each group's fill (the gradient's lower stop) and the ink of its share, as the theme resolves the tokens.
+async function ramp(frame) {
+  return frame.evaluate(() => ['offered', 'not_offered', 'unknown'].map((key) => [
+    getComputedStyle(document.querySelector(`linearGradient.allocation-${key} stop[offset="1"]`)).stopColor,
+    getComputedStyle(document.querySelector(`.allocation-pill.allocation-${key} .allocation-glass`)).color]))
 }
 async function artifact(frame, name) {
   if (!process.env.CHART_ARTIFACT_DIR) return
@@ -112,7 +124,10 @@ test('real sample renders counts, percentages, source, filters and freshness wit
     await settled(page)
     assert.deepEqual(await frame.locator('.allocation-legend-count').allTextContents(), ['2', '7', '1'])
     assert.deepEqual(await frame.locator('[data-slot="allocation-share"]').allTextContents(), ['20 %', '70 %', '10 %'])
-    assert.equal(await frame.locator('.allocation-amount').textContent(), '10')
+    assert.equal(await frame.locator('[data-slot="allocation-slice-button"]').count(), 3)
+    // orange-300 / surface-muted / surface-disable, with dark ink on orange and light ink on the dark grey.
+    assert.deepEqual(await ramp(frame), [['rgb(255, 154, 92)', 'rgb(24, 24, 27)'],
+      ['rgb(39, 39, 42)', 'rgb(255, 255, 255)'], ['rgb(196, 200, 208)', 'rgb(24, 24, 27)']])
     assert.match(await frame.locator('.header .soft').textContent(), /kuhar.*Varaždinska/)
     assert.match(await frame.locator('.sources').textContent(), /HZZ/)
     assert.match(await frame.locator('.warning').textContent(), /stariji od 6 sati/)
@@ -120,19 +135,47 @@ test('real sample renders counts, percentages, source, filters and freshness wit
     await checkLayout(frame)
     await artifact(frame, 'accommodation_comparison.png')
 
+    await amountIs(frame, '10 oglasa')
+    assert.equal(await context(frame), 'Ukupno oglasa · u odabranom skupu')
+
+    // Hover previews: the readout follows the segment under the pointer and counts to its ads.
     const point = await pointOn(frame, 0)
     await page.mouse.move(point.x, point.y)
-    assert.match(await frame.getByRole('slider').getAttribute('aria-valuetext'), /Nudi smještaj: 2 oglasa/)
+    assert.equal(await context(frame), 'Nudi smještaj · 20,0\u00a0% svih oglasa')
+    await amountIs(frame, '2 oglasa')
+    assert.equal(await frame.locator('[data-key="offered"] .allocation-veil').getAttribute('class'), 'allocation-veil')
+    assert.match(await frame.locator('[data-key="not_offered"] .allocation-veil').getAttribute('class'), /is-visible/)
+    // Click selects; leaving the ring keeps the selection.
     await page.mouse.click(point.x, point.y)
     await page.mouse.move(0, 0)
-    assert.equal(await frame.locator('.allocation-middle-label').textContent(), 'Nudi smještaj')
-    await frame.getByRole('slider').focus()
+    assert.match(await context(frame), /^Nudi smještaj · /)
+    assert.equal(await segment(frame, 'Nudi smještaj').getAttribute('aria-pressed'), 'true')
+    assert.match(await segment(frame, 'Nudi smještaj').getAttribute('aria-label'), /Nudi smještaj: 2 oglasa, 20,0.*svih oglasa/)
+    // Roving tab stop on the selection; the arrow keys and Home/End move the selection and the focus with it.
+    assert.deepEqual(await frame.locator('[data-slot="allocation-slice-button"]').evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute('tabindex'))), ['0', '-1', '-1'])
+    await segment(frame, 'Nudi smještaj').focus()
     await page.keyboard.press('End')
-    assert.equal(await frame.locator('.allocation-middle-label').textContent(), 'Podatak nije poznat')
+    assert.match(await context(frame), /^Podatak nije poznat · /)
+    await amountIs(frame, '1 oglas')
+    assert.equal(await segment(frame, 'Podatak nije poznat').getAttribute('aria-pressed'), 'true')
+    assert.equal(await segment(frame, 'Podatak nije poznat').evaluate((node) => node === document.activeElement), true)
+    assert.notEqual(await segment(frame, 'Podatak nije poznat').evaluate((node) => getComputedStyle(node).stroke), 'none')
+    await page.keyboard.press('ArrowRight')
+    assert.match(await context(frame), /^Nudi smještaj · /)
+    await page.keyboard.press('ArrowLeft')
     await page.keyboard.press('Home')
-    assert.equal(await frame.locator('.allocation-middle-label').textContent(), 'Nudi smještaj')
+    assert.match(await context(frame), /^Nudi smještaj · /)
+    assert.deepEqual(await frame.locator('[data-slot="allocation-slice-button"]').evaluateAll((nodes) =>
+      nodes.map((node) => [node.getAttribute('tabindex'), node.getAttribute('aria-pressed')])),
+    [['0', 'true'], ['-1', 'false'], ['-1', 'false']])
+    await page.keyboard.press('Space')
+    assert.equal(await segment(frame, 'Nudi smještaj').getAttribute('aria-pressed'), 'false')
+    await page.keyboard.press('Enter')
+    assert.equal(await segment(frame, 'Nudi smještaj').getAttribute('aria-pressed'), 'true')
     await page.keyboard.press('Escape')
-    assert.equal(await frame.locator('.allocation-middle-label').textContent(), 'Ukupno oglasa')
+    assert.equal(await context(frame), 'Ukupno oglasa · u odabranom skupu')
+    await amountIs(frame, '10 oglasa')
   } finally { await page.close() }
 })
 
@@ -168,12 +211,21 @@ test('320px dark mobile supports touch selection, second-tap clearing and reduce
     await deliver(page, frame, sample())
     await page.evaluate(() => window.setTheme('dark'))
     await frame.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
-    await frame.getByRole('slider').scrollIntoViewIfNeeded()
+    // The same ramp in dark tokens; near-black ink on the darker orange, where fg-loud would be too faint.
+    assert.deepEqual(await ramp(frame), [['rgb(232, 116, 47)', 'rgb(24, 24, 27)'],
+      ['rgb(244, 244, 245)', 'rgb(24, 24, 27)'], ['rgb(113, 113, 122)', 'rgb(250, 250, 250)']])
+    await frame.locator('.allocation-ring').scrollIntoViewIfNeeded()
     const point = await pointOn(frame, 2)
     await page.touchscreen.tap(point.x, point.y)
-    assert.equal(await frame.locator('.allocation-middle-label').textContent(), 'Podatak nije poznat')
+    assert.match(await context(frame), /^Podatak nije poznat · /)
+    assert.equal(await frame.locator('.allocation-amount').textContent(), '1 oglas')
     await page.touchscreen.tap(point.x, point.y)
-    assert.equal(await frame.locator('.allocation-middle-label').textContent(), 'Ukupno oglasa')
+    assert.equal(await context(frame), 'Ukupno oglasa · u odabranom skupu')
+    // A tap in the hole clears a selection, as on the ring before segments were buttons.
+    await page.touchscreen.tap(point.x, point.y)
+    const box = await frame.locator('.allocation-ring').boundingBox()
+    await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2)
+    assert.equal(await context(frame), 'Ukupno oglasa · u odabranom skupu')
     await checkLayout(frame)
     await artifact(frame, 'accommodation_comparison_mobile_dark.png')
   } finally { await page.close() }
@@ -223,6 +275,7 @@ test('hidden iframe animations finish by deadline and keep final percentages whe
     await page.evaluate(() => { document.querySelector('iframe').style.display = 'block' })
     await frame.locator('.allocation-ring').waitFor()
     assert.deepEqual(await frame.locator('[data-slot="allocation-share"]').allTextContents(), ['20 %', '70 %', '10 %'])
+    assert.equal(await frame.locator('.allocation-amount').textContent(), '10 oglasa')
     assert.ok((await frame.locator('[data-layer="shape"]').evaluateAll((paths) => paths.map((p) => p.getAttribute('d')))).every(Boolean))
     await checkLayout(frame)
   } finally { await page.close() }

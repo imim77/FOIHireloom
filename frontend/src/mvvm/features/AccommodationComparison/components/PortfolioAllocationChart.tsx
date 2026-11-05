@@ -3,11 +3,16 @@ import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 // Domain adaptation of the supplied PortfolioAllocationChart. Geometry, stepped bands, sweep, morphing,
 // glass pills and interactive legend follow the reference; values count ads instead of currency.
-import { animate, stagger } from 'animejs'
-import { type KeyboardEvent, type MouseEvent, type PointerEvent, useCallback, useId, useLayoutEffect, useMemo, useRef } from 'react'
+// Styled after the jobs-by-county chart: one ramp (offered orange, not offered dark grey, unknown grey), a readout
+// over the ring with the active segment's name, share and ad count, and the other segments dimmed. Each segment is
+// a button: hover previews, click or the arrow keys select. The readout fades in and counts up with the sweep, and
+// counts to the new number when another segment becomes active.
+import { animate, type JSAnimation, stagger } from 'animejs'
+import { type KeyboardEvent, useCallback, useId, useLayoutEffect, useMemo, useRef } from 'react'
 import { fadeIn, finish, releaseStyles, useChartEntrance, useCountUp, useReducedMotion } from '../../../hooks/chart-motion'
 import { formatAds, formatInteger, formatShare } from '../../../utils/format'
-import { SIZE, START_ANGLE, TUCK, interpolateGeometry, layoutRing, mod, pillPlace, sliceAt, slicePath, type SliceGeometry } from '../utils/ring-geometry'
+import { SIZE, START_ANGLE, TUCK, interpolateGeometry, layoutRing, mod, pillPlace, slicePath, untucked,
+  type SliceGeometry } from '../utils/ring-geometry'
 import type { useAllocation } from '../hooks/use-allocation'
 
 const SWEEP_AT = 150
@@ -17,24 +22,21 @@ const LAYERS = [{ name: 'drop', spread: 0 }, { name: 'rim', spread: -1 }, { name
 const inOutCubic = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 const percent = (value: number) => `${formatInteger(value)} %`
 
-function Amount({ value }: { value: number }) {
-  const ref = useRef<HTMLSpanElement>(null)
-  useCountUp(ref, value, formatInteger, { duration: 450 })
-  return <span ref={ref} className="allocation-amount text-[clamp(26px,_6vw,_36px)] leading-[1.2] font-semibold text-fg-loud tabular-nums">{formatInteger(value)}</span>
-}
-
-function Pill({ index, share, geometry, dimmed }: { index: number; share: number; geometry: SliceGeometry; dimmed: boolean }) {
+function Pill({ index, groupKey, share, geometry, dimmed }:
+  { index: number; groupKey: string; share: number; geometry: SliceGeometry; dimmed: boolean }) {
   const ref = useRef<HTMLSpanElement>(null)
   useCountUp(ref, share, percent, { duration: 700 })
   const place = pillPlace(geometry)
   return <span aria-hidden="true" data-slot="allocation-pill" data-index={index}
-    className={`allocation-pill absolute pointer-events-none [width:12%] [aspect-ratio:1] [transition:opacity_300ms]
-      [&.is-hidden]:[opacity:0] [&.is-dimmed]:[opacity:0.4] [&:first-of-type_.allocation-glass]:[color:#ffffff]
+    className={`allocation-pill allocation-${groupKey} absolute pointer-events-none [width:12%] [aspect-ratio:1]
+      [transition:opacity_300ms] [&.is-hidden]:[opacity:0] [&.is-dimmed]:[opacity:0.4]
       motion-reduce:[transition:none] ${!place.fits ? ' is-hidden' : ''}${dimmed ? ' is-dimmed' : ''}`}
     style={{ left: `${place.left / SIZE * 100}%`, top: `${place.top / SIZE * 100}%` }}>
+    {/* Card-coloured glass, like the card-coloured edges of the 3D columns: light on light, dark on dark. */}
     <span className="allocation-glass flex items-center justify-center w-full h-full rounded-full
-      [background:linear-gradient(135deg,_rgb(255_255_255_/_0.036),_rgb(255_255_255_/_0.164))]
-      [border:1px_solid_rgb(255_255_255_/_0.35)] [color:#18233b] text-[clamp(10px,_2.8vw,_12px)] font-medium" data-slot="allocation-glass">
+      [background:linear-gradient(135deg,_color-mix(in_srgb,_var(--card)_4%,_transparent),_color-mix(in_srgb,_var(--card)_16%,_transparent))]
+      [border:1px_solid_color-mix(in_srgb,_var(--card)_35%,_transparent)] [color:var(--allocation-ink)]
+      text-[12px] font-medium tabular-nums" data-slot="allocation-glass">
       <span ref={ref} data-slot="allocation-share" data-share={share}>{percent(share)}</span>
     </span>
   </span>
@@ -42,8 +44,8 @@ function Pill({ index, share, geometry, dimmed }: { index: number; share: number
 
 export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>) {
   const root = useRef<HTMLDivElement>(null)
-  const { groups, total, hidden, values, shown, visibleTotal, shares, active,
-    sliderAt, sliderSlice, filtered, denominator, showGroups, selectGroup,
+  const { groups, total, hidden, values, shown, visibleTotal, shares, active, selected, tabStop,
+    filtered, denominator, readout, showGroups, selectGroup,
     hoverGroup, previewGroup, navigate, resetGroups } = model
   const geometry = useMemo(() => layoutRing(values, active), [values, active])
   const order = groups.map((_, index) => index).sort((a, b) => geometry[a].band - geometry[b].band)
@@ -52,8 +54,10 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
   const sweep = useRef<{ t: number } | null>(null)
   const previousGeometry = useRef(geometry)
   const reduced = useReducedMotion()
-  const pointer = useRef('mouse')
   const id = useId().replace(/[^\w-]/g, '')
+  const contextRef = useRef<HTMLParagraphElement>(null)
+  const amountRef = useRef<HTMLParagraphElement>(null)
+  const all = (selector: string) => [...root.current?.querySelectorAll<HTMLElement>(selector) ?? []]
 
   const draw = useCallback((frame: SliceGeometry[], clip?: { from: number; upTo: number }) => {
     drawn.current = frame
@@ -61,6 +65,10 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
       for (const element of root.current?.querySelectorAll<SVGPathElement>(`[data-layer="${layer.name}"]`) ?? []) {
         element.setAttribute('d', slicePath(frame[Number(element.dataset.index)], clip, layer.spread))
       }
+    }
+    // Segment buttons cover their own angle only, so neighbours never overlap under the pointer or focus ring.
+    for (const element of root.current?.querySelectorAll<SVGPathElement>('[data-slot="allocation-slice-button"]') ?? []) {
+      element.setAttribute('d', slicePath(untucked(frame[Number(element.dataset.index)]), clip))
     }
     for (const pill of root.current?.querySelectorAll<HTMLElement>('[data-slot="allocation-pill"]') ?? []) {
       const place = pillPlace(frame[Number(pill.dataset.index)])
@@ -70,16 +78,34 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
   }, [])
   useLayoutEffect(() => { latest.current = geometry }, [geometry])
 
+  // The readout's ad count on screen; the entrance counts it up from zero, later changes count from here.
+  const latestAmount = useRef(readout.amount)
+  useLayoutEffect(() => { latestAmount.current = readout.amount })
+  const countingAmount = useRef(false)
+  const amountCount = useRef<{ tween: JSAnimation | null; value: number }>({ tween: null, value: readout.amount })
+  const showAmount = (value: number) => {
+    amountCount.current.value = value
+    if (amountRef.current) amountRef.current.textContent = formatAds(value)
+  }
+
   useChartEntrance(root, (timeline) => {
+    const lines = all('[data-slot="allocation-readout"] > *')
+    timeline.add(lines, { ...fadeIn(lines, 6), duration: 600, delay: stagger(80) }, 100)
+    const up = { t: 0 }
+    const countUp = () => showAmount(latestAmount.current * up.t)
+    countingAmount.current = true
+    countUp()
+    timeline.add(up, { t: [0, 1], duration: 1400, ease: 'outExpo', onUpdate: countUp,
+      onComplete: () => { countingAmount.current = false } }, 150)
     const state = { t: 0 }
     sweep.current = state
     const paint = () => draw(latest.current, { from: START_ANGLE, upTo: inOutCubic(state.t) * (360 + TUCK) })
     paint()
     timeline.add(state, { t: [0, 1], duration: SWEEP, ease: 'linear', onUpdate: paint,
       onComplete: () => { sweep.current = null; draw(latest.current) } }, SWEEP_AT)
-    const buttons = [...root.current!.querySelectorAll<HTMLElement>('.allocation-legend-item')]
+    const buttons = all('.allocation-legend-item')
     timeline.add(buttons, { ...fadeIn(buttons, 8), duration: 700, ease: 'outExpo', delay: stagger(80) }, 500)
-    for (const pill of root.current!.querySelectorAll<HTMLElement>('[data-slot="allocation-pill"]')) {
+    for (const pill of all('[data-slot="allocation-pill"]')) {
       const index = Number(pill.dataset.index)
       const g = latest.current[index]
       if (!(g.span > 0)) continue
@@ -101,11 +127,13 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
     }
     return () => {
       sweep.current = null
+      countingAmount.current = false
       draw(latest.current)
-      for (const node of root.current?.querySelectorAll<HTMLElement>('.allocation-legend-item, .allocation-glass') ?? []) {
+      showAmount(latestAmount.current)
+      for (const node of [...lines, ...all('.allocation-legend-item, .allocation-glass')]) {
         node.style.removeProperty('opacity'); node.style.removeProperty('transform')
       }
-      for (const value of root.current?.querySelectorAll<HTMLElement>('[data-slot="allocation-share"]') ?? []) {
+      for (const value of all('[data-slot="allocation-share"]')) {
         value.textContent = percent(Number(value.dataset.share))
       }
     }
@@ -130,72 +158,108 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
     return () => { animation.cancel() }
   }, [geometry, reduced, draw])
 
-  function pointAt(event: PointerEvent<HTMLDivElement> | MouseEvent<HTMLDivElement>) {
-    const box = event.currentTarget.getBoundingClientRect()
-    return sliceAt((event.clientX - box.left) / (box.width || 1) * SIZE,
-      (event.clientY - box.top) / (box.height || 1) * SIZE, geometry)
-  }
-  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (navigate(event.key)) event.preventDefault()
+  // Another active segment fades its name in over the ring.
+  const lastActive = useRef(active)
+  useLayoutEffect(() => {
+    const before = lastActive.current
+    lastActive.current = active
+    if (reduced || before === active || !contextRef.current) return
+    finish(animate(contextRef.current, { opacity: [0.4, 1], duration: 300, ease: 'outQuad',
+      onComplete: releaseStyles('opacity') }))
+  }, [active, reduced])
+
+  // The ad count counts from the number on screen to the new one; during the entrance its count-up carries on to it.
+  useLayoutEffect(() => {
+    const count = amountCount.current
+    if (countingAmount.current || count.value === readout.amount) return
+    count.tween?.cancel()
+    count.tween = null
+    if (reduced) { showAmount(readout.amount); return }
+    const state = { value: count.value }
+    const target = readout.amount
+    count.tween = finish(animate(state, { value: target, duration: 600, ease: 'outExpo',
+      onUpdate: () => showAmount(state.value),
+      onComplete: () => { count.tween = null; showAmount(target) } }))
+  }, [readout.amount, reduced])
+  useLayoutEffect(() => () => { amountCount.current.tween?.cancel() }, [])
+
+  function onSliceKeyDown(event: KeyboardEvent<SVGPathElement>, index: number) {
+    const next = navigate(event.key, index)
+    if (next === null) return
+    event.preventDefault()
+    root.current?.querySelector<SVGPathElement>(`[data-slot="allocation-slice-button"][data-index="${next}"]`)?.focus()
   }
 
-  return <div className="portfolio-allocation [&_.allocation-offered]:[--allocation-color:var(--allocation-blue)]
-    [&_.allocation-offered]:[--allocation-ink:#ffffff]
-    [&_.allocation-not\_offered]:[--allocation-color:var(--allocation-light)]
-    [&_.allocation-not\_offered]:[--allocation-ink:#18233b]
-    [&_.allocation-unknown]:[--allocation-color:var(--allocation-orange)]
-    [&_.allocation-unknown]:[--allocation-ink:#37200e] flex flex-col items-center gap-6 min-w-0 w-full
-    [&_.allocation-shape]:[fill:var(--allocation-color)] [&_.allocation-rim]:[fill:var(--allocation-color)]
-    [&_.allocation-drop]:[fill:#000] [&_.allocation-glow]:[fill:#000] [&_.allocation-veil]:fill-card
-    [&_.allocation-veil]:[opacity:0] [&_.allocation-veil]:[transition:opacity_300ms]
-    [&_.allocation-veil.is-visible]:[opacity:0.55] motion-reduce:[&_.allocation-veil]:[transition:none]" ref={root} data-slot="accommodation-chart">
+  // One ramp for the parts of the whole: offered lights up orange (a lighter top, as on the lit columns), not offered
+  // is the dark pill grey and unknown the light grey. Inks keep 12px shares legible on each fill in both themes; on
+  // dark orange-300 the near-black fg-on-muted reads, fg-loud (near-white there) would not. Card-coloured strokes part
+  // neighbouring slices; the veil leaves inactive slices at the 32 % of the county chart's grey columns.
+  return <div className="portfolio-allocation
+    [&_.allocation-offered]:[--allocation-color:var(--orange-300)] [&_.allocation-offered]:[--allocation-top:var(--orange-100)]
+    [&_.allocation-offered]:[--allocation-ink:var(--fg-loud)] dark:[&_.allocation-offered]:[--allocation-ink:var(--fg-on-muted)]
+    [&_.allocation-not\_offered]:[--allocation-color:var(--surface-muted)] [&_.allocation-not\_offered]:[--allocation-top:var(--surface-muted)]
+    [&_.allocation-not\_offered]:[--allocation-ink:var(--fg-on-muted)]
+    [&_.allocation-unknown]:[--allocation-color:var(--surface-disable)] [&_.allocation-unknown]:[--allocation-top:var(--surface-disable)]
+    [&_.allocation-unknown]:[--allocation-ink:var(--fg-loud)] flex flex-col items-center gap-6 min-w-0 w-full
+    [&_.allocation-drop]:[fill:var(--allocation-color)] [&_.allocation-glow]:[fill:var(--allocation-color)]
+    [&_.allocation-shape]:[stroke:var(--card)] [&_.allocation-shape]:[stroke-width:1]
+    [&_.allocation-veil]:fill-card [&_.allocation-veil]:[opacity:0] [&_.allocation-veil]:[transition:opacity_300ms]
+    [&_.allocation-veil.is-visible]:[opacity:0.68] motion-reduce:[&_.allocation-veil]:[transition:none]" ref={root} data-slot="accommodation-chart">
+    <div className="allocation-readout flex flex-col items-start gap-2.5 self-stretch" data-slot="allocation-readout">
+      <p className="allocation-context m-0 text-[12px] font-medium leading-[1.25] text-fg-soft" ref={contextRef}>{readout.context}</p>
+      <p className="allocation-amount m-0 text-[28px] font-semibold leading-[1] whitespace-nowrap text-fg-loud tabular-nums"
+        ref={amountRef}>{formatAds(readout.amount)}</p>
+    </div>
     <div className="allocation-ring relative [width:min(100%,_400px)] [aspect-ratio:1] m-2 [&_>_svg]:absolute [&_>_svg]:inset-0
       [&_>_svg]:w-full [&_>_svg]:h-full [&_>_svg]:overflow-visible [&_>_svg]:pointer-events-none
-      [@media(max-width:_400px)]:[margin:8px_0]">
+      [@media(max-width:_400px)]:[margin:8px_0]"
+      onClick={(event) => { if (event.target === event.currentTarget) selectGroup(null) }}>
       <svg aria-hidden="true" viewBox={`0 0 ${SIZE} ${SIZE}`}>
         <defs>
+          {/* Light and shade stay black and white: they model light falling on the ring in either theme, and no
+              token holds one value across themes. */}
           <filter id={`${id}-drop`} filterUnits="userSpaceOnUse" x="-80" y="-80" width="560" height="560">
-            <feDropShadow dx="-2" dy="2" stdDeviation="2.7" floodOpacity="0.16" />
+            <feDropShadow dx="-2" dy="2" stdDeviation="2.7" floodColor="black" floodOpacity="0.16" />
           </filter>
           {groups.map((group) => <filter key={group.key} id={`${id}-glow-${group.key}`} filterUnits="userSpaceOnUse" x="-80" y="-80" width="560" height="560" className={`allocation-${group.key}`}>
             <feOffset in="SourceAlpha" dx="4" /><feGaussianBlur stdDeviation="7.2" result="blurred" />
             <feFlood floodColor="var(--allocation-color)" floodOpacity="0.4" /><feComposite in2="blurred" operator="in" />
           </filter>)}
+          {groups.map((group) => <linearGradient key={group.key} id={`${id}-fill-${group.key}`} x1="0" y1="0" x2="0" y2="1"
+            className={`allocation-${group.key}`}>
+            <stop stopColor="var(--allocation-top)" /><stop offset="1" stopColor="var(--allocation-color)" />
+          </linearGradient>)}
           <filter id={`${id}-bevel`} filterUnits="userSpaceOnUse" x="-20" y="-20" width="440" height="440">
             <feOffset in="SourceAlpha" dy="-1" /><feGaussianBlur stdDeviation="0.9" result="up" />
             <feComposite in="SourceAlpha" in2="up" operator="arithmetic" k2="1" k3="-1" result="edge" />
-            <feFlood floodColor="#000" floodOpacity="0.16" /><feComposite in2="edge" operator="in" result="shade" />
+            <feFlood floodColor="black" floodOpacity="0.16" /><feComposite in2="edge" operator="in" result="shade" />
             <feOffset in="SourceAlpha" dy="2" /><feGaussianBlur stdDeviation="0.9" result="down" />
             <feComposite in="SourceAlpha" in2="down" operator="arithmetic" k2="1" k3="-1" result="top" />
-            <feFlood floodColor="#fff" floodOpacity="0.24" /><feComposite in2="top" operator="in" result="light" />
+            <feFlood floodColor="white" floodOpacity="0.24" /><feComposite in2="top" operator="in" result="light" />
             <feMerge><feMergeNode in="SourceGraphic" /><feMergeNode in="shade" /><feMergeNode in="light" /></feMerge>
           </filter>
         </defs>
         {order.map((index) => <g key={groups[index].key} className={`allocation-slice allocation-${groups[index].key}`} data-key={groups[index].key}>
           {LAYERS.map((layer) => <path key={layer.name} data-layer={layer.name} data-index={index}
             d={slicePath(geometry[index], null, layer.spread)} className={`allocation-${layer.name}${layer.name === 'veil' && active !== null && active !== index ? ' is-visible' : ''}`}
+            fill={layer.name === 'shape' || layer.name === 'rim' ? `url(#${id}-fill-${groups[index].key})` : undefined}
             filter={layer.name === 'drop' ? `url(#${id}-drop)` : layer.name === 'glow' ? `url(#${id}-glow-${groups[index].key})` : layer.name === 'shape' ? `url(#${id}-bevel)` : undefined} />)}
         </g>)}
       </svg>
-      <div role="slider" tabIndex={shown.length ? 0 : -1} className="allocation-hit absolute inset-0 rounded-full [outline:none] cursor-pointer touch-pan-y
-        [-webkit-tap-highlight-color:transparent]
-        [&:focus-visible]:[box-shadow:0_0_0_2px_color-mix(in_srgb,_var(--allocation-blue)_45%,_transparent)]" aria-label="Odaberite skupinu smještaja"
-        aria-describedby={`${id}-hint`} aria-orientation="horizontal" aria-valuemin={0} aria-valuemax={Math.max(0, shown.length - 1)}
-        aria-valuenow={sliderAt} aria-valuetext={sliderSlice !== undefined ? `${groups[sliderSlice].label}: ${formatAds(values[sliderSlice])}, ${formatShare(shares[sliderSlice])} ${denominator}` : undefined}
-        onPointerMove={(event) => { if (event.pointerType === 'mouse') hoverGroup(pointAt(event)) }}
-        onPointerDown={(event) => { pointer.current = event.pointerType; hoverGroup(pointAt(event)) }}
-        onPointerLeave={() => hoverGroup(null)} onPointerCancel={() => hoverGroup(null)}
-        onClick={(event) => { const index = pointAt(event); selectGroup(index); if (pointer.current !== 'mouse') hoverGroup(null) }}
-        onFocus={(event) => { if (event.currentTarget.matches(':focus-visible') && active === null && shown.length) hoverGroup(shown[0]) }}
-        onBlur={() => hoverGroup(null)} onKeyDown={onKeyDown} />
-      {groups.map((group, index) => <Pill key={group.key} index={index} share={shares[index]} geometry={geometry[index]}
-        dimmed={active !== null && active !== index} />)}
-      <div className="allocation-middle absolute inset-0 flex flex-col items-center justify-center gap-1.5 pointer-events-none text-center" aria-hidden="true">
-        <span key={active ?? 'all'} className="allocation-middle-label [max-width:49%] text-[12px] leading-[1.4] text-fg-soft animate-fade-in
-          [animation-duration:250ms] [@media(max-width:_400px)]:text-[11px] motion-reduce:[animation:none]">{active === null ? 'Ukupno oglasa' : groups[active].label}</span>
-        <Amount value={active === null ? visibleTotal : values[active]} />
-        <span className="allocation-middle-share [max-width:48%] text-[12px] leading-[1.4] text-fg-soft [@media(max-width:_400px)]:text-[11px]">{active === null ? (filtered ? 'u prikazanim skupinama' : 'u odabranom skupu') : `${formatShare(shares[active])} ${denominator}`}</span>
-      </div>
+      {groups.map((group, index) => <Pill key={group.key} index={index} groupKey={group.key} share={shares[index]}
+        geometry={geometry[index]} dimmed={active !== null && active !== index} />)}
+      {/* The segments as buttons, over the pills so the pointer reaches them; transparent but for the focus ring. */}
+      <svg viewBox={`0 0 ${SIZE} ${SIZE}`} role="group" aria-label="Udjeli skupina smještaja" aria-describedby={`${id}-hint`}
+        onPointerLeave={() => hoverGroup(null)}>
+        {shown.map((index) => <path key={groups[index].key} role="button" data-slot="allocation-slice-button" data-index={index}
+          d={slicePath(untucked(geometry[index]))} tabIndex={index === tabStop ? 0 : -1} aria-pressed={index === selected}
+          aria-label={`${groups[index].label}: ${formatAds(values[index])}, ${formatShare(shares[index])} ${denominator}`}
+          className="allocation-slice-button pointer-events-auto cursor-pointer [fill:transparent] outline-none
+            [-webkit-tap-highlight-color:transparent] [stroke-linejoin:round]
+            focus-visible:[stroke:color-mix(in_srgb,_var(--orange-500)_40%,_transparent)] focus-visible:[stroke-width:4]"
+          onPointerEnter={(event) => { if (event.pointerType === 'mouse') hoverGroup(index) }}
+          onClick={() => selectGroup(index)} onKeyDown={(event) => onSliceKeyDown(event, index)} />)}
+      </svg>
     </div>
     <ToggleGroup multiple value={groups.filter((group) => group.jobs > 0 && !hidden.includes(group.key)).map((group) => group.key)}
       onValueChange={showGroups} className="allocation-legend grid w-full grid-cols-3 gap-3 [@media(max-width:_400px)]:grid-cols-1"
@@ -203,22 +267,25 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
       {groups.map((group, index) => {
         const off = hidden.includes(group.key) || group.jobs === 0
         return <ToggleGroupItem key={group.key} value={group.key}
-          className={cn('allocation-legend-item h-auto min-w-0 justify-start gap-2 whitespace-normal p-2', `allocation-${group.key}`, off && 'is-off')}
+          className={cn('allocation-legend-item h-auto min-w-0 justify-start gap-2 whitespace-normal p-2 text-left',
+            'text-[12px] leading-[1.25] text-fg-soft [transition:color_200ms] motion-reduce:[transition:none]',
+            `allocation-${group.key}`, off && 'is-off', index === active && 'is-active text-fg-loud')}
           disabled={group.jobs === 0} aria-disabled={!off && shown.length <= 1 ? true : undefined}
           aria-label={`${group.label}: ${formatAds(group.jobs)}, ${formatShare(group.share)} svih oglasa`}
           onPointerEnter={(event) => { if (event.pointerType === 'mouse') previewGroup(index) }}
           onPointerLeave={() => previewGroup(null)} onFocus={() => previewGroup(index)} onBlur={() => previewGroup(null)}>
-          <span className="allocation-dot flex-none w-2.5 h-2.5 rounded-full [background:var(--allocation-color)]
-            [box-shadow:0_0_0_2px_var(--card),_0_0_0_3px_color-mix(in_srgb,_var(--allocation-color)_40%,_transparent)]" /><span className="allocation-legend-label flex-1 leading-[1.4]">{group.label}</span>
+          <span className="allocation-dot flex-none w-2.5 h-2.5 rounded-full
+            [background:linear-gradient(var(--allocation-top),_var(--allocation-color))]
+            [box-shadow:0_0_0_2px_var(--card),_0_0_0_3px_color-mix(in_srgb,_var(--allocation-color)_40%,_transparent)]" /><span className="allocation-legend-label flex-1">{group.label}</span>
           <span className="allocation-legend-count font-semibold tabular-nums">{formatInteger(group.jobs)}</span>
         </ToggleGroupItem>
       })}
     </ToggleGroup>
     {filtered && <div className="allocation-filter-note flex flex-wrap items-center justify-center [gap:8px_16px] w-full text-[12px]
-      leading-[1.5] text-fg-soft" role="status">
+      leading-[1.25] text-fg-soft" role="status">
       <span>Prikazano {formatInteger(visibleTotal)} od {formatInteger(total)} oglasa. Udjeli su među prikazanim oglasima.</span>
-      <Button type="button" variant="link" size="sm" className="link" onClick={resetGroups}>Prikaži sve skupine</Button>
+      <Button type="button" variant="link" size="sm" className="link text-[12px]" onClick={resetGroups}>Prikaži sve skupine</Button>
     </div>}
-    <p id={`${id}-hint`} className="soft allocation-hint m-0 text-[12px] font-medium leading-[1.5] text-fg-soft w-full">Odaberite segment za broj i udio oglasa. Klikom na legendu sakrivate ili vraćate skupinu; strelicama birate segment.</p>
+    <p id={`${id}-hint`} className="soft allocation-hint m-0 text-[12px] font-medium leading-[1.25] text-fg-soft w-full">Odaberite segment za broj i udio oglasa. Klikom na legendu sakrivate ili vraćate skupinu; strelicama birate segment.</p>
   </div>
 }

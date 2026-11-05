@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { INNER, SIZE, interpolateGeometry, layoutRing, pillPlace, sliceAt, slicePath } from './ring-geometry.ts'
+import { INNER, START_ANGLE, interpolateGeometry, layoutRing, mod, pillPlace, slicePath, untucked } from './ring-geometry.ts'
 
 test('three statuses partition the ring by ad count, preserving the reference stepped bands', () => {
   const geometry = layoutRing([2, 7, 1])
@@ -16,8 +16,9 @@ test('one positive group is a complete annulus, with zero groups neither drawn n
       const path = slicePath(g)
       if (values[index] > 0) { assert.equal(g.span, 360); assert.equal((path.match(/ A /g) ?? []).length, 4) }
       else assert.equal(path, '')
+      // The segment button is drawn untucked; a zero group has no shape to point at or focus.
+      assert.equal(slicePath(untucked(g)) === '', values[index] === 0)
     })
-    assert.equal(sliceAt(SIZE / 2, 30, geometry), values.findIndex((value) => value > 0))
   }
 })
 
@@ -28,18 +29,22 @@ test('all-zero data and narrow slices remain finite; small spread layers never i
       assert.ok(Object.values(pillPlace(g)).every((value) => typeof value !== 'number' || Number.isFinite(value)))
     }
   }
-  assert.equal(sliceAt(200, 200, layoutRing([0, 0, 0])), null)
+  assert.ok(layoutRing([0, 0, 0]).every((g) => slicePath(untucked(g)) === ''))
 })
 
-test('hit testing selects each angular segment, rejecting the central hole and outside space', () => {
-  const geometry = layoutRing([2, 7, 1])
-  geometry.forEach((g, index) => {
-    const angle = (g.start + g.span / 2) * Math.PI / 180
-    const radius = (INNER + g.outer) / 2
-    assert.equal(sliceAt(200 + radius * Math.sin(angle), 200 - radius * Math.cos(angle), geometry), index)
-  })
-  assert.equal(sliceAt(200, 200, geometry), null)
-  assert.equal(sliceAt(-20, -20, geometry), null)
+test('untucked segments tile the ring exactly, so a point on it belongs to one segment', () => {
+  for (const values of [[2, 7, 1], [2, 0, 1], [1, 999999, 0]]) {
+    const geometry = layoutRing(values).map(untucked).filter((g) => g.span > 0)
+      .sort((a, b) => mod(a.start - START_ANGLE, 360) - mod(b.start - START_ANGLE, 360))
+    geometry.forEach((g, at) => {
+      const next = geometry[(at + 1) % geometry.length]
+      // Where one segment ends the next begins: no gap, no overlap.
+      assert.ok(Math.abs(mod(g.start + g.span - next.start + 180, 360) - 180) < 1e-9)
+      assert.equal(g.tuckStart + g.tuckEnd, 0)
+    })
+  }
+  const tucked = layoutRing([2, 7, 1])
+  assert.ok(tucked.some((g) => g.tuckStart > 0), 'the drawn slices still tuck under their neighbours')
 })
 
 test('hiding a group recomputes geometry from visible values, leaving original counts untouched', () => {
