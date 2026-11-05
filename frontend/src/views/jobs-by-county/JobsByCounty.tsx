@@ -1,32 +1,20 @@
 import { Card, ExpandButton, Notes } from '../../shared/Card'
 import { formatAds, formatWorkers } from '../../shared/format'
 import { CountyColumns } from './CountyColumns'
-import type { JobsByCountyData } from './types'
+import type { useJobsByCounty } from './use-jobs-by-county'
 
 /** show_jobs_by_county: the top counties as 3D columns, every county once expanded. */
-export function JobsByCounty({ data, expanded, toggle }: {
-  data: JobsByCountyData | null
-  expanded: boolean
-  toggle: () => void
-}) {
+export function JobsByCounty({ data, columns, shown, label, canExpand, expanded, toggle }:
+  ReturnType<typeof useJobsByCounty> & { expanded: boolean; toggle: () => void }) {
   if (!data) return <Card title="Broj oglasa po županijama" description="Učitavanje…" />
-
-  const all = data.counties ?? []
-  const counties = expanded ? all : all.slice(0, data.top)
-  // The columns and the numbers over them show this value; the server has ranked the counties by it.
-  const metric = data.metric === 'workers_needed' ? 'workers_needed' : 'jobs'
-  const shown = counties.length < all.length
-    ? `Prikazano ${counties.length} od ${all.length} županija s oglasima`
-    : `Sve županije s oglasima (${all.length})`
-  const label = expanded ? 'Prikaži manje županija' : `Prikaži svih ${all.length} županija`
 
   return (
     <Card title={data.title} description={data.description}
-      actions={(expanded || all.length > data.top) && <ExpandButton expanded={expanded} label={label} onClick={toggle} />}>
+      actions={canExpand && <ExpandButton expanded={expanded} label={label} onClick={toggle} />}>
       <Notes warning={data.coverage_note} note={data.unknown_note} />
-      {counties.length ? (
+      {columns.counties.length ? (
         <>
-          <CountyColumns counties={counties} metric={metric} />
+          <CountyColumns {...columns} />
           <p className="soft footer m-0 text-[12px] font-medium leading-[1.25] text-fg-soft [margin-top:-8px]">
             {shown} · ukupno {formatAds(data.total_jobs)}, {formatWorkers(data.total_workers_needed)}
           </p>

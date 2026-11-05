@@ -10,19 +10,21 @@ import { formatDay, formatMonth, formatPoints, formatRate, plural } from '../../
 import { Sources } from '../../shared/Sources'
 import { UnemploymentGrowthChart } from './UnemploymentGrowthChart'
 import type { CountyHistory, UnemploymentHistoryData } from './types'
+import type { useHistoryChart } from './use-history-chart'
 
 const TILES_AT = 700
 const TILE_STAGGER = 80
 
-export function UnemploymentHistory({ data, onOpenLink }: {
+export function UnemploymentHistory({ data, chart, onOpenLink }: {
   data: UnemploymentHistoryData | null
+  chart: ReturnType<typeof useHistoryChart>
   onOpenLink: (url: string) => void
 }) {
   if (!data) return <Card title="Stopa registrirane nezaposlenosti" description="Učitavanje…" />
   const charted = data.counties.some((county) => county.series.length)
   return (
     <Card title={data.title} description={data.description}>
-      {charted ? <History data={data} onOpenLink={onOpenLink} /> : (
+      {charted ? <History chart={chart} data={data} onOpenLink={onOpenLink} /> : (
         <>
           <Warning text={data.unavailable_label ?? 'Podaci o nezaposlenosti nisu dostupni.'} />
           <Footer data={data} onOpenLink={onOpenLink} />
@@ -33,7 +35,11 @@ export function UnemploymentHistory({ data, onOpenLink }: {
 }
 
 /** Mounted once the data is there, so its entrance plays with the data. */
-function History({ data, onOpenLink }: { data: UnemploymentHistoryData; onOpenLink: (url: string) => void }) {
+function History({ data, chart, onOpenLink }: {
+  data: UnemploymentHistoryData
+  chart: ReturnType<typeof useHistoryChart>
+  onOpenLink: (url: string) => void
+}) {
   const root = useRef<HTMLDivElement>(null)
 
   useChartEntrance(root, (timeline) => {
@@ -56,7 +62,7 @@ function History({ data, onOpenLink }: { data: UnemploymentHistoryData; onOpenLi
       [&_.s1]:[--series:var(--series-1)] [&_.s2]:[--series:var(--series-2)] [&_.s3]:[--series:var(--series-3)]
       [&_.s4]:[--series:var(--series-4)] [&_.s5]:[--series:var(--series-5)] [&_.s6]:[--series:var(--series-6)]
       flex flex-col gap-5 min-w-0" ref={root}>
-      <UnemploymentGrowthChart counties={data.counties} />
+      <UnemploymentGrowthChart {...chart} />
       <div className="tiles grid [grid-template-columns:repeat(auto-fill,_minmax(190px,_1fr))] gap-2">
         {data.counties.map((county, index) => <Tile key={county.code} county={county} index={index} />)}
       </div>

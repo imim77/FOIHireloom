@@ -6,10 +6,13 @@ import { chromium } from 'playwright'
 import { sample as jobSample } from '../src/views/job-cards/sample.ts'
 import { sample as countySample } from '../src/views/county-comparison/sample.ts'
 import { sample as forecastSample } from '../src/views/labour-market-forecast/sample.ts'
+import { sample as comparisonSample } from '../src/views/job-comparison/sample.ts'
+import { sample as historySample } from '../src/views/unemployment-history/sample.ts'
+import { sample as accommodationSample } from '../src/views/accommodation-comparison/sample.ts'
 
 // The host holds tool replies so tests can deliver a replacement result first.
 const host = `<!doctype html><html><body style="margin:0"><script>
-window.ready=false;window.requests=[];window.messages=[];
+window.ready=false;window.requests=[];window.messages=[];window.links=[];window.failMessage=false;
 const options=new URLSearchParams(location.search);
 function post(message){document.querySelector('iframe').contentWindow.postMessage({jsonrpc:'2.0',...message},'*');}
 window.sendResult=data=>{
@@ -27,7 +30,8 @@ addEventListener('message',event=>{
   hostContext:{theme:'light',displayMode:'inline',availableDisplayModes:['inline']}}});
  else if(m.method==='ui/notifications/initialized')window.ready=true;
  else if(m.method==='tools/call')window.requests.push(m);
- else if(m.method==='ui/message'){window.messages.push(m.params);post({id:m.id,result:{}});}
+ else if(m.method==='ui/message'){window.messages.push(m.params);post({id:m.id,result:{isError:window.failMessage}});}
+ else if(m.method==='ui/open-link'){window.links.push(m.params.url);post({id:m.id,result:{}});}
  else if(m.id!==undefined)post({id:m.id,result:{}});
 });
 </script><iframe title="MCP view" style="display:block;width:100%;height:1600px;border:0"></iframe>
@@ -293,5 +297,102 @@ test('county filter calls preserve counties and period, recover from errors and 
     await frame.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
     assert.equal(await frame.locator('.title').textContent(), 'Nova usporedba')
     assert.equal(await remove.isEnabled(), true)
+  } finally { await page.close() }
+})
+
+
+test('source and advertisement callbacks open the requested URLs through the host', async () => {
+  for (const [view, data] of [
+    ['county-comparison', countySample()], ['unemployment-history', historySample()],
+    ['accommodation-comparison', accommodationSample()], ['labour-market-forecast', forecastSample()],
+  ]) {
+    const { page, frame } = await open(view, data)
+    try {
+      const source = frame.locator('.sources button').first()
+      const url = await source.getAttribute('title')
+      await source.click()
+      await page.waitForFunction(() => window.links.length === 1)
+      assert.deepEqual(await page.evaluate(() => window.links), [url], view)
+    } finally { await page.close() }
+  }
+  for (const [view, data] of [['job-cards', jobSample()], ['job-comparison', comparisonSample()]]) {
+    const { page, frame } = await open(view, data)
+    try {
+      await frame.getByRole('button', { name: /Otvori oglas/ }).first().click()
+      await page.waitForFunction(() => window.links.length === 1)
+      assert.deepEqual(await page.evaluate(() => window.links), [data.jobs[0].canonical_url], view)
+    } finally { await page.close() }
+  }
+})
+
+test('a failed job request retains cards and comparison picks and can be retried', async () => {
+  const data = jobSample()
+  const { page, frame } = await open('job-cards', data)
+  try {
+    await frame.getByRole('checkbox').first().check()
+    await frame.getByRole('button', { name: 'Prikaži još oglasa' }).click()
+    await request(page, 1)
+    await page.evaluate(() => window.reply(0, { content: [], isError: true }))
+    await frame.getByText('Oglasi se nisu mogli učitati.').waitFor()
+    await countCards(frame, data.jobs.length)
+    assert.equal(await frame.getByRole('checkbox').first().isChecked(), true)
+    assert.equal(await frame.getByRole('button', { name: 'Usporedi odabrane (1)' }).isDisabled(), true)
+    await frame.getByRole('button', { name: 'Prikaži još oglasa' }).click()
+    assert.deepEqual((await request(page, 2)).arguments, { ...data.filters, cursor: data.next_cursor })
+    await reply(page, 1, { ...data, jobs: [{ ...data.jobs[0], id: 999 }], next_cursor: null })
+    await countCards(frame, data.jobs.length + 1)
+    assert.equal(await frame.getByText('Oglasi se nisu mogli učitati.').count(), 0)
+    assert.equal(await frame.getByRole('checkbox').first().isChecked(), true)
+  } finally { await page.close() }
+})
+
+test('a rejected comparison message preserves picks until a successful retry', async () => {
+  const { page, frame } = await open('job-cards', jobSample())
+  try {
+    await page.evaluate(() => { window.failMessage = true })
+    await frame.getByRole('checkbox').nth(0).check()
+    await frame.getByRole('checkbox').nth(1).check()
+    await frame.getByRole('button', { name: 'Usporedi odabrane (2)' }).click()
+    await frame.getByText('Poruka nije poslana.').waitFor()
+    assert.equal(await frame.getByRole('checkbox').nth(0).isChecked(), true)
+    assert.equal(await frame.getByRole('checkbox').nth(1).isChecked(), true)
+    await page.evaluate(() => { window.failMessage = false })
+    await frame.getByRole('button', { name: 'Usporedi odabrane (2)' }).click()
+    await page.waitForFunction(() => window.messages.length === 2)
+    await frame.locator('.compare-bar').waitFor({ state: 'detached' })
+    assert.equal(await frame.getByText('Poruka nije poslana.').count(), 0)
+  } finally { await page.close() }
+})
+
+test('county ranking preserves its metric, keyboard selection and expansion across new results', async () => {
+  const data = {
+    title: 'Traženi radnici', description: 'Usporedba županija', metric: 'workers_needed', top: 2,
+    total_jobs: 6, total_workers_needed: 60, coverage: { warning: null }, active_filters: [],
+    coverage_note: null, unknown_note: null,
+    counties: [
+      { name: 'Prva', short_name: 'Prva', jobs: 3, workers_needed: 30, share: 50 },
+      { name: 'Druga', short_name: 'Druga', jobs: 2, workers_needed: 20, share: 33.3 },
+      { name: 'Treća', short_name: 'Treća', jobs: 1, workers_needed: 10, share: 16.7 },
+    ],
+  }
+  const { page, frame } = await open('jobs-by-county', data)
+  try {
+    const columns = frame.locator('[data-slot="column"]')
+    assert.equal(await columns.count(), 2)
+    assert.deepEqual(await frame.locator('[data-slot="value-text"]').allTextContents(), ['30', '20'])
+    await columns.first().focus()
+    await columns.first().press('End')
+    assert.equal(await columns.nth(1).getAttribute('aria-pressed'), 'true')
+    assert.equal(await columns.nth(1).evaluate((el) => el === document.activeElement), true)
+    await frame.getByRole('button', { name: 'Prikaži svih 3 županija' }).click()
+    assert.equal(await columns.count(), 3)
+    await columns.nth(1).focus()
+    await columns.nth(1).press('End')
+    assert.equal(await columns.nth(2).getAttribute('aria-pressed'), 'true')
+    await deliver(page, frame, { ...data, title: 'Nova potražnja' })
+    assert.equal(await columns.count(), 3, 'expansion survives a replacement host result')
+    assert.equal(await columns.first().getAttribute('aria-pressed'), 'true', 'selection starts a fresh session')
+    await frame.getByRole('button', { name: 'Prikaži manje županija' }).click()
+    assert.equal(await columns.count(), 2)
   } finally { await page.close() }
 })

@@ -6,12 +6,12 @@
 // (another result, or every county once expanded) regrows the columns from the heights on screen.
 
 import { animate, type JSAnimation, stagger, utils } from 'animejs'
-import { type KeyboardEvent, useId, useLayoutEffect, useRef, useState } from 'react'
+import { type KeyboardEvent, useId, useLayoutEffect, useRef } from 'react'
 import { fadeIn, finish, releaseStyles, useChartEntrance, useCountUp, useReducedMotion } from '../../shared/chart-motion'
 import { formatAds, formatInteger, formatShare, formatWorkers } from '../../shared/format'
 import { useChartWidth } from '../../shared/use-chart-size'
 import { BAR_VIEW, BarGradients, BarLook } from './Bar3d'
-import type { County, CountyMetric } from './types'
+import type { useJobsByCounty } from './use-jobs-by-county'
 
 // Figma geometry ("Investment App User Age Chart" 1473:77228)
 const PLOT_HEIGHT = 208.921 // the tallest column: its 16px value, a 4px gap and its bar
@@ -37,9 +37,9 @@ function BarValue({ value }: { value: number }) {
   return <span ref={ref} data-slot="value-text">{formatInteger(value)}</span>
 }
 
-export function CountyColumns({ counties, metric }: { counties: County[]; metric: CountyMetric }) {
+export function CountyColumns({ counties, values, selected, active, county, workers, selectCounty, hoverCounty, navigate }:
+  ReturnType<typeof useJobsByCounty>['columns']) {
   const n = counties.length
-  const values = counties.map((county) => Math.max(0, county[metric]))
   const max = Math.max(0, ...values)
   const heights = values.map((value) => (max > 0 ? round((value / max) * MAX_BAR) : 0))
   // Content key: the data arrives as new arrays, so changes are detected by value.
@@ -49,13 +49,6 @@ export function CountyColumns({ counties, metric }: { counties: County[]; metric
   const gaps = COLUMN_GAP * Math.max(0, n - 1)
   const columnWidth = n ? (plotWidth - gaps) / n : plotWidth
   const barWidth = round(Math.max(2, Math.min(BAR_WIDTH, columnWidth * BAR_RATIO)))
-
-  const [selectedIndex, setSelected] = useState(0)
-  const [hovered, setHovered] = useState<number | null>(null)
-  const selected = Math.min(Math.max(selectedIndex, 0), n - 1)
-  const active = hovered !== null && hovered < n ? hovered : selected
-  const county = counties[active]
-  const workers = county.workers_needed
 
   const reduced = useReducedMotion()
   const root = useRef<HTMLDivElement>(null)
@@ -212,18 +205,10 @@ export function CountyColumns({ counties, metric }: { counties: County[]; metric
   }, [workers, reduced])
   useLayoutEffect(() => () => { workersCount.current.tween?.cancel() }, [])
 
-  function select(next: number) {
-    setSelected(Math.min(Math.max(next, 0), n - 1))
-  }
-
   function onColumnKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
-    const next = ({ ArrowRight: selected + 1, ArrowDown: selected + 1, ArrowLeft: selected - 1,
-      ArrowUp: selected - 1, Home: 0, End: n - 1 } as Record<string, number>)[event.key]
-    if (next === undefined) return
+    const index = navigate(event.key)
+    if (index === null) return
     event.preventDefault()
-    const index = Math.min(Math.max(next, 0), n - 1)
-    setHovered(null)
-    select(index)
     all('[data-slot="column"]')[index]?.focus()
   }
 
@@ -237,7 +222,7 @@ export function CountyColumns({ counties, metric }: { counties: County[]; metric
       <div className="scroller overflow-x-auto overflow-y-hidden p-1 [margin:-4px]">
         <div className="chart flex flex-col gap-2" style={{ minWidth: `${n * MIN_COLUMN + gaps}px` }}>
           <div className="plot relative isolate flex gap-2 [height:208.921px]" role="group" aria-label="Broj oglasa po županijama" ref={plot}
-            onPointerLeave={() => setHovered(null)}>
+            onPointerLeave={() => hoverCounty(null)}>
             <BarGradients ids={ids} />
             {counties.map((county, i) => (
               <button key={i} type="button" data-slot="column" className={`column [font-family:Arial,sans-serif] relative flex-1 min-w-0 p-0 [border:0] [background:none]
@@ -246,7 +231,7 @@ export function CountyColumns({ counties, metric }: { counties: County[]; metric
                 aria-label={`${county.name}: ${formatAds(county.jobs)}, ${formatWorkers(county.workers_needed)}, `
                   + formatShare(county.share)}
                 aria-pressed={i === selected} tabIndex={i === selected ? 0 : -1}
-                onPointerEnter={() => setHovered(i)} onClick={() => select(i)} onKeyDown={onColumnKeyDown}>
+                onPointerEnter={() => hoverCounty(i)} onClick={() => selectCounty(i)} onKeyDown={onColumnKeyDown}>
                 <svg className="bar absolute bottom-0 pointer-events-none overflow-visible
                   [-webkit-mask-image:linear-gradient(to_bottom,_#000_72%,_transparent_100%)]
                   [mask-image:linear-gradient(to_bottom,_#000_72%,_transparent_100%)]

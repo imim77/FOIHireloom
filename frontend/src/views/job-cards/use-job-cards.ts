@@ -7,8 +7,8 @@ import { useServerTool } from '../../shared/use-server-tool'
 import type { JobCard, JobCardsData } from './types'
 
 // A comparison takes 2 or 3 jobs, as show_job_comparison does.
-export const MIN_COMPARED = 2
-export const MAX_COMPARED = 3
+const MIN_COMPARED = 2
+const MAX_COMPARED = 3
 
 /** The user's message that asks for the comparison: Usporedi oglase „Kuhar” (id 1) i „Konobar” (id 2). */
 function compareMessage(jobs: JobCard[]): string {
@@ -17,7 +17,7 @@ function compareMessage(jobs: JobCard[]): string {
 }
 
 /** What the comparison bar says about the picked cards. */
-export function pickedHint(count: number): string {
+function pickedHint(count: number): string {
   if (count < MIN_COMPARED) return 'Odaberite još jedan ili dva oglasa za usporedbu.'
   if (count < MAX_COMPARED) return 'Možete odabrati još jedan oglas.'
   return 'Odabrana su 3 oglasa, najviše koliko se može usporediti.'
@@ -91,6 +91,22 @@ export function useJobCards(app: App | null, initial: JobCardsData) {
     if (await sendMessage(compareMessage(chosen))) setChosen([])
   }
 
-  return { data, cards, cursor, chosen, loading, error, tools, messages, actions,
-    loadMore, removeFilter, togglePicked, clearPicked: () => setChosen([]), compare }
+  const cardViews = cards.map(({ job, order }) => {
+    const checked = chosen.some((other) => other.id === job.id)
+    return { job, order, compare: messages ? {
+      checked,
+      disabled: chosen.length >= MAX_COMPARED && !checked,
+      onChange: () => togglePicked(job),
+    } : null }
+  })
+  const comparison = messages && chosen.length > 0 ? {
+    count: chosen.length,
+    hint: pickedHint(chosen.length),
+    canCompare: chosen.length >= MIN_COMPARED,
+    clear: () => setChosen([]),
+    submit: compare,
+  } : null
+
+  return { data, cards: cardViews, loading, error, actions, comparison,
+    loadMore: cursor && tools ? loadMore : null, removeFilter: tools ? removeFilter : undefined }
 }

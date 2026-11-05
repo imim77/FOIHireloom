@@ -1,13 +1,14 @@
 // Local adaptation of the supplied Keitoto RevenueGrowthChart: stat tiles, glowing curves and area fills,
 // dashed grid, nodes and a scrubber with triangle caps. Rates retain the original DZS gaps and provenance.
 import { animate, stagger } from 'animejs'
-import { type KeyboardEvent, type PointerEvent, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, type PointerEvent, useId, useLayoutEffect, useRef } from 'react'
 import { fadeIn, finish, releaseStyles, useChartEntrance, useCountUp, useReducedMotion } from '../../shared/chart-motion'
 import { formatMonth, formatRate, formatShortMonth } from '../../shared/format'
 import { useChartWidth } from '../../shared/use-chart-size'
-import { provisionalBands, seriesRuns, toGrowthData, type GrowthSeries } from './chart-data'
+import { provisionalBands, seriesRuns, type GrowthSeries } from './chart-data'
 import { areaPath, curvePath, monthTicks, rateAxis } from './chart-geometry'
-import type { CountyHistory, UnemploymentPoint } from './types'
+import type { UnemploymentPoint } from './types'
+import type { useHistoryChart } from './use-history-chart'
 
 const HEIGHT = 360
 const TOP = 14
@@ -48,19 +49,13 @@ function Stat({ series, value, period, onEmphasis }: {
   )
 }
 
-export function UnemploymentGrowthChart({ counties }: { counties: CountyHistory[] }) {
-  const data = useMemo(() => toGrowthData(counties), [counties])
-  const { series, points } = data
+export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart>) {
+  const { series, points, active, point, emphasis, valueText, selectMonth, hoverMonth, emphasiseSeries, navigate } = model
   const root = useRef<HTMLDivElement>(null)
   const cursor = useRef<SVGGElement>(null)
   const wipe = useRef<SVGRectElement>(null)
   const [plot, measuredWidth] = useChartWidth<HTMLDivElement>()
   const width = Math.max(2 * EDGE + 1, measuredWidth || 591)
-  const [selected, setSelected] = useState(points.length - 1)
-  const [hovered, setHovered] = useState<number | null>(null)
-  const [emphasis, setEmphasis] = useState<string | null>(null)
-  const active = hovered ?? selected
-  const point = points[active]
   const reduced = useReducedMotion()
   const id = useId().replace(/[^\w-]/g, '')
   const known = points.flatMap((point) => series.flatMap((s) => point.values[s.id].rate ?? []))
@@ -127,24 +122,14 @@ export function UnemploymentGrowthChart({ counties }: { counties: CountyHistory[
     return () => { ride.cancel(); node.style.removeProperty('transform') }
   }, [cursorX, width, reduced])
 
-  const select = (index: number) => setSelected(Math.min(points.length - 1, Math.max(0, index)))
   function pointAt(event: PointerEvent<HTMLDivElement>) {
     const box = event.currentTarget.getBoundingClientRect()
     const localX = (event.clientX - box.left) / (box.width || 1) * width
     return step ? Math.min(points.length - 1, Math.max(0, Math.round((localX - EDGE) / step))) : 0
   }
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const next = ({ ArrowRight: active + 1, ArrowUp: active + 1, ArrowLeft: active - 1, ArrowDown: active - 1,
-      Home: 0, End: points.length - 1 } as Record<string, number>)[event.key]
-    if (next === undefined) return
-    event.preventDefault()
-    setHovered(null)
-    select(next)
+    if (navigate(event.key)) event.preventDefault()
   }
-  const valueText = point ? `${formatMonth(point.period)}: ${series.map((s) => {
-    const value = point.values[s.id]
-    return `${s.label}: ${value.rate === null ? 'nema podatka' : formatRate(value.rate)}${value.is_provisional ? ', privremeno' : ''}`
-  }).join('; ')}` : ''
 
   return (
     <div className="growth-chart dark:[&_]:[--card:#18181b] dark:[&_]:[--fg-loud:#fafafa] dark:[&_]:[--fg-soft:#a1a1aa]
@@ -158,7 +143,7 @@ export function UnemploymentGrowthChart({ counties }: { counties: CountyHistory[
       <div className="growth-stats grid [grid-template-columns:repeat(auto-fit,_minmax(min(100%,_190px),_1fr))] gap-4
         [@media(max-width:_400px)]:gap-2
         [@media(max-width:_400px)]:[grid-template-columns:repeat(2,_minmax(0,_1fr))]">
-        {series.map((s) => <Stat key={s.id} series={s} value={point?.values[s.id]} period={point?.period} onEmphasis={setEmphasis} />)}
+        {series.map((s) => <Stat key={s.id} series={s} value={point?.values[s.id]} period={point?.period} onEmphasis={emphasiseSeries} />)}
       </div>
       <ul className="legend growth-legend [gap:6px_16px] flex flex-wrap m-0 p-0 [list-style:none] text-[12px] font-medium
         leading-[1.25] text-fg-loud [&_li]:inline-flex [&_li]:items-center [&_li]:gap-1.5" data-slot="legend" aria-label="Legenda">
@@ -244,18 +229,18 @@ export function UnemploymentGrowthChart({ counties }: { counties: CountyHistory[
                 aria-valuenow={active} aria-valuetext={valueText} data-period={point?.period}
                 onKeyDown={onKeyDown} onPointerMove={(event) => {
                   const index = pointAt(event)
-                  if (event.currentTarget.hasPointerCapture(event.pointerId)) select(index)
-                  else if (event.pointerType === 'mouse') setHovered(index)
-                }} onPointerLeave={() => setHovered(null)} onPointerCancel={() => setHovered(null)}
+                  if (event.currentTarget.hasPointerCapture(event.pointerId)) selectMonth(index)
+                  else if (event.pointerType === 'mouse') hoverMonth(index)
+                }} onPointerLeave={() => hoverMonth(null)} onPointerCancel={() => hoverMonth(null)}
                 onPointerDown={(event) => {
                   if (event.button !== 0) return
                   if (event.pointerType !== 'mouse') event.currentTarget.setPointerCapture(event.pointerId)
-                  setHovered(null)
-                  select(pointAt(event))
+                  hoverMonth(null)
+                  selectMonth(pointAt(event))
                 }} onPointerUp={(event) => {
                   if (event.button !== 0) return
-                  setHovered(null)
-                  select(pointAt(event))
+                  hoverMonth(null)
+                  selectMonth(pointAt(event))
                   if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
                 }} />
             </div>
