@@ -45,6 +45,7 @@
   --color-orange-100: var(--orange-100);
   --color-orange-300: var(--orange-300);
   --color-orange-500: var(--orange-500);
+  --color-orange-wash: var(--orange-wash);
   --color-warning-bg: var(--warning-bg);
   --color-warning-fg: var(--warning-fg);
   --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -92,6 +93,8 @@
   --orange-100: #ffd9c2;
   --orange-300: #ff9a5c;
   --orange-500: #f26419;
+  /* Translucent fill for ranges and areas; dark mode mixes the saturated orange, since a pale one turns brown. */
+  --orange-wash: color-mix(in srgb, var(--orange-100) 70%, transparent);
   --warning-bg: #fff4e5;
   --warning-fg: #9a4d00;
   --focus: 0 0 0 2px color-mix(in srgb, var(--orange-500) 40%, transparent);
@@ -112,6 +115,7 @@
   --fg-on-muted: #18181b;
   --orange-100: #ffb98f;
   --orange-300: #e8742f;
+  --orange-wash: color-mix(in srgb, var(--orange-500) 45%, transparent);
   --warning-bg: #3a2a14;
   --warning-fg: #ffc77a;
   color-scheme: dark;

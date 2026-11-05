@@ -54,6 +54,7 @@ both `:root` and `:root[data-theme="dark"]` first and justify it.
 | Focus, light end / lid | `orange-100` | `#ffd9c2` | `#ffb98f` |
 | Focus, dark end | `orange-300` | `#ff9a5c` | `#e8742f` |
 | Focus ring, lines, small marks | `orange-500` | `#f26419` | `#f26419` |
+| Ranges and areas (translucent) | `orange-wash` | `orange-100` at 70 % | `orange-500` at 45 % |
 
 Status colours are the only exception to "grey plus orange", and they never
 encode data: `warning-bg`/`warning-fg` (coverage warnings), `green-tint`/
@@ -70,11 +71,15 @@ encode data: `warning-bg`/`warning-fg` (coverage warnings), `green-tint`/
   question is about is orange (`orange-100` → `orange-300`), the rest are
   quiet greys (`surface-disable`, `surface-subdued`). Never `surface-muted`
   for a datum: it inverts to near-white in dark mode and out-shouts the
-  orange. Focus dims the other parts instead of recolouring them, and each
+  orange. Focus dims the other parts instead of recolouring them, keeping a
+  `surface-disable` hairline edge so the lightest part never fades into the
+  card, and each
   part keeps its label and value beside it, so colour is never the only cue.
 - **Measured vs projected** (history vs forecast): history is grey
-  (`fg-soft` line), the projection is orange, its interval an `orange-100`
-  wash. Provisional or projected segments are dashed.
+  (`fg-soft` line), the projection is orange, its interval an `orange-wash`
+  fill edged in `orange-300`. A pale orange at low opacity turns brown on the
+  dark card, so the wash token mixes the saturated orange there. Provisional
+  or projected segments are dashed.
 - **Gaps stay gaps.** Missing values are not drawn and not interpolated.
 
 ## Shape

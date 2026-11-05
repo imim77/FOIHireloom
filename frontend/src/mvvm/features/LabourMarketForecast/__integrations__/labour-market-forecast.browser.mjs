@@ -50,6 +50,9 @@ test('Chronos displays exact medians and intervals, preserves gaps and supports 
     await page.evaluate(() => window.setTheme('dark'))
     await frame.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
     assert.deepEqual(await strokes(), { history: 'rgb(161, 161, 170)', forecast: 'rgb(242, 100, 25)', dashed: true })
+    // The dark wash mixes the saturated orange, so the interval reads orange rather than brown on the dark card.
+    assert.match(await frame.evaluate(() => getComputedStyle(document.querySelector('[data-slot="forecast-band"]')).fill),
+      /0\.94902 0\.392157 0\.0980392 \/ 0\.45\)$/)
     const replacement = { ...data, title: 'Prognoza nije dostupna', unavailable_label: 'Potrebna su 24 mjeseca podataka.',
       counties: [{ ...county, forecast: [], change_to_horizon: null, unavailable_reason: 'not_enough_history' }] }
     await deliver(page, frame, replacement)

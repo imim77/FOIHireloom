@@ -145,6 +145,9 @@ test('real sample renders counts, percentages, source, filters and freshness wit
     await amountIs(frame, '2 oglasa')
     assert.equal(await frame.locator('[data-key="offered"] .allocation-veil').getAttribute('class'), 'allocation-veil')
     assert.match(await frame.locator('[data-key="not_offered"] .allocation-veil').getAttribute('class'), /is-visible/)
+    // A dimmed slice keeps a surface-disable edge, so the lightest one does not fade into the card.
+    assert.equal(await frame.locator('[data-key="unknown"] .allocation-veil').evaluate((el) => getComputedStyle(el).stroke),
+      'rgb(196, 200, 208)')
     // Click selects; leaving the ring keeps the selection.
     await page.mouse.click(point.x, point.y)
     await page.mouse.move(0, 0)

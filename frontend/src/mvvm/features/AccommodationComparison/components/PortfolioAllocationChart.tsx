@@ -194,7 +194,8 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
   // is the darker grey and unknown the lighter one, so only the orange stands out. The greys stay flat: a
   // disable-to-subdued face would end not offered in unknown's colour. Inks keep 12px shares legible on each fill in
   // both themes; on dark orange-300 the near-black fg-on-muted reads, fg-loud (near-white there) would not. Card-coloured strokes part
-  // neighbouring slices; the veil leaves inactive slices at the 32 % of the county chart's grey columns.
+  // neighbouring slices; the veil leaves inactive slices at the 32 % of the county chart's grey columns, and its
+  // surface-disable edge keeps the lightest slice's shape, which the veil alone would fade into the card.
   return <div className="portfolio-allocation
     [&_.allocation-offered]:[--allocation-color:var(--orange-300)] [&_.allocation-offered]:[--allocation-top:var(--orange-100)]
     [&_.allocation-offered]:[--allocation-ink:var(--fg-loud)] dark:[&_.allocation-offered]:[--allocation-ink:var(--fg-on-muted)]
@@ -204,7 +205,8 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
     [&_.allocation-unknown]:[--allocation-ink:var(--fg-loud)] flex flex-col items-center gap-6 min-w-0 w-full
     [&_.allocation-drop]:[fill:var(--allocation-color)] [&_.allocation-glow]:[fill:var(--allocation-color)]
     [&_.allocation-shape]:[stroke:var(--card)] [&_.allocation-shape]:[stroke-width:1]
-    [&_.allocation-veil]:fill-card [&_.allocation-veil]:[opacity:0] [&_.allocation-veil]:[transition:opacity_300ms]
+    [&_.allocation-veil]:fill-card [&_.allocation-veil]:[stroke:var(--surface-disable)] [&_.allocation-veil]:[stroke-width:1]
+    [&_.allocation-veil]:[opacity:0] [&_.allocation-veil]:[transition:opacity_300ms]
     [&_.allocation-veil.is-visible]:[opacity:0.68] motion-reduce:[&_.allocation-veil]:[transition:none]" ref={root} data-slot="accommodation-chart">
     <div className="allocation-readout flex flex-col items-start gap-2.5 self-stretch" data-slot="allocation-readout">
       <p className="allocation-context m-0 text-[12px] font-medium leading-[1.25] text-fg-soft" ref={contextRef}>{readout.context}</p>

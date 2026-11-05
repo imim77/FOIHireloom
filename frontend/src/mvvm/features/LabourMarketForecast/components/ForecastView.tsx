@@ -181,9 +181,9 @@ export function ForecastView(model: ReturnType<typeof useForecast>) {
   </div>
 }
 
-// The interval is an orange-100 wash; dark mode's orange-100 is brighter, so the wash is fainter there.
-const WASH = '[fill-opacity:.7] dark:[fill-opacity:.25]'
-const WASH_KEY = 'opacity-70 dark:opacity-25'
+// The interval is the orange wash, edged in orange-300 so it still reads as orange on the dark card.
+const WASH = '[fill:var(--orange-wash)] [stroke:var(--orange-300)] [stroke-opacity:.6] [stroke-width:1]'
+const WASH_KEY = 'bg-orange-wash border border-orange-300/60'
 
 function ForecastChart({ data, county, active, onSelect, onHover }: {
   data: ForecastData; county: CountyForecast; active: number
@@ -209,7 +209,7 @@ function ForecastChart({ data, county, active, onSelect, onHover }: {
       text-[12px] font-medium leading-[1.25] [&_li]:inline-flex [&_li]:items-center [&_li]:gap-1.5" aria-label="Legenda">
       <li><span className="forecast-key history w-4 h-0 border-t-2 border-fg-soft" />Povijest</li>
       <li><span className="forecast-key median w-4 h-0 border-t-2 border-dashed border-orange-500" />Prognoza (medijan)</li>
-      <li><span className={`forecast-key interval w-4 h-2.5 bg-orange-100 ${WASH_KEY}`} />
+      <li><span className={`forecast-key interval w-4 h-2.5 ${WASH_KEY}`} />
         {Math.round(data.interval * 100)}% interval</li>
       {flags && <li><span className="forecast-key estimated w-4 h-0 border-t-2 border-dashed border-fg-soft" />
         Procijenjeno / privremeno</li>}
@@ -236,7 +236,7 @@ function ForecastChart({ data, county, active, onSelect, onHover }: {
             {chart.ticks.map((tick) => <line key={tick} x1={0} x2={width} y1={chart.y(tick)} y2={chart.y(tick)} className="forecast-grid [stroke:var(--border)] [stroke-dasharray:3_4]" />)}
             {chart.forecast.length > 0 && <line x1={chart.boundary} x2={chart.boundary} y1={chart.top} y2={chart.bottom}
               className="forecast-boundary [stroke:var(--fg-soft)] [stroke-dasharray:2_5] [opacity:.5]" />}
-            {chart.band && <path d={chart.band} className={`forecast-band [fill:var(--orange-100)] ${WASH}`} data-slot="forecast-band" />}
+            {chart.band && <path d={chart.band} className={`forecast-band ${WASH}`} data-slot="forecast-band" />}
             {chart.history.map((p, index) => {
               const next = chart.history[index + 1]
               return p.y !== null && next?.y != null ? <line key={p.period} x1={p.x} y1={p.y} x2={next.x} y2={next.y}
