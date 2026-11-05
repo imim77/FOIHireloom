@@ -65,22 +65,6 @@ class SqlAlchemyJobRepository(JobRepository):
             return []
         return list(await self._session.scalars(select(Job).where(Job.id.in_(job_ids))))
 
-    async def get_by_source_job_id(self, provider: str, source_job_id: str) -> Job | None:
-        statement = select(Job).where(
-            Job.provider == provider,
-            Job.source_job_id == source_job_id,
-        )
-        result = await self._session.execute(statement)
-        return result.scalar_one_or_none()
-
-    async def get_by_canonical_url(self, provider: str, canonical_url: str) -> Job | None:
-        statement = select(Job).where(
-            Job.provider == provider,
-            Job.canonical_url == canonical_url,
-        )
-        result = await self._session.execute(statement)
-        return result.scalar_one_or_none()
-
     async def search(self, criteria: JobSearchCriteriaDTO) -> list[JobSearchHit]:
         title_match = terms_condition(criteria.terms, SEARCH_TITLE_WEIGHT) if criteria.terms else None
         statement = select(Job, title_match).where(*filter_conditions(criteria))
@@ -270,10 +254,6 @@ class SqlAlchemyJobRepository(JobRepository):
         )
         result = await self._session.execute(statement)
         return [CategoryDTO.model_validate(row) for row in result.all()]
-
-    async def add(self, job: Job) -> None:
-        self._session.add(job)
-        await self._session.flush()
 
     async def list_snapshots(self, provider: str, source_job_ids: Collection[str]) -> list[JobSnapshotDTO]:
         if not source_job_ids:

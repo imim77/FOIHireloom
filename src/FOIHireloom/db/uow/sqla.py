@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from FOIHireloom.db.session import AsyncDBContextManager, SessionManager
+from FOIHireloom.db.session import SessionManager
 from FOIHireloom.dao.interfaces.county import CountyRepository
 from FOIHireloom.dao.concrete.sqla_county import SqlAlchemyCountyRepository
 from FOIHireloom.dao.concrete.sqla_dzs_import import SqlAlchemyDzsImportRepository
@@ -37,13 +37,13 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
 
     Example:
         async with SqlAlchemyUnitOfWork(sessions) as work:
-            await work.jobs.add(job)
+            await work.jobs.create_many("hzz", jobs, await work.transaction_time())
             await work.commit()
     """
 
     def __init__(self, sessions: SessionManager) -> None:
         self._sessions = sessions
-        self._context: AsyncDBContextManager | None = None
+        self._context: AsyncSession | None = None
         self._session: AsyncSession | None = None
         self._counties: CountyRepository | None = None
         self._dzs_imports: DzsImportRepository | None = None

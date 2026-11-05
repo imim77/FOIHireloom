@@ -15,27 +15,6 @@ class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_by_job_and_feed(
-        self, job_id: int, feed_id: int
-    ) -> JobFeedMembership | None:
-        statement = select(JobFeedMembership).join(SourceFeed).where(
-            JobFeedMembership.job_id == job_id,
-            JobFeedMembership.feed_id == feed_id,
-            SourceFeed.scope.in_(SYNCED_SCOPES),
-        )
-        result = await self._session.execute(statement)
-        return result.scalar_one_or_none()
-
-    async def list_for_feed(self, feed_id: int) -> list[JobFeedMembership]:
-        statement = (
-            select(JobFeedMembership)
-            .join(SourceFeed)
-            .where(JobFeedMembership.feed_id == feed_id, SourceFeed.scope.in_(SYNCED_SCOPES))
-            .order_by(JobFeedMembership.job_id)
-        )
-        result = await self._session.scalars(statement)
-        return list(result.all())
-
     async def list_listings(self, job_id: int) -> list[JobListingDTO]:
         statement = (
             select(
@@ -74,11 +53,6 @@ class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
         )
         result = await self._session.execute(statement)
         return [JobCountyDTO.model_validate(row) for row in result.all()]
-
-    async def add(self, membership: JobFeedMembership) -> None:
-        await self._require_synced_feed(membership.feed_id)
-        self._session.add(membership)
-        await self._session.flush()
 
     async def list_snapshots_for_feed(self, feed_id: int) -> list[MembershipSnapshotDTO]:
         statement = (

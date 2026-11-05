@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Collection
 from datetime import datetime
 
-from FOIHireloom.db.models import JobFeedMembership
 from FOIHireloom.dto.job_search import JobCountyDTO, JobListingDTO
 from FOIHireloom.dto.job_sync import MembershipSnapshotDTO
 
@@ -18,32 +17,12 @@ class JobFeedMembershipRepository(ABC):
     """
 
     @abstractmethod
-    async def get_by_job_and_feed(
-        self, job_id: int, feed_id: int
-    ) -> JobFeedMembership | None:
-        """Return the membership for this exact job/feed pair, or None if absent."""
-
-    @abstractmethod
-    async def list_for_feed(self, feed_id: int) -> list[JobFeedMembership]:
-        """Return all memberships of the feed ordered by ascending job ID."""
-
-    @abstractmethod
     async def list_listings(self, job_id: int) -> list[JobListingDTO]:
         """Return the job's present and missing county-feed memberships by county name."""
 
     @abstractmethod
     async def list_counties(self, job_ids: Collection[int]) -> list[JobCountyDTO]:
         """Return the counties of these jobs' county-feed memberships, present ones first."""
-
-    @abstractmethod
-    async def add(self, membership: JobFeedMembership) -> None:
-        """Add and flush a membership without committing the transaction.
-
-        The job and feed IDs must refer to records in the current transaction.
-        A missing or EU feed raises ValueError before attachment.
-        Database errors propagate; the caller owns rollback. Generated
-        observation timestamps are available after the call.
-        """
 
     @abstractmethod
     async def list_snapshots_for_feed(self, feed_id: int) -> list[MembershipSnapshotDTO]:

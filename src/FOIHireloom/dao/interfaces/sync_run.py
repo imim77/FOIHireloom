@@ -19,13 +19,6 @@ class SyncRunRepository(ABC):
         """Return a county or occupation feed's sync attempt by ID, or None if absent."""
 
     @abstractmethod
-    async def get_latest_for_feed(self, feed_id: int) -> SyncRun | None:
-        """Return the latest attempt of any status, or None if absent.
-
-        Order by started_at descending, then by ID descending to break ties.
-        """
-
-    @abstractmethod
     async def add(self, sync_run: SyncRun) -> None:
         """Add and flush an attempt without committing the transaction.
 

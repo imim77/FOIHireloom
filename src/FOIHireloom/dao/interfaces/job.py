@@ -39,14 +39,6 @@ class JobRepository(ABC):
         """Return the jobs with these database IDs, listed or not, in no particular order; absent IDs are skipped."""
 
     @abstractmethod
-    async def get_by_source_job_id(self, provider: str, source_job_id: str) -> Job | None:
-        """Look up a source's job ID within its provider's namespace."""
-
-    @abstractmethod
-    async def get_by_canonical_url(self, provider: str, canonical_url: str) -> Job | None:
-        """Look up a canonical URL within its provider's namespace."""
-
-    @abstractmethod
     async def search(self, criteria: JobSearchCriteriaDTO) -> list[JobSearchHit]:
         """Return up to criteria.limit listed jobs matching every criterion.
 
@@ -97,14 +89,6 @@ class JobRepository(ABC):
         """Count listed jobs per category whose known deadline is not before open_on.
 
         Most common categories come first; jobs without a category are left out.
-        """
-
-    @abstractmethod
-    async def add(self, job: Job) -> None:
-        """Add and flush a job without committing the caller's transaction.
-
-        Generated fields, including the ID, are available after the call.
-        Database constraint errors propagate to the caller, who owns rollback.
         """
 
     @abstractmethod

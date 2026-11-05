@@ -22,17 +22,6 @@ class SqlAlchemySyncRunRepository(SyncRunRepository):
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
 
-    async def get_latest_for_feed(self, feed_id: int) -> SyncRun | None:
-        statement = (
-            select(SyncRun)
-            .join(SourceFeed)
-            .where(SyncRun.feed_id == feed_id, SourceFeed.scope.in_(SYNCED_SCOPES))
-            .order_by(SyncRun.started_at.desc(), SyncRun.id.desc())
-            .limit(1)
-        )
-        result = await self._session.execute(statement)
-        return result.scalar_one_or_none()
-
     async def add(self, sync_run: SyncRun) -> None:
         feed_id = await self._session.scalar(select(SourceFeed.id).where(
             SourceFeed.id == sync_run.feed_id,

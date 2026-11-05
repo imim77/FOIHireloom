@@ -125,18 +125,6 @@ class DependencyService:
                 yield factory.create(http, uow_factory)
 
     @asynccontextmanager
-    async def job_search_service(self) -> AsyncIterator[JobSearchServiceInterface]:
-        """Yield a read-only search service; keep it open for as long as requests arrive."""
-        async with self._open_uow() as uow_factory:
-            yield JobSearchServiceFactory(self._settings).create(uow_factory)
-
-    @asynccontextmanager
-    async def county_indicator_service(self) -> AsyncIterator[CountyIndicatorServiceInterface]:
-        """Yield a read-only county indicator service; keep it open for as long as requests arrive."""
-        async with self._open_uow() as uow_factory:
-            yield CountyIndicatorServiceFactory(self._settings).create(uow_factory)
-
-    @asynccontextmanager
     async def category_snapshot_service(self) -> AsyncIterator[CategorySnapshotServiceInterface]:
         """Yield a read-only category snapshot service."""
         async with self._open_uow() as uow_factory:
