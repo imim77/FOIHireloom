@@ -3,12 +3,12 @@ import { after, before, test } from 'node:test'
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
-import { sample as jobSample } from '../src/views/job-cards/sample.ts'
-import { sample as countySample } from '../src/views/county-comparison/sample.ts'
-import { sample as forecastSample } from '../src/views/labour-market-forecast/sample.ts'
-import { sample as comparisonSample } from '../src/views/job-comparison/sample.ts'
-import { sample as historySample } from '../src/views/unemployment-history/sample.ts'
-import { sample as accommodationSample } from '../src/views/accommodation-comparison/sample.ts'
+import { sample as jobSample } from '../src/mvvm/features/JobCards/utils/sample.ts'
+import { sample as countySample } from '../src/mvvm/features/CountyComparison/utils/sample.ts'
+import { sample as forecastSample } from '../src/mvvm/features/LabourMarketForecast/utils/sample.ts'
+import { sample as comparisonSample } from '../src/mvvm/features/JobComparison/utils/sample.ts'
+import { sample as historySample } from '../src/mvvm/features/UnemploymentHistory/utils/sample.ts'
+import { sample as accommodationSample } from '../src/mvvm/features/AccommodationComparison/utils/sample.ts'
 
 // The host holds tool replies so tests can deliver a replacement result first.
 const host = `<!doctype html><html><body style="margin:0"><script>

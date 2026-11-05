@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
-import { sample } from '../src/views/unemployment-history/sample.ts'
+import { sample } from '../src/mvvm/features/UnemploymentHistory/utils/sample.ts'
 
 // Exercise the production single-file page over the same postMessage protocol as an MCP Apps host.
 // No dev-server globals or React state injection: every update arrives as a tool-result notification.

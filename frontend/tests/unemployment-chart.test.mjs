@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { provisionalBands, seriesRuns, toGrowthData } from '../src/views/unemployment-history/chart-data.ts'
-import { areaPath, curvePath, curveSegments, monthTicks, rateAxis } from '../src/views/unemployment-history/chart-geometry.ts'
-import { sample } from '../src/views/unemployment-history/sample.ts'
-import { formatPoints, formatRate } from '../src/shared/format.ts'
+import { provisionalBands, seriesRuns, toGrowthData } from '../src/mvvm/features/UnemploymentHistory/utils/chart-data.ts'
+import { areaPath, curvePath, curveSegments, monthTicks, rateAxis } from '../src/mvvm/features/UnemploymentHistory/utils/chart-geometry.ts'
+import { sample } from '../src/mvvm/features/UnemploymentHistory/utils/sample.ts'
+import { formatPoints, formatRate } from '../src/mvvm/utils/format.ts'
 
 test('all source rates and metadata survive adaptation, without mutating the tool result', () => {
   const source = sample()

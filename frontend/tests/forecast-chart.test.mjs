@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { forecastChart, formatChange, formatPeriod, formatValue } from '../src/views/labour-market-forecast/forecast-chart.ts'
-import { sample } from '../src/views/labour-market-forecast/sample.ts'
+import { forecastChart, formatChange, formatPeriod, formatValue } from '../src/mvvm/features/LabourMarketForecast/utils/forecast-chart.ts'
+import { sample } from '../src/mvvm/features/LabourMarketForecast/utils/sample.ts'
 
 test('the chart includes interval extremes, preserves missing observations and stays within its bounds', () => {
   const county = sample().counties[0]

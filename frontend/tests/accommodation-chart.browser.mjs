@@ -4,8 +4,8 @@ import { createServer } from 'node:http'
 import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
-import { sample } from '../src/views/accommodation-comparison/sample.ts'
-import { INNER, layoutRing } from '../src/views/accommodation-comparison/ring-geometry.ts'
+import { sample } from '../src/mvvm/features/AccommodationComparison/utils/sample.ts'
+import { INNER, layoutRing } from '../src/mvvm/features/AccommodationComparison/utils/ring-geometry.ts'
 
 // A minimal MCP Apps host sends actual protocol messages into the built page; no app-state injection.
 const host = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0">
