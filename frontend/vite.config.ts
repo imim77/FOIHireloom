@@ -12,6 +12,10 @@ export const OUT_DIR = fileURLToPath(new URL('./dist', import.meta.url))
 
 export default defineConfig({
   root: 'src/pages',
+  resolve: {
+    // HTML module URLs resolve from the page root during development.
+    alias: { '/mvvm': fileURLToPath(new URL('./src/mvvm', import.meta.url)) },
+  },
   plugins: [
     tailwindcss(),
     react(),
