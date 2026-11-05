@@ -135,8 +135,8 @@ export function JobCardView({ job, today, order, actions, compare }: {
       </CardHeader>
       <CardContent className="flex min-w-0 flex-col gap-3">
         <div className="job-heading flex flex-col gap-1 min-w-0">
-          <h2 className="job-title m-0 text-[18px] font-bold leading-[1.25] [overflow-wrap:anywhere]">{title}</h2>
-          <p className="employer-line m-0 text-[13px] font-medium leading-[1.35] text-fg-loud [overflow-wrap:anywhere] [&_.where]:text-fg-soft">
+          <h2 className="job-title m-0 text-[16px] font-semibold leading-[1.25] [overflow-wrap:anywhere]">{title}</h2>
+          <p className="employer-line m-0 text-[12px] font-medium leading-[1.25] text-fg-loud [overflow-wrap:anywhere] [&_.where]:text-fg-soft">
             <span className="employer" title={employer}>{employer}</span>
             {job.county_name && <> / <span className="where">{job.county_name}</span></>}
           </p>
@@ -146,7 +146,7 @@ export function JobCardView({ job, today, order, actions, compare }: {
           <ul className="details grid [grid-template-columns:repeat(3,_minmax(0,_1fr))] [gap:8px_16px] m-0 p-0 [list-style:none]
             [@container(max-width:_520px)]:[grid-template-columns:repeat(2,_minmax(0,_1fr))]" aria-label="Uvjeti">
             {items.map((item) => (
-              <li key={item.kind} className={`detail flex items-center gap-2 min-w-0 text-[13px] leading-[1.3] text-fg-loud [&_svg]:flex-none
+              <li key={item.kind} className={`detail flex items-center gap-2 min-w-0 text-[12px] font-medium leading-[1.25] text-fg-loud [&_svg]:flex-none
                 [&_svg]:w-4 [&_svg]:h-4 [&_svg]:text-fg-soft [&_span]:min-w-0 [&_span]:overflow-hidden
                 [&_span]:whitespace-nowrap [&_span]:text-ellipsis ${item.kind}`} data-slot="detail">
                 <Icon paths={DETAIL_ICONS[item.kind]} />

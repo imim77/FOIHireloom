@@ -77,7 +77,7 @@ function JobHead({ job, onOpenLink }: { job: ComparedJob; onOpenLink: (url: stri
           </Button>
         </div>
         {/* "Kuhar/kuharica" may break after the slash in a narrow column. */}
-        <span className="job-name text-[15px] font-bold leading-[1.25]">{title.replaceAll('/', '/​')}</span>
+        <span className="job-name text-[14px] font-semibold leading-[1.25]">{title.replaceAll('/', '/​')}</span>
         <span className="job-employer text-[12px] font-medium">{employer}</span>
         {place && <span className="job-where text-[12px] text-fg-soft">{place}</span>}
       </div>
@@ -91,7 +91,7 @@ function RowHead({ row, index }: { row: ComparisonRow; index: number }) {
       <div className="aspect-inner flex flex-col gap-1 min-w-0" data-row={index}>
         <span className="aspect-name font-semibold">{row.name}</span>
         {row.condition_label && <span className="aspect-you text-[12px] text-fg-soft">vi: {row.condition_label}</span>}
-        {row.differs && <span className="aspect-differs inline-flex items-center [gap:5px] text-[11px] font-medium text-fg-soft
+        {row.differs && <span className="aspect-differs inline-flex items-center [gap:5px] text-[12px] font-medium text-fg-soft
           whitespace-nowrap [&::before]:[content:''] [&::before]:flex-none [&::before]:w-1.5 [&::before]:h-1.5
           [&::before]:rounded-full [&::before]:bg-orange-500">razlikuje se</span>}
       </div>

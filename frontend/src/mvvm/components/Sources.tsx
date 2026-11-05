@@ -10,7 +10,7 @@ export function Sources({ onOpenLink, links, children }: {
 }) {
   if (!links.length && !children) return null
   return (
-    <p className="sources flex flex-wrap [gap:4px_12px] m-0 [padding:0_12px] text-[12px] leading-[1.4] text-fg-soft">
+    <p className="sources flex flex-wrap [gap:4px_12px] m-0 [padding:0_12px] text-[12px] font-medium leading-[1.25] text-fg-soft">
       {links.length > 0 && (
         <span>
           {links.length > 1 ? 'Izvori: ' : 'Izvor: '}

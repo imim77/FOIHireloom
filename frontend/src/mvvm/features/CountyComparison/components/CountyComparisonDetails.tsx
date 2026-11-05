@@ -67,15 +67,14 @@ export function ComparisonTable({ data, expanded }: { data: CountyComparisonData
         border-spacing-0 [&_th]:[padding:10px_12px] [&_th]:text-left [&_th]:align-top [&_td]:[padding:10px_12px]
         [&_td]:text-left [&_td]:align-top [&_tbody_tr:not(.section)_>_*]:[border-top:1px_solid_var(--border)]
         [&_.section_>_th]:[padding:18px_0_8px]
-        [&_tbody.indicators_tr:not(.section)_>_*]:[border-top-color:var(--card)]
-        [&_tbody.indicators_.section-name]:text-orange-500" style={{ '--counties': data.counties.length } as CSSProperties}>
+        [&_tbody.indicators_tr:not(.section)_>_*]:[border-top-color:var(--card)]" style={{ '--counties': data.counties.length } as CSSProperties}>
         <TableHeader>
           <TableRow>
             <TableCell sticky className="corner w-(--aspect)" />
             {data.counties.map((county) => (
               <TableHead key={county.code} scope="col" className="county-head">
                 <div className="county-head-inner flex flex-col gap-0.5 min-w-0" data-slot="county">
-                  <span className="county-name text-[15px] font-bold leading-[1.25]">{county.short_name}</span>
+                  <span className="county-name text-[14px] font-semibold leading-[1.25]">{county.short_name}</span>
                   <span className="county-total text-[12px] text-fg-soft">
                     {noHzz(county) ? 'HZZ oglasi nisu učitani'
                       : `svih aktivnih oglasa: ${formatInteger(county.all_active_jobs.jobs)}`}
@@ -93,7 +92,7 @@ export function ComparisonTable({ data, expanded }: { data: CountyComparisonData
                 <TableHead scope="colgroup" colSpan={data.counties.length + 1}>
                   <div className="section-inner sticky left-0 flex flex-wrap items-baseline [gap:2px_8px] [width:max-content]
                     [max-width:min(100cqw,_100%)] [padding:0_12px]" data-row={sectionRow}>
-                    <span className="section-name text-[12px] font-bold [letter-spacing:0.02em] uppercase">{section.name}</span>
+                    <span className="section-name text-[12px] font-semibold [letter-spacing:0.02em] uppercase">{section.name}</span>
                     <span className="section-hint text-[12px] text-fg-soft">{section.hint}</span>
                   </div>
                 </TableHead>
@@ -111,17 +110,17 @@ export function ComparisonTable({ data, expanded }: { data: CountyComparisonData
                       <div className="aspect-inner font-semibold min-w-0" data-row={rowIndex}>{row.name}</div>
                     </TableHead>
                     {cells.map((cell, j) => (
-                      <TableCell key={data.counties[j].code} className={`cell [&.unavailable_.cell-text]:text-[13px] [&.unavailable_.cell-text]:font-medium
+                      <TableCell key={data.counties[j].code} className={`cell [&.unavailable_.cell-text]:text-[12px] [&.unavailable_.cell-text]:font-medium
                         [&.unavailable_.cell-text]:italic [&.unavailable_.cell-text]:text-fg-soft
                         [&.unavailable_.cell-note]:text-warning-fg ${cell.unavailable ? ' unavailable' : ''}`}>
                         <div className="cell-inner flex flex-col items-start gap-1 min-w-0" data-row={rowIndex}>
                           <span className="cell-text flex flex-wrap items-center [gap:4px_6px] text-[14px] font-semibold tabular-nums">
                             {cell.text}
-                            {marked && cell.value === high && <span className="extreme inline-flex items-center gap-1 text-[11px] font-medium not-italic
+                            {marked && cell.value === high && <span className="extreme inline-flex items-center gap-1 text-[12px] font-medium not-italic
                               text-fg-soft whitespace-nowrap [&::before]:[content:''] [&::before]:flex-none
                               [&::before]:w-1.5 [&::before]:h-1.5 [&::before]:rounded-full
                               [&::before]:bg-orange-500">najviše</span>}
-                            {marked && cell.value === low && <span className="extreme inline-flex items-center gap-1 text-[11px] font-medium not-italic
+                            {marked && cell.value === low && <span className="extreme inline-flex items-center gap-1 text-[12px] font-medium not-italic
                               text-fg-soft whitespace-nowrap [&::before]:[content:''] [&::before]:flex-none
                               [&::before]:w-1.5 [&::before]:h-1.5 [&::before]:rounded-full
                               [&::before]:bg-orange-500">najmanje</span>}
