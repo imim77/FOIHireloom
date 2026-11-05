@@ -60,7 +60,9 @@ function Icon({ paths }: { paths: string[] }) {
 /** An action at the end of the label row: its icon pops when pressed. */
 function Action({ label, icon, onClick }: { label: string; icon: string[]; onClick: () => void }) {
   return (
-    <button className="icon-button" type="button" title={label} aria-label={label} onClick={(event) => {
+    <button className="icon-button grid place-items-center flex-none w-9 h-9 p-0 rounded-[10px] border border-border bg-card
+      text-fg-loud cursor-pointer [&:hover]:bg-surface-subdued [&:focus-visible]:[outline:none]
+      [&:focus-visible]:shadow-focus [&_svg]:w-4.5 [&_svg]:h-4.5" type="button" title={label} aria-label={label} onClick={(event) => {
       finish(animate(event.currentTarget.firstElementChild!, { scale: [0.7, 1], duration: 500, ease: 'outBack(2.4)',
         onComplete: releaseStyles('transform') }))
       onClick()
@@ -107,19 +109,31 @@ export function JobCardView({ job, today, order, actions, compare }: {
   })
 
   return (
-    <article className="job" ref={root} data-slot="job" data-id={job.id} aria-label={`${title}, ${employer}`}>
-      <div className="job-top">
-        <ul className="labels" aria-label="Oznake">
-          {published && <li className="label age" data-slot="label">{published}</li>}
+    <article className="job @container flex flex-col gap-3 min-w-0 p-4 rounded-[16px] bg-card
+      [box-shadow:0_1px_2px_rgb(40_40_40_/_0.08),_0_0_0_1px_var(--border)]" ref={root} data-slot="job" data-id={job.id} aria-label={`${title}, ${employer}`}>
+      <div className="job-top flex items-center gap-2 min-w-0 [&_.icon-button]:w-8 [&_.icon-button]:h-8
+        [&_.icon-button]:rounded-[8px] [&_.icon-button_svg]:w-4 [&_.icon-button_svg]:h-4">
+        <ul className="labels flex flex-1 flex-wrap gap-1.5 min-w-0 m-0 p-0 [list-style:none]" aria-label="Oznake">
+          {published && <li className="label age [padding:4px_8px] rounded-[6px] text-[12px] font-medium leading-[1.25] bg-surface-subdued
+            text-fg-loud [&.age]:bg-green-tint [&.age]:text-green-on-tint [&.feed]:bg-card
+            [&.feed]:[outline:1px_dashed_var(--fg-soft)] [&.feed]:[outline-offset:-1px] [&.feed]:cursor-help" data-slot="label">{published}</li>}
           {job.category && (
-            <li className={`label${job.category_source === 'feed' ? ' feed' : ''}`} data-slot="label"
+            <li className={`label [padding:4px_8px] rounded-[6px] text-[12px] font-medium leading-[1.25] bg-surface-subdued
+              text-fg-loud [&.age]:bg-green-tint [&.age]:text-green-on-tint [&.feed]:bg-card
+              [&.feed]:[outline:1px_dashed_var(--fg-soft)] [&.feed]:[outline-offset:-1px] [&.feed]:cursor-help ${job.category_source === 'feed' ? ' feed' : ''}`} data-slot="label"
               title={job.category_source === 'feed' ? FEED_CATEGORY : undefined}>
               {sentenceCase(job.category)}
             </li>
           )}
         </ul>
         {compare && (
-          <label className={`compare-toggle${compare.checked ? ' checked' : ''}`}
+          <label className={`compare-toggle inline-flex flex-none items-center gap-1.5 h-8 [padding:0_10px_0_8px] border
+            border-border rounded-[8px] bg-card text-fg-loud text-[12px] font-semibold cursor-pointer select-none
+            [&:hover:not(:has(input:disabled))]:bg-surface-subdued [&:has(input:focus-visible)]:shadow-focus
+            [&.checked]:bg-green-tint [&.checked]:text-green-on-tint [&.checked]:[border-color:transparent]
+            [&:has(input:disabled)]:text-fg-soft [&:has(input:disabled)]:cursor-not-allowed [&_input]:w-3.5
+            [&_input]:h-3.5 [&_input]:m-0 [&_input]:[accent-color:var(--green-on-tint)]
+            [&_input]:[cursor:inherit] [&_input:focus-visible]:[outline:none] ${compare.checked ? ' checked' : ''}`}
             title={compare.disabled ? 'Usporediti se mogu najviše 3 oglasa' : undefined}>
             <input type="checkbox" checked={compare.checked} disabled={compare.disabled} onChange={compare.onChange}
               aria-label={`Usporedi oglas ${title}`} />
@@ -129,18 +143,21 @@ export function JobCardView({ job, today, order, actions, compare }: {
         <Action label="Otvori oglas na HZZ-u" icon={OPEN_ICON} onClick={() => actions.open(job)} />
         {actions.ask && <Action label="Pitaj o ovom oglasu" icon={ASK_ICON} onClick={() => actions.ask?.(job)} />}
       </div>
-      <div className="job-heading">
-        <h2 className="job-title">{title}</h2>
-        <p className="employer-line">
+      <div className="job-heading flex flex-col gap-1 min-w-0">
+        <h2 className="job-title m-0 text-[18px] font-bold leading-[1.25] [overflow-wrap:anywhere]">{title}</h2>
+        <p className="employer-line m-0 text-[13px] font-medium leading-[1.35] text-fg-loud [overflow-wrap:anywhere] [&_.where]:text-fg-soft">
           <span className="employer" title={employer}>{employer}</span>
           {job.county_name && <> / <span className="where">{job.county_name}</span></>}
         </p>
       </div>
-      {items.length > 0 && <span className="rule" aria-hidden="true" data-slot="rule" />}
+      {items.length > 0 && <span className="rule block h-px bg-border [transform-origin:left]" aria-hidden="true" data-slot="rule" />}
       {items.length > 0 && (
-        <ul className="details" aria-label="Uvjeti">
+        <ul className="details grid [grid-template-columns:repeat(3,_minmax(0,_1fr))] [gap:8px_16px] m-0 p-0 [list-style:none]
+          [@container(max-width:_520px)]:[grid-template-columns:repeat(2,_minmax(0,_1fr))]" aria-label="Uvjeti">
           {items.map((item) => (
-            <li key={item.kind} className={`detail ${item.kind}`} data-slot="detail">
+            <li key={item.kind} className={`detail flex items-center gap-2 min-w-0 text-[13px] leading-[1.3] text-fg-loud [&_svg]:flex-none
+              [&_svg]:w-4 [&_svg]:h-4 [&_svg]:text-fg-soft [&_span]:min-w-0 [&_span]:overflow-hidden
+              [&_span]:whitespace-nowrap [&_span]:text-ellipsis ${item.kind}`} data-slot="detail">
               <Icon paths={DETAIL_ICONS[item.kind]} />
               <span>{item.text}</span>
             </li>

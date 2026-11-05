@@ -7,7 +7,7 @@ import type { SourceLink } from './types'
 export function Sources({ app, links, children }: { app: App | null; links: SourceLink[]; children?: ReactNode }) {
   if (!links.length && !children) return null
   return (
-    <p className="sources">
+    <p className="sources flex flex-wrap [gap:4px_12px] m-0 [padding:0_12px] text-[12px] leading-[1.4] text-fg-soft">
       {links.length > 0 && (
         <span>
           {links.length > 1 ? 'Izvori: ' : 'Izvor: '}
@@ -15,7 +15,11 @@ export function Sources({ app, links, children }: { app: App | null; links: Sour
             <span key={link.label}>
               {i > 0 && ', '}
               {link.url ? (
-                <button type="button" className="link" title={link.url} onClick={() => openLink(app, link.url!)}>
+                <button type="button" className="link inline p-0 [border:0] [background:none] [font-family:inherit] text-[inherit]
+                  [font-weight:inherit] [font-style:inherit] leading-[inherit] text-fg-loud underline
+                  [text-decoration-color:var(--surface-disable)] [text-underline-offset:2px] cursor-pointer
+                  text-left [&:hover]:[text-decoration-color:currentColor] [&:focus-visible]:[outline:none]
+                  [&:focus-visible]:rounded-[4px] [&:focus-visible]:shadow-focus" title={link.url} onClick={() => openLink(app, link.url!)}>
                   {link.label}
                 </button>
               ) : link.label}

@@ -182,6 +182,6 @@ class JobComparisonAppTests(unittest.TestCase):
         html = JOB_COMPARISON.page()
         for expected in ("Usporedba oglasa", "razlikuje se", "vi: ",
                          "Otvori oglas na HZZ-u", "Skupina zanimanja dopunjena iz HZZ-ova feeda po zanimanju",
-                         ".verdict.no_match{", "position:sticky", ".note{"):
+                         "ne odgovara", "Usporedba oglasa po uvjetima", "note "):
             with self.subTest(expected=expected):
                 self.assertIn(expected, html)

@@ -4,7 +4,6 @@ import { useExpanded, useMcpApp } from '../../shared/mcp'
 import { CountyColumns } from './CountyColumns'
 import { sample } from './sample'
 import type { JobsByCountyData } from './types'
-import './jobs-by-county.css'
 
 /** show_jobs_by_county: the top counties as 3D columns, every county once expanded. */
 export function JobsByCounty() {
@@ -29,12 +28,12 @@ export function JobsByCounty() {
       {counties.length ? (
         <>
           <CountyColumns counties={counties} metric={metric} />
-          <p className="soft footer">
+          <p className="soft footer m-0 text-[12px] font-medium leading-[1.25] text-fg-soft [margin-top:-8px]">
             {shown} · ukupno {formatAds(data.total_jobs)}, {formatWorkers(data.total_workers_needed)}
           </p>
         </>
       ) : (
-        <p className="empty">Nema aktivnih oglasa za zadane filtre.</p>
+        <p className="empty m-0 text-[14px] text-fg-soft">Nema aktivnih oglasa za zadane filtre.</p>
       )}
     </Card>
   )

@@ -229,42 +229,55 @@ export function CountyColumns({ counties, metric }: { counties: County[]; metric
 
   const fraction = `((100% - ${gaps}px) / ${n})`
   return (
-    <div className="columns" ref={root}>
-      <div className="selection" data-slot="selection">
-        <p className="soft" ref={nameRef}>{county.name} · {formatAds(county.jobs)}</p>
-        <p className="big" ref={workersRef}>{formatWorkers(workers)}</p>
+    <div className="columns flex flex-col gap-6" ref={root}>
+      <div className="selection flex flex-col items-start gap-2.5" data-slot="selection">
+        <p className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft" ref={nameRef}>{county.name} · {formatAds(county.jobs)}</p>
+        <p className="big m-0 text-[28px] font-semibold leading-[1] whitespace-nowrap tabular-nums" ref={workersRef}>{formatWorkers(workers)}</p>
       </div>
-      <div className="scroller">
-        <div className="chart" style={{ minWidth: `${n * MIN_COLUMN + gaps}px` }}>
-          <div className="plot" role="group" aria-label="Broj oglasa po županijama" ref={plot}
+      <div className="scroller overflow-x-auto overflow-y-hidden p-1 [margin:-4px]">
+        <div className="chart flex flex-col gap-2" style={{ minWidth: `${n * MIN_COLUMN + gaps}px` }}>
+          <div className="plot relative isolate flex gap-2 [height:208.921px]" role="group" aria-label="Broj oglasa po županijama" ref={plot}
             onPointerLeave={() => setHovered(null)}>
             <BarGradients ids={ids} />
             {counties.map((county, i) => (
-              <button key={i} type="button" data-slot="column" className={`column${i === active ? ' active' : ''}`}
+              <button key={i} type="button" data-slot="column" className={`column [font-family:Arial,sans-serif] relative flex-1 min-w-0 p-0 [border:0] [background:none]
+                cursor-pointer [outline:none] [&.active_.value]:font-semibold [&.active_.value]:text-orange-500
+                [&:focus-visible_.focus-ring]:[opacity:1] ${i === active ? ' active' : ''}`}
                 aria-label={`${county.name}: ${formatAds(county.jobs)}, ${formatWorkers(county.workers_needed)}, `
                   + formatShare(county.share)}
                 aria-pressed={i === selected} tabIndex={i === selected ? 0 : -1}
                 onPointerEnter={() => setHovered(i)} onClick={() => select(i)} onKeyDown={onColumnKeyDown}>
-                <svg className="bar" data-slot="bar" viewBox={BAR_VIEW} preserveAspectRatio="none" aria-hidden="true"
+                <svg className="bar absolute bottom-0 pointer-events-none overflow-visible
+                  [-webkit-mask-image:linear-gradient(to_bottom,_#000_72%,_transparent_100%)]
+                  [mask-image:linear-gradient(to_bottom,_#000_72%,_transparent_100%)]
+                  [&_.look]:[transition:opacity_300ms] motion-reduce:[&_.look]:[transition:none]" data-slot="bar" viewBox={BAR_VIEW} preserveAspectRatio="none" aria-hidden="true"
                   style={{ width: `${barWidth}px`, left: `calc(50% - ${barWidth / 2}px)`, height: `${heights[i]}px` }}>
                   <BarLook ids={ids} lit={false} opacity={i === active ? 0 : 0.32} />
                   <BarLook ids={ids} lit opacity={i === active ? 1 : 0} />
                 </svg>
                 {/* the count, centred 4px over the bar */}
-                <span className="value" data-slot="value" aria-hidden="true"
+                <span className="value absolute [left:50%] [z-index:1] [transform:translateX(-50%)] pointer-events-none
+                  text-[12px] font-medium leading-[16px] whitespace-nowrap text-fg-soft tabular-nums
+                  [transition:color_200ms] [&_span]:block motion-reduce:[transition:none]" data-slot="value" aria-hidden="true"
                   style={{ bottom: `${round(heights[i] + VALUE_GAP)}px` }}>
                   <BarValue value={values[i]} />
                 </span>
                 {/* keyboard focus rings the column */}
-                <span className="focus-ring" aria-hidden="true" />
+                <span className="focus-ring absolute [inset:-4px] [z-index:1] rounded-[12px] pointer-events-none [opacity:0]
+                  shadow-focus [transition:opacity_150ms]" aria-hidden="true" />
               </button>
             ))}
           </div>
-          <div className="axis" aria-hidden="true">
-            <span className="pill" ref={pill}
+          <div className="axis relative flex gap-2" aria-hidden="true">
+            <span className="pill absolute [inset-block:0] rounded-[8px] bg-surface-muted" ref={pill}
               style={{ width: `calc${fraction}`, left: `calc(${active} * (${fraction} + ${COLUMN_GAP}px))` }} />
             {counties.map((county, i) => (
-              <span key={i} data-slot="axis-label" className={`axis-label${i === active ? ' active' : ''}`}
+              <span key={i} data-slot="axis-label" className={`axis-label relative flex flex-1 min-w-0 justify-center [padding:6px_2px]
+                [&_span]:[display:-webkit-box] [&_span]:[-webkit-box-orient:vertical]
+                [&_span]:[-webkit-line-clamp:2] [&_span]:overflow-hidden [&_span]:text-ellipsis
+                [&_span]:text-center [&_span]:text-[12px] [&_span]:leading-[1.25] [&_span]:text-fg-soft
+                [&_span]:[transition:color_200ms] [&.active_span]:font-semibold [&.active_span]:text-fg-on-muted
+                motion-reduce:[&_span]:[transition:none] ${i === active ? ' active' : ''}`}
                 title={county.name}>
                 {/* A break after each hyphen: "Splitsko-" over "dalmatinska" instead of a cut word. */}
                 <span>{county.short_name.replaceAll('-', '-​')}</span>

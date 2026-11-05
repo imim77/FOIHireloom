@@ -13,7 +13,6 @@ import { Sources } from '../../shared/Sources'
 import { UnemploymentGrowthChart } from './UnemploymentGrowthChart'
 import { sample } from './sample'
 import type { CountyHistory, UnemploymentHistoryData } from './types'
-import './unemployment-history.css'
 
 const TILES_AT = 700
 const TILE_STAGGER = 80
@@ -53,9 +52,14 @@ function History({ data, app }: { data: UnemploymentHistoryData; app: App | null
   })
 
   return (
-    <div className="history" ref={root}>
+    <div className="history [--series-1:#8979ff] [--series-2:#f58233] [--series-3:#3a6ee8] [--series-4:#19965a]
+      [--series-5:#c85594] [--series-6:#a38500] dark:[--series-1:#a99dff] dark:[--series-2:#ff9d5c]
+      dark:[--series-3:#79a2ff] dark:[--series-4:#5ed799] dark:[--series-5:#f58fc9] dark:[--series-6:#ddc45a]
+      [&_.s1]:[--series:var(--series-1)] [&_.s2]:[--series:var(--series-2)] [&_.s3]:[--series:var(--series-3)]
+      [&_.s4]:[--series:var(--series-4)] [&_.s5]:[--series:var(--series-5)] [&_.s6]:[--series:var(--series-6)]
+      flex flex-col gap-5 min-w-0" ref={root}>
       <UnemploymentGrowthChart counties={data.counties} />
-      <div className="tiles">
+      <div className="tiles grid [grid-template-columns:repeat(auto-fill,_minmax(190px,_1fr))] gap-2">
         {data.counties.map((county, index) => <Tile key={county.code} county={county} index={index} />)}
       </div>
       <Footer data={data} app={app} />
@@ -68,27 +72,34 @@ function Tile({ county, index }: { county: CountyHistory; index: number }) {
   const missing = county.series.filter((point) => point.rate === null).length
   const direction = change === null ? null : change < 0 ? 'down' : change > 0 ? 'up' : 'same'
   return (
-    <section className="tile" data-slot="tile" aria-label={county.name}>
-      <p className="tile-name"><span className={`swatch s${index + 1}`} />{county.name}</p>
+    <section className="tile flex flex-col gap-2 min-w-0 p-3 rounded-[14px] bg-surface-sunken [&_p]:m-0 [&_>_.soft]:font-normal
+      [&_>_.soft]:leading-[1.35]" data-slot="tile" aria-label={county.name}>
+      <p className="tile-name flex items-center gap-2 text-[13px] font-semibold"><span className={`swatch flex-none w-3 [height:3px] rounded-[2px] [background:var(--series)] s${index + 1}`} />{county.name}</p>
       {latest && (
-        <div className="tile-latest">
-          <p className="soft">
+        <div className="tile-latest flex flex-col gap-1.5 [&_.soft]:flex [&_.soft]:items-center [&_.soft]:gap-1.5">
+          <p className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft">
             {formatMonth(latest.period)}
-            {latest.is_provisional && <span className="provisional">privremeno</span>}
+            {latest.is_provisional && <span className="provisional inline-block [padding:1px_6px] rounded-full text-[11px] font-medium leading-[1.4]
+              whitespace-nowrap text-fg-soft [outline:1px_dashed_var(--fg-soft)] [outline-offset:-1px]">privremeno</span>}
           </p>
-          <p className={latest.rate === null ? 'tile-missing' : 'big'}>
+          <p className={latest.rate === null ? "tile-missing text-[13px] italic text-fg-soft" : "big m-0 text-[28px] font-semibold leading-[1] whitespace-nowrap tabular-nums"}>
             {latest.rate === null ? 'nema podatka' : formatRate(latest.rate)}
           </p>
         </div>
       )}
       {before && (
-        <p className="tile-before">
+        <p className="tile-before text-[13px] text-fg-soft tabular-nums">
           {formatMonth(before.period)}: {before.rate === null ? 'nema podatka' : formatRate(before.rate)}
         </p>
       )}
       {change !== null ? (
-        <p className="tile-change">
-          <span className={`change ${direction}`}>
+        <p className="tile-change flex flex-col items-start gap-1 [&_.soft]:font-normal [&_.soft]:leading-[1.35]">
+          <span className={`change inline-flex items-center gap-1 [padding:2px_8px] rounded-full text-[12px] font-semibold
+            leading-[1.4] whitespace-nowrap tabular-nums [&_svg]:w-3 [&_svg]:h-3 [&_svg]:[fill:none]
+            [&_svg]:[stroke:currentColor] [&_svg]:[stroke-width:1.8] [&_svg]:[stroke-linecap:round]
+            [&_svg]:[stroke-linejoin:round] [&.down]:bg-green-tint [&.down]:text-green-on-tint
+            [&.up]:bg-warning-bg [&.up]:text-warning-fg [&.same]:bg-surface-subdued [&.same]:text-fg-soft
+            [&.none]:bg-surface-subdued [&.none]:text-fg-soft ${direction}`}>
             {direction !== 'same' && (
               <svg viewBox="0 0 12 12" aria-hidden="true">
                 <path d={direction === 'down' ? 'M6 2v8M2.5 6.5 6 10l3.5-3.5' : 'M6 10V2M2.5 5.5 6 2l3.5 3.5'} />
@@ -96,16 +107,21 @@ function Tile({ county, index }: { county: CountyHistory; index: number }) {
             )}
             {formatPoints(change)}
           </span>
-          <span className="soft">prema istom mjesecu prošle godine</span>
+          <span className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft">prema istom mjesecu prošle godine</span>
         </p>
       ) : (
-        <p className="tile-change unavailable">
-          <span className="change none">promjena nije dostupna</span>
-          {county.change_unavailable_label && <span className="soft">{county.change_unavailable_label}</span>}
+        <p className="tile-change unavailable flex flex-col items-start gap-1 [&_.soft]:font-normal [&_.soft]:leading-[1.35]">
+          <span className="change none inline-flex items-center gap-1 [padding:2px_8px] rounded-full text-[12px] font-semibold
+            leading-[1.4] whitespace-nowrap tabular-nums [&_svg]:w-3 [&_svg]:h-3 [&_svg]:[fill:none]
+            [&_svg]:[stroke:currentColor] [&_svg]:[stroke-width:1.8] [&_svg]:[stroke-linecap:round]
+            [&_svg]:[stroke-linejoin:round] [&.down]:bg-green-tint [&.down]:text-green-on-tint
+            [&.up]:bg-warning-bg [&.up]:text-warning-fg [&.same]:bg-surface-subdued [&.same]:text-fg-soft
+            [&.none]:bg-surface-subdued [&.none]:text-fg-soft">promjena nije dostupna</span>
+          {county.change_unavailable_label && <span className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft">{county.change_unavailable_label}</span>}
         </p>
       )}
       {missing > 0 && (
-        <p className="soft">Nema podatka za {missing} {plural(missing, 'mjesec', 'mjeseca', 'mjeseci')} u nizu.</p>
+        <p className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft">Nema podatka za {missing} {plural(missing, 'mjesec', 'mjeseca', 'mjeseci')} u nizu.</p>
       )}
     </section>
   )

@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { sample as jobSample } from '../src/views/job-cards/sample.ts'
 import { sample as countySample } from '../src/views/county-comparison/sample.ts'
+import { sample as forecastSample } from '../src/views/labour-market-forecast/sample.ts'
 
 // The host holds tool replies so tests can deliver a replacement result first.
 const host = `<!doctype html><html><body style="margin:0"><script>
@@ -33,7 +34,7 @@ addEventListener('message',event=>{
 <script>document.querySelector('iframe').src='/view/'+options.get('view');</script></body></html>`
 
 const views = ['job-cards', 'job-comparison', 'county-comparison', 'jobs-by-county',
-  'unemployment-history', 'accommodation-comparison']
+  'unemployment-history', 'accommodation-comparison', 'labour-market-forecast']
 let browser, server, base
 const errors = [], remote = []
 before(async () => {
@@ -87,15 +88,91 @@ async function countCards(frame, count) {
   await frame.waitForFunction((count) => document.querySelectorAll('[data-slot="job"]').length === count, count)
 }
 
-test('all six standalone previews render at mobile width', async () => {
+test('all standalone previews render with shared styling and both themes at mobile width', async () => {
   for (const view of views) {
     const page = await pageFor(`/view/${view}`, 320)
     try {
       await page.locator('.card .title').waitFor()
       assert.ok(await page.locator('.card .body').textContent(), view)
+      const layout = await page.locator('.card').evaluate((card) => ({
+        card: getComputedStyle(card).display,
+        header: getComputedStyle(card.querySelector('.header')).display,
+        body: getComputedStyle(card.querySelector('.body')).display,
+        font: getComputedStyle(card.querySelector('.title')).fontSize,
+      }))
+      assert.deepEqual(layout, { card: 'flex', header: 'flex', body: 'flex', font: '16px' }, view)
+      if (view === 'job-comparison') {
+        assert.deepEqual(await page.locator('.verdict.no_match').first().evaluate((badge) => ({
+          background: getComputedStyle(badge).backgroundColor, color: getComputedStyle(badge).color,
+        })), { background: 'rgb(255, 244, 229)', color: 'rgb(154, 77, 0)' })
+        assert.equal(await page.locator('.cell.expired .cell-text').first()
+          .evaluate((text) => getComputedStyle(text).fontWeight), '500')
+      }
+      await page.evaluate(() => { document.documentElement.dataset.theme = 'dark' })
+      assert.equal(await page.locator('.card').evaluate((card) => getComputedStyle(card).color),
+        'rgb(250, 250, 250)', view)
+      await page.evaluate(() => { document.documentElement.dataset.theme = 'light' })
+      assert.equal(await page.locator('.card').evaluate((card) => getComputedStyle(card).color),
+        'rgb(24, 24, 27)', view)
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, view)
     } finally { await page.close() }
   }
+})
+
+test('Chronos displays exact medians and intervals, preserves gaps and supports keyboard selection', async () => {
+  const data = forecastSample()
+  const county = data.counties[0]
+  county.history[3].value = null
+  county.history[4].is_estimated = true
+  const { page, frame } = await open('labour-market-forecast', data)
+  try {
+    assert.equal(await frame.locator('[data-slot="forecast-row"]').count(), county.forecast.length)
+    assert.equal(await frame.locator('[data-slot="forecast-band"]').count(), 1)
+    assert.equal(await frame.locator('[data-slot="history-node"]').count(), county.history.length - 1)
+    assert.equal(await frame.locator(`[data-slot="history-segment"][data-from="${county.history[2].period}"]`).count(), 0)
+    assert.equal(await frame.locator(`[data-slot="history-segment"][data-from="${county.history[3].period}"]`).count(), 0)
+    const slider = frame.getByRole('slider', { name: 'Mjesec prognoze' })
+    await slider.focus()
+    await slider.press('Home')
+    await frame.waitForFunction(() => document.querySelector('[data-slot="forecast-cursor"]').dataset.period === '2026-10-01')
+    assert.match(await frame.locator('[data-slot="forecast-median"]').textContent(), /2,6.*%/)
+    assert.match(await frame.locator('[data-slot="forecast-interval"]').textContent(), /2,3.*2,9.*80%/)
+    await slider.press('ArrowRight')
+    await frame.waitForFunction(() => document.querySelector('[data-slot="forecast-cursor"]').dataset.period === '2026-11-01')
+    await frame.getByText('Povijesni podaci (24)', { exact: true }).click()
+    assert.ok(await frame.getByRole('region', { name: 'Povijesne vrijednosti' }).getByText('procijenjeno', { exact: true }).count())
+    await page.evaluate(() => window.setTheme('dark'))
+    await frame.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
+    assert.notEqual(await frame.locator('.forecast-predicted').evaluate((el) => getComputedStyle(el).stroke), 'none')
+    const replacement = { ...data, title: 'Prognoza nije dostupna', unavailable_label: 'Potrebna su 24 mjeseca podataka.',
+      counties: [{ ...county, forecast: [], change_to_horizon: null, unavailable_reason: 'not_enough_history' }] }
+    await deliver(page, frame, replacement)
+    await frame.getByText(replacement.unavailable_label, { exact: true }).waitFor()
+    assert.equal(await frame.getByRole('slider').count(), 0)
+    assert.equal(await frame.locator('[data-slot="forecast-row"], [data-slot="forecast-band"]').count(), 0)
+    assert.ok(await frame.locator('[data-slot="history-node"]').count())
+  } finally { await page.close() }
+})
+
+test('weekly Chronos counts render without percentages and empty histories show a reason', async () => {
+  const data = forecastSample()
+  data.title = 'Prognoza broja oglasa'
+  data.target = 'job_ads'
+  data.unit = 'ads'
+  data.frequency = 'week'
+  data.sex = null
+  data.counties[0].forecast = [{ period: '2026-11-02', median: 120, low: 80, high: 170 }]
+  const { page, frame } = await open('labour-market-forecast', data)
+  try {
+    assert.equal(await frame.locator('[data-slot="forecast-median"]').textContent(), '120')
+    assert.match(await frame.locator('[data-slot="forecast-period"]').textContent(), /tjedan od 02\. 11\. 2026/)
+    const empty = { ...data, title: 'Nema HZZ podataka', unavailable_label: 'HZZ oglasi nisu učitani.',
+      counties: [{ ...data.counties[0], history: [], forecast: [], last_observed: null, change_to_horizon: null }] }
+    await deliver(page, frame, empty)
+    await frame.getByText(empty.unavailable_label, { exact: true }).waitFor()
+    assert.equal(await frame.locator('[data-slot="forecast-chart"]').count(), 0)
+    assert.equal(await frame.locator('table').count(), 0)
+  } finally { await page.close() }
 })
 
 test('hosts without capabilities show filters and omit tool and message controls', async () => {

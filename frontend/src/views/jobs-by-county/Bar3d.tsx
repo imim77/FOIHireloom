@@ -20,9 +20,9 @@ export function BarLook({ ids, lit, opacity }: { ids: string; lit: boolean; opac
   return (
     <g className="look" style={{ opacity }}>
       <path d={RIGHT} fill={`url(#${look}-right)`} />
-      <path d={LID} style={{ fill: `var(${lit ? '--orange-100' : '--surface-subdued'})` }} />
+      <path d={LID} className={lit ? 'fill-orange-100' : 'fill-surface-subdued'} />
       <path d={LEFT} fill={`url(#${look}-left)`} />
-      <path d={EDGES} style={{ fill: 'var(--card)' }} />
+      <path d={EDGES} className="fill-card" />
     </g>
   )
 }
@@ -30,8 +30,8 @@ export function BarLook({ ids, lit, opacity }: { ids: string; lit: boolean; opac
 function Gradient({ id, x1, y1, x2, y2, from, to }: Record<'id' | 'x1' | 'y1' | 'x2' | 'y2' | 'from' | 'to', string>) {
   return (
     <linearGradient id={id} gradientUnits="userSpaceOnUse" x1={x1} y1={y1} x2={x2} y2={y2}>
-      <stop style={{ stopColor: `var(${from})` }} />
-      <stop offset="1" style={{ stopColor: `var(${to})` }} />
+      <stop stopColor={`var(${from})`} />
+      <stop offset="1" stopColor={`var(${to})`} />
     </linearGradient>
   )
 }
@@ -39,7 +39,7 @@ function Gradient({ id, x1, y1, x2, y2, from, to }: Record<'id' | 'x1' | 'y1' | 
 /** The face gradients the BarLooks with the same ids refer to; render once per chart. */
 export function BarGradients({ ids }: { ids: string }) {
   return (
-    <svg aria-hidden="true" width="0" height="0" style={{ position: 'absolute' }}>
+    <svg aria-hidden="true" width="0" height="0" className="absolute">
       <defs>
         <Gradient id={`${ids}-grey-right`} x1="35.8613" y1="8.0502" x2="35.8613" y2="188.448" from="--surface-disable" to="--surface-subdued" />
         <Gradient id={`${ids}-grey-left`} x1="23.9673" y1="0" x2="0.181152" y2="0" from="--surface-disable" to="--surface-subdued" />

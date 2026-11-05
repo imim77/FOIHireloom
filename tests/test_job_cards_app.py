@@ -63,6 +63,6 @@ class JobCardsAppTests(unittest.TestCase):
     def test_built_page_shows_the_filters_the_notes_and_the_normalised_conditions(self) -> None:
         html = JOB_CARDS.page()
         for expected in ("Ukloni filtar", "show_jobs", "Skupina zanimanja dopunjena iz HZZ-ova feeda po zanimanju",
-                         "Za pripravnike", "h tjedno", "Na neodređeno", "Obiteljski stan", ".note{"):
+                         "Za pripravnike", "h tjedno", "Na neodređeno", "Obiteljski stan", "note "):
             with self.subTest(expected=expected):
                 self.assertIn(expected, html)

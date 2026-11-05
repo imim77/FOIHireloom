@@ -4,6 +4,16 @@ The charts that Claude, ChatGPT and other MCP Apps hosts show inside the convers
 under `src/views/<name>.html`; `src/shared/` holds the card, theme, formatting, animations and the host connection
 (`useMcpApp`).
 
+Styling uses Tailwind CSS v4 through the official `@tailwindcss/vite` plugin. Every view imports
+`shared/mount.tsx`, which loads the single `shared/tailwind.css` entry. That entry contains Tailwind's
+import, semantic theme tokens, the host's dark-theme overrides, and shared animation keyframes.
+Layout, typography, interaction states, and responsive/container rules live in component utility classes;
+there are no separate component style sheets. Existing named classes remain as animation and test hooks.
+Use complete utility names in source so Tailwind can discover them; the entry explicitly scans all of
+`src/`, including shared controls outside Vite's views directory. Chart coordinates and animation frames
+calculated from data remain dynamic styles or SVG attributes. The county column buttons retain Arial's
+number metrics from the reference design.
+
 Shared job conditions and search filters live in `src/shared/jobs.ts`, independent of any view.
 `FilterChips` renders removable filters, and `useServerTool` owns request status and ignores replies after
 unmount. Job cards keep pagination and comparison selection in `use-job-cards.ts` and grid animation in
@@ -34,7 +44,7 @@ npx playwright install chromium  # once, for browser tests
 npm run test:browser           # production page in an MCP Apps iframe; mouse, keyboard, touch and themes
 ```
 
-Browser tests also cover all six standalone previews, host capabilities, pagination, filter removal,
+Browser tests also cover all seven standalone previews, host capabilities, pagination, filter removal,
 comparison messages, request failures and replacement results arriving before pending tool replies.
 
 The unemployment chart adapts the supplied `RevenueGrowthChart` to monthly DZS rates. Its stat tiles follow the
