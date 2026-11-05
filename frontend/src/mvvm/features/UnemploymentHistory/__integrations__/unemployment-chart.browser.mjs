@@ -66,7 +66,7 @@ async function open(width = 900, options = {}, query = '') {
 }
 async function deliver(page, frame, data) {
   await page.evaluate((data) => window.sendResult(data), data)
-  await frame.locator('.growth-stat').first().waitFor()
+  await frame.locator('[data-slot="unemployment-growth-chart"]').first().waitFor()
 }
 async function settled(frame) {
   await frame.waitForFunction(() => {
@@ -83,6 +83,26 @@ async function layout(frame) {
       index > 0 && el.getBoundingClientRect().left < labels[index - 1].getBoundingClientRect().right + 2),
   }))
 }
+// The focus is drawn by colour alone, so read it as the browser paints it: one lit county in orange-500 over grey ones.
+async function looks(frame) {
+  return frame.evaluate(() => ({
+    lit: [...document.querySelectorAll('[data-focus-series][data-lit="true"]')].map((g) => g.dataset.focusSeries),
+    litColor: [...new Set([...document.querySelectorAll('[data-focus-series]')].map((g) => getComputedStyle(g).color))],
+    greyColor: [...new Set([...document.querySelectorAll('[data-series]')].map((g) => getComputedStyle(g).color))],
+    greyOpacity: [...new Set([...document.querySelectorAll('[data-series]')].map((g) => getComputedStyle(g).opacity))],
+    pressed: [...document.querySelectorAll('[data-slot="legend-county"]')].map((b) => b.getAttribute('aria-pressed')),
+    tabbable: [...document.querySelectorAll('[data-slot="legend-county"]')].map((b) => b.tabIndex),
+    tiles: [...document.querySelectorAll('[data-slot="tile"]')].map((t) => t.dataset.lit),
+    readout: document.querySelector('.growth-readout-name')?.textContent,
+  }))
+}
+const ORANGE = 'rgb(242, 100, 25)'
+// Once the cross-fade ends, only the lit copy is painted.
+async function painted(frame) {
+  await frame.waitForFunction(() => [...document.querySelectorAll('[data-focus-series]')].every((g) =>
+    getComputedStyle(g).opacity === (g.dataset.lit === 'true' ? '1' : '0')))
+}
+
 async function screenshot(page, name) {
   if (!process.env.CHART_ARTIFACT_DIR) return
   await mkdir(process.env.CHART_ARTIFACT_DIR, { recursive: true })
@@ -116,7 +136,8 @@ test('production iframe preserves every monthly rate, gaps, provisional segments
     // September 2025 has a real gap for Ličko-senjska in the reference fixture.
     await page.mouse.move(box.x + 8 + (box.width - 16) * 11 / 23, box.y + 120)
     await frame.waitForFunction(() => document.querySelector('[role="slider"]').dataset.period === '2025-09-01')
-    assert.match(await frame.locator('.growth-stat').nth(2).textContent(), /nema podatka/)
+    assert.match(await frame.locator('[data-slot="legend-county"]').nth(2).getAttribute('aria-label'),
+      /Ličko-senjska županija, rujan 2025\.: nema podatka/)
     assert.match(await slider.getAttribute('aria-valuetext'), /Ličko-senjska županija: nema podatka/)
     await page.mouse.click(box.x + 8 + (box.width - 16) * 7 / 23, box.y + 120)
     await page.mouse.move(0, 0)
@@ -133,6 +154,68 @@ test('production iframe preserves every monthly rate, gaps, provisional segments
   } finally { await page.close() }
 })
 
+test('the legend lights one county: hover previews, click and keys select, readout and tiles follow', async () => {
+  const { page, frame } = await open()
+  try {
+    const data = sample()
+    const [first, second, third] = data.counties.map((county) => county.code)
+    await deliver(page, frame, data)
+    await settled(frame)
+    await painted(frame)
+    // The first county is lit by default; the others are grey at reduced opacity.
+    assert.deepEqual(await looks(frame), {
+      lit: [first], litColor: [ORANGE], greyColor: ['rgb(196, 200, 208)'], greyOpacity: ['0.5'],
+      pressed: ['true', 'false', 'false'], tabbable: [0, -1, -1], tiles: ['true', 'false', 'false'],
+      readout: 'Varaždinska županija · rujan 2026.privremeno',
+    })
+    assert.equal(await frame.locator('.growth-value').textContent(), '2,3\u00a0%')
+    assert.equal(await frame.locator('[data-focus-series]').first().evaluate((g) => getComputedStyle(g).transitionDuration), '0.3s')
+    const chips = frame.locator('[data-slot="legend-county"]')
+    assert.equal(await chips.first().evaluate((chip) => getComputedStyle(chip).backgroundColor), 'rgb(39, 39, 42)')
+
+    // Hover previews without selecting; leaving the legend falls back to the selection.
+    await chips.nth(1).hover()
+    await frame.waitForFunction(() => document.querySelector('.growth-readout-name').textContent.startsWith('Istarska'))
+    await frame.waitForFunction(() => document.querySelector('.growth-value').textContent === '1,1\u00a0%')
+    let state = await looks(frame)
+    assert.deepEqual([state.lit, state.pressed, state.tiles], [[second], ['true', 'false', 'false'], ['false', 'true', 'false']])
+    await page.mouse.move(0, 0)
+    await frame.waitForFunction(() => document.querySelector('.growth-readout-name').textContent.startsWith('Varaždinska'))
+    assert.deepEqual((await looks(frame)).lit, [first])
+
+    // Click selects; the roving tab stop moves with it.
+    await chips.nth(2).click()
+    await page.mouse.move(0, 0)
+    state = await looks(frame)
+    assert.deepEqual([state.lit, state.pressed, state.tabbable], [[third], ['false', 'false', 'true'], [-1, -1, 0]])
+    await frame.waitForFunction(() => document.querySelector('.growth-value').textContent === '3,4\u00a0%')
+    await painted(frame)
+
+    // Arrow keys, Home and End move selection and focus; the focus ring shows on the focused chip.
+    await page.keyboard.press('ArrowLeft')
+    state = await looks(frame)
+    assert.deepEqual([state.lit, state.pressed, state.tabbable], [[second], ['false', 'true', 'false'], [-1, 0, -1]])
+    assert.equal(await frame.evaluate(() => document.activeElement.getAttribute('aria-pressed')), 'true')
+    await frame.waitForFunction(() => getComputedStyle(document.activeElement.querySelector('.focus-ring')).opacity === '1')
+    await page.keyboard.press('Home')
+    assert.deepEqual((await looks(frame)).lit, [first])
+    await page.keyboard.press('ArrowLeft')
+    assert.deepEqual((await looks(frame)).pressed, ['true', 'false', 'false'], 'Selection stops at the first county')
+    await page.keyboard.press('End')
+    state = await looks(frame)
+    assert.deepEqual([state.lit, state.tiles], [[third], ['false', 'false', 'true']])
+    assert.match(await frame.evaluate(() => document.activeElement.getAttribute('aria-label')), /^Ličko-senjska županija, rujan 2026\.: 3,4/)
+
+    // The month and the county are independent: inspecting another month keeps the lit county.
+    await frame.getByRole('slider').focus()
+    await page.keyboard.press('Home')
+    await frame.waitForFunction(() => document.querySelector('.growth-readout-name').textContent === 'Ličko-senjska županija · listopad 2024.')
+    await frame.waitForFunction(() => document.querySelector('.growth-value').textContent === '5,0\u00a0%')
+    assert.deepEqual((await looks(frame)).lit, [third])
+    await screenshot(page, 'unemployment_chart_selected.png')
+  } finally { await page.close() }
+})
+
 test('two-county dark mobile view supports real touch dragging and reduced motion', async () => {
   const { page, frame } = await open(320, { hasTouch: true, isMobile: true, reducedMotion: 'reduce' })
   try {
@@ -141,8 +224,15 @@ test('two-county dark mobile view supports real touch dragging and reduced motio
     data.counties = data.counties.slice(0, 2)
     await deliver(page, frame, data)
     await frame.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
-    assert.equal(await frame.locator('.growth-stat').count(), 2)
+    assert.equal(await frame.locator('[data-slot="legend-county"]').count(), 2)
     assert.equal(await frame.locator('clipPath rect').getAttribute('width'), '100%')
+    // Dark tokens come from the root theme: lit orange-500, grey surface-disable, an inverted pill, no transitions.
+    await painted(frame)
+    const state = await looks(frame)
+    assert.deepEqual([state.lit, state.litColor, state.greyColor], [[data.counties[0].code], [ORANGE], ['rgb(113, 113, 122)']])
+    assert.equal(await frame.locator('[data-slot="legend-county"]').first().evaluate((chip) => getComputedStyle(chip).backgroundColor),
+      'rgb(244, 244, 245)')
+    assert.equal(await frame.locator('[data-focus-series]').first().evaluate((g) => getComputedStyle(g).transitionDuration), '0s')
     assert.deepEqual(await layout(frame), { overflow: false, finite: true, labelsOverlap: false })
     const slider = frame.getByRole('slider')
     await slider.scrollIntoViewIfNeeded()
@@ -154,26 +244,29 @@ test('two-county dark mobile view supports real touch dragging and reduced motio
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: box.x + box.width - 8, y }] })
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
     assert.equal(await slider.getAttribute('data-period'), '2026-09-01')
-    assert.match(await frame.locator('.growth-stat').first().textContent(), /2,3/)
+    assert.match(await frame.locator('.growth-value').textContent(), /2,3/)
     await page.evaluate(() => scrollTo(0, 0))
     await screenshot(page, 'unemployment_chart_mobile_dark.png')
   } finally { await page.close() }
 })
 
-test('new MCP results reset selection and render six distinct series at 560 px without stale animations', async () => {
+test('new MCP results reset selection and render six series, one lit, at 560 px without stale animations', async () => {
   const { page, frame } = await open(560)
   try {
     const data = sample()
     await deliver(page, frame, data)
     await frame.getByRole('slider').focus()
     await page.keyboard.press('Home')
+    await frame.locator('[data-slot="legend-county"]').nth(2).click()
     const six = structuredClone(data)
     six.counties = [...data.counties, ...data.counties.map((county) => ({ ...county, code: county.code + '-test' }))]
     await deliver(page, frame, six)
     await settled(frame)
-    assert.equal(await frame.locator('.growth-stat').count(), 6)
-    assert.equal(new Set(await frame.locator('.growth-stat').evaluateAll((cards) =>
-      cards.map((card) => getComputedStyle(card).getPropertyValue('--series')))).size, 6)
+    assert.equal(await frame.locator('[data-slot="legend-county"]').count(), 6)
+    await painted(frame)
+    const state = await looks(frame)
+    assert.deepEqual([state.lit, state.litColor, state.greyColor, state.pressed.indexOf('true')],
+      [[six.counties[0].code], [ORANGE], ['rgb(196, 200, 208)'], 0])
     assert.equal(await frame.getByRole('slider').getAttribute('data-period'), data.last_period)
     assert.deepEqual(await layout(frame), { overflow: false, finite: true, labelsOverlap: false })
     // Resize in the middle of the next entrance animation, then inspect the final geometry.
@@ -181,7 +274,8 @@ test('new MCP results reset selection and render six distinct series at 560 px w
     await deliver(page, frame, reordered)
     await page.setViewportSize({ width: 320, height: 1200 })
     await settled(frame)
-    assert.match(await frame.locator('.growth-stat').first().textContent(), /Ličko-senjska/)
+    assert.match(await frame.locator('[data-slot="legend-county"]').first().textContent(), /Ličko-senjska/)
+    assert.match(await frame.locator('.growth-readout-name').textContent(), /^Ličko-senjska/)
     assert.deepEqual(await layout(frame), { overflow: false, finite: true, labelsOverlap: false })
   } finally { await page.close() }
 })
@@ -217,7 +311,7 @@ test('an initially hidden MCP iframe completes its entrance and renders correctl
     // Hidden iframe animation frames pause; shared finish() must settle them by the deadline.
     await page.waitForTimeout(2900)
     await page.evaluate(() => { document.querySelector('iframe').style.display = 'block' })
-    await frame.locator('.growth-stat').first().waitFor()
+    await frame.locator('.growth-value').first().waitFor()
     await settled(frame)
     assert.match(await frame.locator('.growth-value').first().textContent(), /2,3/)
     assert.equal(await frame.locator('clipPath rect').getAttribute('width'), '100%')
@@ -231,7 +325,7 @@ test('the captured live MCP response renders its original county rates', { skip:
   try {
     await deliver(page, frame, data)
     await settled(frame)
-    assert.equal(await frame.locator('.growth-stat').count(), data.counties.length)
+    assert.equal(await frame.locator('[data-slot="legend-county"]').count(), data.counties.length)
     for (const county of data.counties) {
       const nodes = await frame.locator(`[data-series="${county.code}"] [data-slot="growth-node"]`).evaluateAll((nodes) =>
         nodes.map((node) => ({ period: node.dataset.period, rate: Number(node.dataset.rate) })))

@@ -4,7 +4,6 @@ export interface GrowthSeries {
   id: string
   label: string
   shortLabel: string
-  color: number
 }
 
 export interface GrowthPoint {
@@ -24,9 +23,7 @@ export function toGrowthData(counties: CountyHistory[]): GrowthData {
   const periods = [...new Set(counties.flatMap((county) => county.series.map((point) => point.period)))].sort()
   const lookup = counties.map((county) => new Map(county.series.map((point) => [point.period, point])))
   return {
-    series: counties.map((county, index) => ({
-      id: county.code, label: county.name, shortLabel: county.short_name, color: index + 1,
-    })),
+    series: counties.map((county) => ({ id: county.code, label: county.name, shortLabel: county.short_name })),
     points: periods.map((period) => ({
       period,
       values: Object.fromEntries(counties.map((county, index) => [county.code, lookup[index].get(period) ?? {

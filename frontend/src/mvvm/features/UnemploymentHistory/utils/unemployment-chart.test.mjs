@@ -75,12 +75,11 @@ test('no-data series never create zero-valued lines', () => {
   assert.deepEqual(toGrowthData([]), { series: [], points: [] })
 })
 
-test('all six counties have distinct palette slots; labels keep the original request order', () => {
+test('six counties keep their ids, names and the original request order', () => {
   const county = sample().counties[0]
-  const counties = Array.from({ length: 6 }, (_, index) => ({ ...county, code: `county-${index}` }))
+  const counties = Array.from({ length: 6 }, (_, index) => ({ ...county, code: `county-${index}`, short_name: `K${index}` }))
   const data = toGrowthData(counties)
-  assert.equal(new Set(data.series.map((series) => series.color)).size, 6)
-  assert.deepEqual(data.series.map((series) => series.id), counties.map((county) => county.code))
+  assert.deepEqual(data.series, counties.map((county) => ({ id: county.code, label: county.name, shortLabel: county.short_name })))
 })
 
 test('smoothing cannot overshoot endpoints, including abrupt peaks, zeros and flat segments', () => {
