@@ -8,7 +8,7 @@ import { cn } from 'cn'
 // Rates retain the original DZS gaps and provenance; provisional runs are dashed.
 import { animate, stagger } from 'animejs'
 import { type KeyboardEvent, type PointerEvent, useId, useLayoutEffect, useRef } from 'react'
-import { fadeIn, finish, releaseStyles, useChartEntrance, useCountUp, useReducedMotion } from '../../../hooks/chart-motion'
+import { fadeIn, finish, MOTION, releaseStyles, useChartEntrance, useCountUp, useReducedMotion } from '../../../hooks/chart-motion'
 import { formatMonth, formatRate, formatShortMonth } from '../../../utils/format'
 import { useChartWidth } from '../../../hooks/use-chart-size'
 import { provisionalBands, seriesRuns, type GrowthPoint, type GrowthSeries } from '../utils/chart-data'
@@ -19,14 +19,12 @@ const HEIGHT = 360
 const TOP = 14
 const BOTTOM = HEIGHT - 14
 const EDGE = 8
-const DRAW_AT = 250
-const DRAW_DURATION = 1400
 
 /** The focused county's rate, counting from the number on screen when the county or month changes. */
 function RateValue({ rate }: { rate: number }) {
   const ref = useRef<HTMLParagraphElement>(null)
   useCountUp(ref, rate, formatRate)
-  return <p ref={ref} className="growth-value m-0 text-[28px] font-semibold leading-[1] whitespace-nowrap tabular-nums"
+  return <p ref={ref} className="growth-value m-0 mono-headline whitespace-nowrap text-fg-loud"
     data-slot="growth-readout-value" data-value={rate}>{formatRate(rate)}</p>
 }
 
@@ -95,11 +93,13 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
   const reading = focused && point?.values[focused.id]
   const all = <T extends Element>(selector: string) => [...root.current?.querySelectorAll<T>(selector) ?? []]
 
-  // Entrance: the readout comes in and its rate counts up, the grid draws, the curves wipe in from the left with
-  // their nodes popping as the wipe passes them, then the legend comes in.
+  // Entrance: the eyebrow and readout come in and the rate counts up, the grid draws, the curves wipe in from the
+  // left with their nodes popping as the wipe passes them, and the legend comes in.
   useChartEntrance(root, (timeline) => {
     const stats = all<HTMLElement>('[data-slot="growth-readout-value"]')
-    const readout = all<HTMLElement>('[data-slot="readout"] > *')
+    // The card's eyebrow comes in with the readout, ahead of it.
+    const eyebrow = root.current?.closest('[data-slot="card"]')?.querySelector<HTMLElement>('[data-slot="eyebrow"]')
+    const readout = [...(eyebrow ? [eyebrow] : []), ...all<HTMLElement>('[data-slot="readout"] > *')]
     const legend = all<HTMLElement>('[data-slot="legend-county"], [data-slot="legend-key"]')
     const grid = all<SVGLineElement>('[data-slot="growth-grid"]')
     const nodes = all<SVGGElement>('.growth-node')
@@ -109,18 +109,22 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
     const count = () => stats.forEach((el) => { el.textContent = formatRate(Number(el.dataset.value) * state.count) })
     reveal()
     count()
-    timeline.add(readout, { ...fadeIn(readout, 6), duration: 600, delay: stagger(80) }, 100)
-    timeline.add(state, { count: [0, 1], duration: 1400, ease: 'outExpo', onUpdate: count }, 150)
-    timeline.add(legend, { ...fadeIn(legend, 4), duration: 600, delay: stagger(50) }, 350)
-    if (grid.length) timeline.add(grid, { scaleX: { from: 0 }, duration: 850, delay: stagger(40), ease: 'outQuad',
-      onComplete: releaseStyles('transform') }, 100)
-    timeline.add(state, { progress: [0, 1], duration: DRAW_DURATION, ease: 'inOutSine', onUpdate: reveal }, DRAW_AT)
+    const { headline, marks, labels } = MOTION
+    timeline.add(readout, { ...fadeIn(readout, MOTION.readout.rise), duration: MOTION.readout.duration,
+      delay: stagger(MOTION.readout.stagger) }, MOTION.readout.at)
+    timeline.add(state, { count: [0, 1], duration: headline.duration, ease: 'outExpo', onUpdate: count }, headline.at)
+    timeline.add(legend, { ...fadeIn(legend, labels.rise), duration: labels.duration, delay: stagger(labels.stagger) },
+      labels.at)
+    if (grid.length) timeline.add(grid, { scaleX: { from: 0 }, duration: marks.duration, delay: stagger(labels.stagger),
+      ease: 'outExpo', onComplete: releaseStyles('transform') }, MOTION.readout.at)
+    timeline.add(state, { progress: [0, 1], duration: marks.duration, ease: 'inOutSine', onUpdate: reveal }, marks.at)
     for (const node of nodes) {
       const index = Number(node.dataset.index)
-      timeline.add(node, { scale: { from: 0 }, opacity: { from: 0 }, duration: 450, ease: 'outBack(2)',
-        onComplete: releaseStyles('transform', 'opacity') }, DRAW_AT + (index / Math.max(1, points.length - 1)) * DRAW_DURATION)
+      timeline.add(node, { scale: { from: 0 }, opacity: { from: 0 }, duration: MOTION.pop, ease: 'outBack(2)',
+        onComplete: releaseStyles('transform', 'opacity') }, marks.at + (index / Math.max(1, points.length - 1)) * marks.duration)
     }
-    if (cursorNode) timeline.add(cursorNode, { opacity: { from: 0 }, duration: 400 }, DRAW_AT + DRAW_DURATION - 250)
+    if (cursorNode) timeline.add(cursorNode, { opacity: { from: 0 }, duration: labels.duration },
+      marks.at + marks.duration - labels.duration / 2)
     return () => {
       wipe.current?.setAttribute('width', '100%')
       for (const el of [...readout, ...legend, ...grid, ...nodes, ...(cursorNode ? [cursorNode] : [])]) {
@@ -146,17 +150,18 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
       node.style.transform = `translateX(${state.x - cursorX}px)`
     }
     paint()
-    const ride = finish(animate(state, { x: cursorX, duration: 450, ease: 'outExpo', onUpdate: paint, onComplete: settle }))
+    const ride = finish(animate(state, { x: cursorX, duration: MOTION.slide, ease: 'outExpo', onUpdate: paint, onComplete: settle }))
     return () => { ride.cancel(); node.style.removeProperty('transform') }
   }, [cursorX, width, reduced])
 
-  // A new county fades its name in; its rate counts over in RateValue and the curves cross-fade in CSS.
+  // A new county rolls its name in from below; its rate counts over in RateValue and the curves cross-fade in CSS.
   const lastSeries = useRef(activeSeries)
   useLayoutEffect(() => {
     const before = lastSeries.current
     lastSeries.current = activeSeries
     if (!nameRef.current || reduced || before === activeSeries) return
-    finish(animate(nameRef.current, { opacity: [0.4, 1], duration: 300, ease: 'outQuad', onComplete: releaseStyles('opacity') }))
+    finish(animate(nameRef.current, { translateY: ['100%', '0%'], duration: MOTION.roll, ease: 'outExpo',
+      onComplete: releaseStyles('transform') }))
   }, [activeSeries, reduced])
 
   function pointAt(event: PointerEvent<HTMLDivElement>) {
@@ -180,11 +185,15 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
       [&_[data-slot='growth-grid']]:[transform-origin:left]" ref={root} data-slot="unemployment-growth-chart">
       {known.length === 0 ? <div ref={plot}><EmptyState>Za odabrano razdoblje nema poznatih stopa nezaposlenosti.</EmptyState></div> : <>
         {focused && point && <div className="readout flex flex-col items-start gap-2.5" data-slot="readout">
-          <p className="growth-readout-name m-0 flex min-h-5 flex-wrap items-center gap-1.5 text-[12px] font-medium leading-[1.25] text-fg-soft"
-            ref={nameRef}>
-            {focused.label} · {formatMonth(point.period)}
-            {reading?.is_provisional && <Badge variant="provisional" className="provisional">privremeno</Badge>}
-          </p>
+          {/* Clips the name as it rolls in from below on a new county. Mono like every label, but only the month
+              is uppercase: county names keep their own case. */}
+          <div className="overflow-clip">
+            <p className="growth-readout-name m-0 flex min-h-5 flex-wrap items-center gap-1.5 mono-label text-fg-soft"
+              ref={nameRef}>
+              <span>{focused.label} · <span className="uppercase">{formatMonth(point.period)}</span></span>
+              {reading?.is_provisional && <Badge variant="provisional" className="provisional">privremeno</Badge>}
+            </p>
+          </div>
           {reading?.rate != null ? <RateValue rate={reading.rate} />
             : <p className="growth-missing m-0 text-[16px] leading-[28px] text-fg-soft">nema podatka</p>}
         </div>}
@@ -196,10 +205,10 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
               const rate = value?.rate == null ? 'nema podatka' : formatRate(value.rate)
               const lit = i === activeSeries
               return <Button variant="ghost" key={s.id} type="button" data-slot="legend-county"
-                className={cn('legend-county relative h-7 gap-1.5 rounded-[8px] px-2 text-[12px] font-medium leading-[1.25]',
-                  'text-fg-soft tabular-nums transition-[background-color,color] duration-300 motion-reduce:transition-none',
+                className={cn('legend-county relative h-7 gap-2 rounded-full px-3 mono-label',
+                  'text-fg-soft transition-[background-color,color] duration-300 motion-reduce:transition-none',
                   'focus-visible:border-transparent focus-visible:ring-0',
-                  lit && 'active bg-surface-muted font-semibold text-fg-on-muted hover:bg-surface-muted hover:text-fg-on-muted')}
+                  lit && 'active bg-surface-muted font-medium text-fg-on-muted hover:bg-surface-muted hover:text-fg-on-muted')}
                 title={s.label} aria-label={`${s.label}, ${point ? formatMonth(point.period) + ': ' : ''}${rate}`
                   + (value?.is_provisional ? ', privremeno' : '')}
                 aria-pressed={i === selectedSeries} tabIndex={i === selectedSeries ? 0 : -1}
@@ -207,15 +216,15 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
                 <span className={cn('swatch h-[3px] w-3 flex-none rounded-[2px] transition-colors duration-300 motion-reduce:transition-none',
                   lit ? 'bg-accent-500' : 'bg-surface-disable')} aria-hidden="true" />
                 {s.shortLabel}
-                <span className="font-medium">{rate}</span>
+                <span className="uppercase">{rate}</span>
                 {/* keyboard focus rings the chip */}
-                <span className="focus-ring pointer-events-none absolute -inset-1 rounded-[12px] opacity-0 shadow-focus
+                <span className="focus-ring pointer-events-none absolute -inset-1 rounded-full opacity-0 shadow-focus
                   transition-opacity duration-150 group-focus-visible/button:opacity-100" aria-hidden="true" />
               </Button>
             })}
           </div>
           {(bands.length > 0 || gaps) && <ul className="legend-keys m-0 flex flex-wrap [gap:6px_16px] p-0 [list-style:none]
-            text-[12px] font-medium leading-[1.25] text-fg-soft [&_li]:inline-flex [&_li]:items-center [&_li]:gap-1.5">
+            mono-label uppercase text-fg-soft [&_li]:inline-flex [&_li]:items-center [&_li]:gap-2">
             {bands.length > 0 && <li data-slot="legend-key"><svg className="key h-3 w-7" viewBox="0 0 28 12" aria-hidden="true">
               <rect x="0" y="0" width="28" height="12" rx="3" className="key-band fill-surface-subdued" />
               <line x1="2" y1="6" x2="26" y2="6" className="key-dashed stroke-fg-soft [stroke-width:2] [stroke-linecap:round] [stroke-dasharray:4_3]" />
@@ -227,9 +236,9 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
           </ul>}
         </div>
         <div className="flex flex-col gap-2">
-          <p className="growth-plot-heading m-0 text-[12px] font-medium leading-[1.25] text-fg-soft">Stopa registrirane nezaposlenosti (%)</p>
+          <p className="growth-plot-heading m-0 mono-label uppercase text-fg-soft">Stopa registrirane nezaposlenosti (%)</p>
           <div className="growth-axes flex gap-3 min-w-0 [@media(max-width:_400px)]:gap-2">
-            <div className="growth-y-axis relative flex-none min-w-11 text-fg-soft text-[12px] tabular-nums [&_span]:absolute
+            <div className="growth-y-axis relative flex-none min-w-11 mono-label text-fg-soft [&_span]:absolute
               [&_span]:left-0 [&_span]:whitespace-nowrap [&_span]:[transform:translateY(-50%)]" aria-hidden="true" style={{ height: HEIGHT }}>
               {axis.ticks.map((tick) => <span key={tick} style={{ top: y(tick) }}>{formatRate(tick)}</span>)}
             </div>
@@ -294,7 +303,7 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
                     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
                   }} />
               </div>
-              <div className="growth-x-axis relative h-6 mt-1 text-fg-soft text-[12px] [&_span]:absolute
+              <div className="growth-x-axis relative h-6 mt-1 mono-label uppercase text-fg-soft [&_span]:absolute
                 [&_span]:whitespace-nowrap [&_span]:[transform:translateX(-50%)] [&_.is-first]:[transform:none]
                 [&_.is-last]:[transform:translateX(-100%)]" aria-hidden="true">
                 {ticks.map((index, position) => {
