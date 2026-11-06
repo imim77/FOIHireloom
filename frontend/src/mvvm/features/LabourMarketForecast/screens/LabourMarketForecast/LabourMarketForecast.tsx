@@ -3,6 +3,8 @@ import { Card, Notes, Warning } from '../../../../components/Card'
 import { Sources } from '../../../../components/Sources'
 import type { ForecastData } from '../../types'
 
+const EYEBROW = 'Prognoza'
+
 export function LabourMarketForecast({ data, onOpenLink, children }: {
   data: ForecastData | null
   onOpenLink: (url: string) => void
@@ -10,7 +12,7 @@ export function LabourMarketForecast({ data, onOpenLink, children }: {
 }) {
   return <div className="forecast-view [&_.title]:whitespace-normal [&_.title]:overflow-visible [&_.titles_>_.soft]:whitespace-normal
     [&_.titles_>_.soft]:overflow-visible [&_.body]:min-w-0 [@media(max-width:_420px)]:[&_.card]:p-3.5">
-    <Card loading={!data} title={data?.title ?? 'Chronos prognoza za županiju'} description={data?.description ?? 'Učitavanje…'}>
+    <Card eyebrow={EYEBROW} loading={!data} title={data?.title ?? 'Chronos prognoza za županiju'} description={data?.description ?? 'Učitavanje…'}>
       {data && <>
         <Warning text={data.unavailable_label} />
         {children}

@@ -7,7 +7,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableCap
 import { Badge } from '@/components/ui/badge'
 import { animate, type JSAnimation, stagger } from 'animejs'
 import { type MouseEvent, type PointerEvent, type ReactNode, useId, useLayoutEffect, useRef } from 'react'
-import { fadeIn, finish, releaseStyles, useChartEntrance, useReducedMotion } from '../../../hooks/chart-motion'
+import { fadeIn, finish, MOTION, releaseStyles, useChartEntrance, useReducedMotion } from '../../../hooks/chart-motion'
 import { useChartWidth } from '../../../hooks/use-chart-size'
 import { forecastChart, formatChange, formatPeriod, formatValue } from '../utils/forecast-chart'
 import type { useForecast } from '../hooks/use-forecast'
@@ -20,7 +20,8 @@ function Flags({ point }: { point: ObservedPoint }) {
 
 /**
  * Readout shows the inspected period's median over the chart, as the county chart shows its county's workers: the
- * lines rise in and the median counts up from 0, then counts to each newly inspected median.
+ * eyebrow and lines rise in and the median counts up from 0; a newly inspected period rolls its name in and the
+ * median counts to its value.
  */
 function Readout({ context, median, format, children }: {
   context: string
@@ -45,15 +46,19 @@ function Readout({ context, median, format, children }: {
   }
 
   useChartEntrance(root, (timeline) => {
-    const lines = [...root.current!.children] as HTMLElement[]
+    // The card's eyebrow comes in with the readout, ahead of it.
+    const eyebrow = root.current!.closest('[data-slot="card"]')?.querySelector<HTMLElement>('[data-slot="eyebrow"]')
+    const lines = [...(eyebrow ? [eyebrow] : []), ...root.current!.children] as HTMLElement[]
     const up = { t: 0 }
     const countUp = () => show(latest.current * up.t)
     count.current.entering = true
     countUp()
+    const { readout, headline } = MOTION
     timeline
-      .add(lines, { ...fadeIn(lines, 6), duration: 600, delay: stagger(80) }, 100)
-      .add(up, { t: [0, 1], duration: 1400, ease: 'outExpo', onUpdate: countUp,
-        onComplete: () => { count.current.entering = false } }, 150)
+      .add(lines, { ...fadeIn(lines, readout.rise), duration: readout.duration, delay: stagger(readout.stagger) },
+        readout.at)
+      .add(up, { t: [0, 1], duration: headline.duration, ease: 'outExpo', onUpdate: countUp,
+        onComplete: () => { count.current.entering = false } }, headline.at)
     return () => {
       count.current.entering = false
       show(latest.current)
@@ -75,7 +80,7 @@ function Readout({ context, median, format, children }: {
     }
     const from = { value: state.value }
     state.tween = finish(animate(from, {
-      value: median, duration: 600, ease: 'outExpo',
+      value: median, duration: MOTION.count, ease: 'outExpo',
       onUpdate: () => show(from.value),
       onComplete: () => {
         state.tween = null
@@ -91,15 +96,17 @@ function Readout({ context, median, format, children }: {
     if (lastContext.current === context) return
     lastContext.current = context
     if (reduced || !contextRef.current) return
-    finish(animate(contextRef.current, { opacity: [0.4, 1], duration: 300, ease: 'outQuad',
-      onComplete: releaseStyles('opacity') }))
+    finish(animate(contextRef.current, { translateY: ['100%', '0%'], duration: MOTION.roll, ease: 'outExpo',
+      onComplete: releaseStyles('transform') }))
   }, [context, reduced])
 
   return <div className="forecast-readout flex flex-col items-start gap-2.5" ref={root} data-slot="readout">
-    <p className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft" ref={contextRef}
-      data-slot="forecast-period">{context}</p>
-    <p className="forecast-number m-0 text-[28px] font-semibold leading-[1] whitespace-nowrap tabular-nums"
-      ref={numberRef} data-slot="forecast-median">{format(median)}</p>
+    {/* Clips the period as it rolls in from below on a new one. */}
+    <div className="overflow-clip">
+      <p className="soft m-0 mono-label uppercase text-fg-soft" ref={contextRef} data-slot="forecast-period">{context}</p>
+    </div>
+    <p className="forecast-number m-0 mono-headline whitespace-nowrap text-fg-loud" ref={numberRef}
+      data-slot="forecast-median">{format(median)}</p>
     {children}
   </div>
 }
@@ -111,10 +118,9 @@ export function ForecastView(model: ReturnType<typeof useForecast>) {
   const sliderLabel = `${sliderId}-label`
   return <div className="forecast-content min-w-0 flex flex-col gap-6">
     {point && <Readout context={`${period(point.period)} · medijan prognoze`} median={point.median} format={value}>
-      <p className="forecast-interval m-0 text-[12px] font-medium leading-[1.25] text-fg-soft tabular-nums"
-        data-slot="forecast-interval">{value(point.low)} – {value(point.high)} · {interval}</p>
-      <div className="forecast-last flex flex-wrap items-center [gap:4px_8px] text-[12px] font-medium leading-[1.25]
-        text-fg-soft tabular-nums" data-slot="forecast-last">
+      <p className="forecast-interval m-0 mono-label uppercase text-fg-soft" data-slot="forecast-interval">{value(point.low)} – {value(point.high)} · {interval}</p>
+      <div className="forecast-last flex flex-wrap items-center [gap:4px_8px] mono-label uppercase text-fg-soft"
+        data-slot="forecast-last">
         <span>Posljednji podatak: {last?.value == null ? 'nema podatka' : value(last.value)}
           {last && ` · ${period(last.period)}`}</span>
         {last && <Flags point={last} />}
@@ -133,13 +139,13 @@ export function ForecastView(model: ReturnType<typeof useForecast>) {
               + `${value(selectedPoint.low)} – ${value(selectedPoint.high)}` }} />
       </Field>
     </FieldGroup>}
-    {end && county.change_to_horizon !== null && <p className="forecast-change flex flex-wrap items-baseline [gap:6px_12px] m-0 text-[12px] font-medium leading-[1.25] text-fg-soft
-      [&_strong]:text-fg-loud [&_strong]:text-[14px] [&_strong]:font-semibold [&_strong]:tabular-nums">
+    {end && county.change_to_horizon !== null && <p className="forecast-change flex flex-wrap items-baseline [gap:6px_12px] m-0 mono-label uppercase text-fg-soft
+      [&_strong]:text-fg-loud [&_strong]:text-[14px] [&_strong]:font-medium">
       <strong>{formatChange(county.change_to_horizon, data.unit)}</strong>
       <span>do {period(end.period)}, u odnosu na posljednji podatak</span>
     </p>}
     {county.forecast.length > 0 && <div className="forecast-table-scroll focus-visible:outline-none focus-visible:shadow-focus overflow-auto [max-height:290px]
-      border border-border rounded-[12px]" tabIndex={0} role="region" aria-label="Prognozirane vrijednosti">
+      border border-border rounded-[10px]" tabIndex={0} role="region" aria-label="Prognozirane vrijednosti">
       <Table variant="numeric" containerClassName="contents" className="forecast-table w-full border-collapse text-right tabular-nums [&_caption]:text-left [&_caption]:p-3
         [&_caption]:text-fg-soft [&_th]:[padding:9px_12px] [&_th]:[border-top:1px_solid_var(--border)]
         [&_th]:whitespace-nowrap [&_td]:[padding:9px_12px] [&_td]:[border-top:1px_solid_var(--border)]
@@ -162,7 +168,7 @@ export function ForecastView(model: ReturnType<typeof useForecast>) {
       </CollapsibleTrigger>
       <CollapsibleContent>
       <div className="forecast-table-scroll focus-visible:outline-none focus-visible:shadow-focus overflow-auto [max-height:290px]
-        border border-border rounded-[12px]" tabIndex={0} role="region" aria-label="Povijesne vrijednosti">
+        border border-border rounded-[10px]" tabIndex={0} role="region" aria-label="Povijesne vrijednosti">
         <Table variant="numeric" containerClassName="contents" className="forecast-table w-full border-collapse text-right tabular-nums [&_caption]:text-left [&_caption]:p-3
         [&_caption]:text-fg-soft [&_th]:[padding:9px_12px] [&_th]:[border-top:1px_solid_var(--border)]
         [&_th]:whitespace-nowrap [&_td]:[padding:9px_12px] [&_td]:[border-top:1px_solid_var(--border)]
@@ -206,7 +212,7 @@ function ForecastChart({ data, county, active, onSelect, onHover }: {
   }
   return <div className="forecast-chart" data-slot="forecast-chart">
     <ul className="forecast-legend flex flex-wrap [gap:8px_16px] p-0 [margin:0_0_16px] [list-style:none] text-fg-soft
-      text-[12px] font-medium leading-[1.25] [&_li]:inline-flex [&_li]:items-center [&_li]:gap-1.5" aria-label="Legenda">
+      mono-label uppercase [&_li]:inline-flex [&_li]:items-center [&_li]:gap-2" aria-label="Legenda">
       <li><span className="forecast-key history w-4 h-0 border-t-2 border-fg-soft" />Povijest</li>
       <li><span className="forecast-key median w-4 h-0 border-t-2 border-dashed border-accent-500" />Prognoza (medijan)</li>
       <li><span className={`forecast-key interval w-4 h-2.5 ${WASH_KEY}`} />
@@ -215,7 +221,7 @@ function ForecastChart({ data, county, active, onSelect, onHover }: {
         Procijenjeno / privremeno</li>}
     </ul>
     <div className="forecast-axes flex gap-2 min-w-0">
-      <div className="forecast-y-axis relative flex-none w-16 text-[12px] font-medium tabular-nums text-fg-soft
+      <div className="forecast-y-axis relative flex-none w-16 mono-label text-fg-soft
         [&_span]:absolute [&_span]:right-0 [&_span]:[transform:translateY(-50%)] [&_span]:whitespace-nowrap
         [@media(max-width:_420px)]:w-14" aria-hidden="true" style={{ height: chart.height }}>
         {chart.ticks.map((tick) => <span key={tick} style={{ top: chart.y(tick) }}>{formatValue(tick, data.unit)}</span>)}
@@ -255,7 +261,7 @@ function ForecastChart({ data, county, active, onSelect, onHover }: {
             </g>}
           </svg>
         </div>
-        <div className="forecast-x-axis flex justify-between gap-3 mt-2.5 text-[12px] font-medium leading-[1.25] text-fg-soft [&_span:last-child]:text-right"><span>{formatPeriod(periods[0].period, data.frequency)}</span>
+        <div className="forecast-x-axis flex justify-between gap-3 mt-2.5 mono-label uppercase text-fg-soft [&_span:last-child]:text-right"><span>{formatPeriod(periods[0].period, data.frequency)}</span>
           {periods.length > 1 && <span>{formatPeriod(periods.at(-1)!.period, data.frequency)}</span>}</div>
       </div>
     </div>
