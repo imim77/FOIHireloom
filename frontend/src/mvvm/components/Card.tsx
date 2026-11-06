@@ -45,8 +45,7 @@ export function Card({ eyebrow, title, description, actions, children, sunken = 
 
 // Uppercase comes from CSS, so screen readers read words rather than letters.
 function Eyebrow({ text }: { text: string }) {
-  return <p className="eyebrow m-0 mb-1 flex items-center gap-2 font-mono text-[12px] leading-[1.25] font-normal
-    tracking-[0.04em] uppercase text-fg-soft" data-slot="eyebrow">
+  return <p className="eyebrow m-0 mb-1 flex items-center gap-2 mono-label uppercase text-fg-soft" data-slot="eyebrow">
     <span className="size-1.5 flex-none rounded-full bg-accent-500" aria-hidden="true" />{text}
   </p>
 }

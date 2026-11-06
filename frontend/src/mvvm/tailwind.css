@@ -88,6 +88,23 @@
   --shadow-focus: var(--focus);
 }
 
+/* The DESIGN.md mono steps every view shares. Labels leave case and colour to the caller: short labels add
+   uppercase and fg-soft, names keep their own case. */
+@utility mono-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0.04em;
+}
+@utility mono-headline {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
 @theme {
   --animate-fade-in: fade-in 400ms ease-out;
   @keyframes fade-in {
