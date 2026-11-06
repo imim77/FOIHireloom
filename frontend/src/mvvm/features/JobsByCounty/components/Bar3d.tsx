@@ -43,8 +43,8 @@ export function BarGradients({ ids }: { ids: string }) {
       <defs>
         <Gradient id={`${ids}-grey-right`} x1="35.8613" y1="8.0502" x2="35.8613" y2="188.448" from="--surface-disable" to="--surface-subdued" />
         <Gradient id={`${ids}-grey-left`} x1="23.9673" y1="0" x2="0.181152" y2="0" from="--surface-disable" to="--surface-subdued" />
-        <Gradient id={`${ids}-lit-right`} x1="23.9683" y1="0" x2="47.7538" y2="0" from="--accent-100" to="--accent-300" />
-        <Gradient id={`${ids}-lit-left`} x1="23.9672" y1="0" x2="0.181641" y2="0" from="--accent-100" to="--accent-300" />
+        <Gradient id={`${ids}-lit-right`} x1="23.9683" y1="0" x2="47.7538" y2="0" from="--accent-300" to="--accent-500" />
+        <Gradient id={`${ids}-lit-left`} x1="23.9672" y1="0" x2="0.181641" y2="0" from="--accent-300" to="--accent-500" />
       </defs>
     </svg>
   )
