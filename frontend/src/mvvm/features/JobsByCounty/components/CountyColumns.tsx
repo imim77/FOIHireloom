@@ -9,7 +9,7 @@ import { cn } from 'cn'
 
 import { animate, type JSAnimation, stagger, utils } from 'animejs'
 import { type KeyboardEvent, useId, useLayoutEffect, useRef } from 'react'
-import { fadeIn, finish, releaseStyles, useChartEntrance, useCountUp, useReducedMotion } from '../../../hooks/chart-motion'
+import { fadeIn, finish, MOTION, releaseStyles, useChartEntrance, useCountUp, useReducedMotion } from '../../../hooks/chart-motion'
 import { formatAds, formatInteger, formatShare, formatWorkers } from '../../../utils/format'
 import { useChartWidth } from '../../../hooks/use-chart-size'
 import { BAR_VIEW, BarGradients, BarLook } from './Bar3d'
@@ -23,10 +23,6 @@ const BAR_RATIO = 48 / 64
 const VALUE_HEIGHT = 16
 const VALUE_GAP = 4 // between a bar's top and its value
 const MAX_BAR = PLOT_HEIGHT - VALUE_HEIGHT - VALUE_GAP
-const BARS_AT = 250
-const BAR_STAGGER = 70
-const GROW = 1100
-const MORPH = 700
 // The narrowest column; the plot scrolls sideways below it.
 const MIN_COLUMN = 84
 
@@ -35,7 +31,7 @@ const round = (n: number) => Math.round(n * 1000) / 1000
 /** A column's count over it, counting from the previous one when the data changes. */
 function BarValue({ value }: { value: number }) {
   const ref = useRef<HTMLSpanElement>(null)
-  useCountUp(ref, value, formatInteger, { duration: MORPH })
+  useCountUp(ref, value, formatInteger, { duration: MOTION.morph })
   return <span ref={ref} data-slot="value-text">{formatInteger(value)}</span>
 }
 
@@ -102,24 +98,28 @@ export function CountyColumns({ counties, values, selected, active, county, work
     const countUp = () => showWorkers(latest.current.workers * up.t)
     countingWorkers.current = true
     countUp()
-    const selection = all('[data-slot="selection"] > *')
+    // The card's eyebrow comes in with the readout, ahead of it.
+    const eyebrow = root.current?.closest('[data-slot="card"]')?.querySelector<HTMLElement>('[data-slot="eyebrow"]')
+    const selection = [...(eyebrow ? [eyebrow] : []), ...all('[data-slot="selection"] > *')]
     const counts = all('[data-slot="value"]')
     const names = all('[data-slot="axis-label"] > span')
-    const pillAt = BARS_AT + Math.max(0, active) * BAR_STAGGER + GROW * 0.45
+    const { readout, headline, marks, labels } = MOTION
+    const pillAt = marks.at + Math.max(0, active) * marks.stagger + marks.duration * MOTION.pill.progress
     timeline
-      .add(selection, { ...fadeIn(selection, 6), duration: 600, delay: stagger(80) }, 100)
+      .add(selection, { ...fadeIn(selection, readout.rise), duration: readout.duration, delay: stagger(readout.stagger) },
+        readout.at)
       .add(up, {
-        t: [0, 1], duration: 1400, ease: 'outExpo', onUpdate: countUp,
+        t: [0, 1], duration: headline.duration, ease: 'outExpo', onUpdate: countUp,
         onComplete: () => { countingWorkers.current = false },
-      }, 150)
-      .add(counts, { ...fadeIn(counts), duration: 400, delay: stagger(BAR_STAGGER) }, BARS_AT)
-      .add(names, { ...fadeIn(names, 4), duration: 600, delay: stagger(50) }, 350)
-    growth.forEach((state, i) => timeline.add(state, { t: [0, 1], duration: GROW, ease: 'outExpo', onUpdate: grow },
-      BARS_AT + i * BAR_STAGGER))
+      }, headline.at)
+      .add(counts, { ...fadeIn(counts), duration: labels.duration, delay: stagger(marks.stagger) }, marks.at)
+      .add(names, { ...fadeIn(names, labels.rise), duration: labels.duration, delay: stagger(labels.stagger) }, labels.at)
+    growth.forEach((state, i) => timeline.add(state, { t: [0, 1], duration: marks.duration, ease: 'outExpo',
+      onUpdate: grow }, marks.at + i * marks.stagger))
     if (pill.current) {
       utils.set(pill.current, { opacity: 0 })
-      timeline.add(pill.current, { scale: [0.7, 1], opacity: [0, 1], duration: 500, ease: 'outBack(1.7)',
-        onComplete: releaseStyles('opacity', 'transform') }, pillAt)
+      timeline.add(pill.current, { scale: [0.7, 1], opacity: [0, 1], duration: MOTION.pill.duration,
+        ease: 'outBack(1.7)', onComplete: releaseStyles('opacity', 'transform') }, pillAt)
     }
     return () => {
       if (growing.current === growth) growing.current = null
@@ -128,7 +128,10 @@ export function CountyColumns({ counties, values, selected, active, county, work
       draw(heights)
       texts.forEach((el, i) => (el.textContent = formatInteger(values[i] ?? 0)))
       showWorkers(workers)
-      for (const el of [...selection, ...counts, ...names, pill.current]) el?.style.removeProperty('opacity')
+      for (const el of [...selection, ...counts, ...names, pill.current]) {
+        el?.style.removeProperty('opacity')
+        el?.style.removeProperty('transform')
+      }
     }
   })
 
@@ -155,7 +158,7 @@ export function CountyColumns({ counties, values, selected, active, county, work
     const at = () => heights.map((height, i) => (from[i] ?? 0) + (height - (from[i] ?? 0)) * state.t)
     draw(at())
     morph.current = finish(animate(state, {
-      t: 1, duration: MORPH, ease: 'outExpo',
+      t: 1, duration: MOTION.morph, ease: 'outExpo',
       onUpdate: () => draw(at()),
       onComplete: () => {
         morph.current = null
@@ -166,7 +169,8 @@ export function CountyColumns({ counties, values, selected, active, county, work
   }, [heightsKey, reduced])
   useLayoutEffect(() => () => { morph.current?.cancel() }, [])
 
-  // A new county slides the pill over (from where it is, if it is still sliding), pops its count and fades its name in.
+  // A new county slides the pill over (from where it is, if it is still sliding), pops its count and rolls its name in
+  // from below.
   const lastActive = useRef(active)
   useLayoutEffect(() => {
     const before = lastActive.current
@@ -175,12 +179,13 @@ export function CountyColumns({ counties, values, selected, active, county, work
     const step = columnWidth + COLUMN_GAP
     finish(animate(pill.current, {
       translateX: [(before - active) * step + (utils.get(pill.current, 'translateX', false) as number), 0],
-      duration: 550, ease: 'outExpo', onComplete: releaseStyles('transform'),
+      duration: MOTION.slide, ease: 'outExpo', onComplete: releaseStyles('transform'),
     }))
     const count = all('[data-slot="value-text"]')[active]
-    if (count) finish(animate(count, { scale: [0.86, 1], duration: 500, ease: 'outBack(2)', onComplete: releaseStyles('transform') }))
+    if (count) finish(animate(count, { scale: [0.86, 1], duration: MOTION.pop, ease: 'outBack(2)', onComplete: releaseStyles('transform') }))
     if (nameRef.current) {
-      finish(animate(nameRef.current, { opacity: [0.4, 1], duration: 300, ease: 'outQuad', onComplete: releaseStyles('opacity') }))
+      finish(animate(nameRef.current, { translateY: ['100%', '0%'], duration: MOTION.roll, ease: 'outExpo',
+        onComplete: releaseStyles('transform') }))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, reduced])
@@ -197,7 +202,7 @@ export function CountyColumns({ counties, values, selected, active, county, work
     }
     const state = { value: count.value }
     count.tween = finish(animate(state, {
-      value: workers, duration: 600, ease: 'outExpo',
+      value: workers, duration: MOTION.count, ease: 'outExpo',
       onUpdate: () => showWorkers(state.value),
       onComplete: () => {
         count.tween = null
@@ -218,7 +223,10 @@ export function CountyColumns({ counties, values, selected, active, county, work
   return (
     <div className="columns flex flex-col gap-6" ref={root}>
       <div className="selection flex flex-col items-start gap-2.5" data-slot="selection">
-        <p className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft" ref={nameRef}>{county.name} · {formatAds(county.jobs)}</p>
+        {/* Clips the name as it rolls in from below on a new county. */}
+        <div className="overflow-clip">
+          <p className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft" ref={nameRef}>{county.name} · {formatAds(county.jobs)}</p>
+        </div>
         <p className="big m-0 text-[28px] font-semibold leading-[1] whitespace-nowrap tabular-nums" ref={workersRef}>{formatWorkers(workers)}</p>
       </div>
       <div className="scroller overflow-x-auto overflow-y-hidden p-1 [margin:-4px]">

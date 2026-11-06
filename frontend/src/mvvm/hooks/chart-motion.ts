@@ -6,6 +6,23 @@ import { type RefObject, useLayoutEffect, useRef, useSyncExternalStore } from 'r
 
 const REDUCE = '(prefers-reduced-motion: reduce)'
 
+/**
+ * MOTION holds the timings (ms) of the DESIGN.md motion table: short durations and tight staggers, so things slide
+ * into place in sequence. at is the start within an entrance timeline; rise is how far (px) an element comes up from.
+ */
+export const MOTION = {
+  readout: { at: 100, duration: 500, stagger: 60, rise: 6 }, // eyebrow and readout lines
+  headline: { at: 150, duration: 1200 }, // the headline number counting up from 0
+  marks: { at: 250, duration: 900, stagger: 50 }, // columns growing from their feet, their values counting along
+  labels: { at: 350, duration: 400, stagger: 20, rise: 4 }, // axis labels
+  pill: { duration: 450, progress: 0.45 }, // pops in as the active mark passes this share of its growth
+  slide: 450, // the pill moving to a new item
+  pop: 400, // the active value on a new focus
+  roll: 250, // the readout label rolling to a new name; also the hover roll of links and pills
+  count: 600, // a number counting to a new value
+  morph: 600, // shapes regrowing from their size on screen for new data
+} as const
+
 export function useReducedMotion(): boolean {
   return useSyncExternalStore((onChange) => {
     const query = matchMedia(REDUCE)
@@ -43,7 +60,7 @@ export function releaseStyles(...properties: string[]) {
  */
 export function fadeIn(targets: HTMLElement[], rise = 0) {
   utils.set(targets, { opacity: 0, translateY: rise })
-  return { opacity: [0, 1], translateY: [rise, 0], ease: 'outQuad', onComplete: releaseStyles('opacity', 'transform') }
+  return { opacity: [0, 1], translateY: [rise, 0], ease: 'outExpo', onComplete: releaseStyles('opacity', 'transform') }
 }
 
 /**
@@ -69,7 +86,7 @@ export function useChartEntrance(root: RefObject<HTMLElement | null>, build: (ti
 
 /** Count an element's text from the number it shows to a new value whenever value changes. */
 export function useCountUp(ref: RefObject<HTMLElement | null>, value: number, format: (value: number) => string,
-  { duration = 600 }: { duration?: number } = {}) {
+  { duration = MOTION.count }: { duration?: number } = {}) {
   const reduced = useReducedMotion()
   const shown = useRef({ value })
   const tween = useRef<JSAnimation | null>(null)
