@@ -80,7 +80,7 @@ async function amountIs(frame, text) {
 async function ramp(frame) {
   return frame.evaluate(() => ['offered', 'not_offered', 'unknown'].map((key) => [
     getComputedStyle(document.querySelector(`linearGradient.allocation-${key} stop[offset="1"]`)).stopColor,
-    getComputedStyle(document.querySelector(`.allocation-pill.allocation-${key} .allocation-glass`)).color]))
+    getComputedStyle(document.querySelector(`.allocation-pill.allocation-${key} .allocation-disc`)).color]))
 }
 async function artifact(frame, name) {
   if (!process.env.CHART_ARTIFACT_DIR) return
@@ -117,7 +117,7 @@ test('legend keyboard toggles retain at least one positive group and restore ori
   } finally { await page.close() }
 })
 
-test('real sample renders counts, percentages, source, filters and freshness with reference ring and glass pills', async () => {
+test('real sample renders counts, percentages, source, filters and freshness with a flat ring and share labels', async () => {
   const { page, frame } = await open()
   try {
     await deliver(page, frame, sample())
@@ -125,9 +125,15 @@ test('real sample renders counts, percentages, source, filters and freshness wit
     assert.deepEqual(await frame.locator('.allocation-legend-count').allTextContents(), ['2', '7', '1'])
     assert.deepEqual(await frame.locator('[data-slot="allocation-share"]').allTextContents(), ['20 %', '70 %', '10 %'])
     assert.equal(await frame.locator('[data-slot="allocation-slice-button"]').count(), 3)
-    // accent-500 / surface-disable / surface-subdued, with fg-loud ink on all three.
-    assert.deepEqual(await ramp(frame), [['rgb(251, 41, 14)', 'rgb(25, 25, 25)'],
-      ['rgb(205, 205, 205)', 'rgb(25, 25, 25)'], ['rgb(238, 238, 238)', 'rgb(25, 25, 25)']])
+    // accent-500 / surface-disable / surface-subdued; shares in fg-soft on card-coloured discs.
+    assert.deepEqual(await ramp(frame), [['rgb(251, 41, 14)', 'rgb(110, 110, 110)'],
+      ['rgb(205, 205, 205)', 'rgb(110, 110, 110)'], ['rgb(238, 238, 238)', 'rgb(110, 110, 110)']])
+    // Flat: no filters on the ring, and the share discs carry no blur or shadow.
+    assert.equal(await frame.locator('.allocation-ring filter, .allocation-ring [filter]').count(), 0)
+    assert.ok(await frame.locator('.allocation-disc').evaluateAll((discs) => discs.every((disc) => {
+      const style = getComputedStyle(disc)
+      return style.boxShadow === 'none' && style.backdropFilter === 'none' && style.backgroundImage === 'none'
+    })))
     assert.match(await frame.locator('.header .soft').textContent(), /kuhar.*Varaždinska/)
     assert.match(await frame.locator('.sources').textContent(), /HZZ/)
     assert.match(await frame.locator('.warning').textContent(), /stariji od 6 sati/)
@@ -214,10 +220,9 @@ test('320px dark mobile supports touch selection, second-tap clearing and reduce
     await deliver(page, frame, sample())
     await page.evaluate(() => window.setTheme('dark'))
     await frame.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
-    // The same ramp in dark tokens (accent-500 is one red in both); near-black ink on the red, where fg-loud
-    // (near-white there) would be too faint.
-    assert.deepEqual(await ramp(frame), [['rgb(251, 41, 14)', 'rgb(25, 25, 25)'],
-      ['rgb(110, 110, 110)', 'rgb(244, 244, 244)'], ['rgb(58, 58, 58)', 'rgb(244, 244, 244)']])
+    // The same ramp in dark tokens (accent-500 is one red in both), with dark fg-soft shares.
+    assert.deepEqual(await ramp(frame), [['rgb(251, 41, 14)', 'rgb(154, 154, 154)'],
+      ['rgb(110, 110, 110)', 'rgb(154, 154, 154)'], ['rgb(58, 58, 58)', 'rgb(154, 154, 154)']])
     await frame.locator('.allocation-ring').scrollIntoViewIfNeeded()
     const point = await pointOn(frame, 2)
     await page.touchscreen.tap(point.x, point.y)

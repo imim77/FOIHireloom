@@ -74,7 +74,7 @@ class AccommodationComparisonAppTests(unittest.TestCase):
 
     def test_built_page_has_the_supplied_ring_features_and_no_external_assets(self):
         page = ACCOMMODATION_COMPARISON.page()
-        for text in ('allocation-ring', 'allocation-glass', 'Nudi smještaj', 'Bez smještaja', 'Podatak nije poznat',
+        for text in ('allocation-ring', 'allocation-disc', 'Nudi smještaj', 'Bez smještaja', 'Podatak nije poznat',
                      'prikazanim oglasima', 'Udjeli skupina smještaja', 'Nema oglasa za zadane filtre.'):
             self.assertIn(text, page)
         for text in ('src="http', '<link', 'of portfolio', 'Equities'):

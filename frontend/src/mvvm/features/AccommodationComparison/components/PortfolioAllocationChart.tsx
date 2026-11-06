@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button'
 import { RollLabel } from '@/components/RollLabel'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 // Domain adaptation of the supplied PortfolioAllocationChart. Geometry, stepped bands, sweep, morphing,
-// glass pills and interactive legend follow the reference; values count ads instead of currency.
+// share labels and interactive legend follow the reference; values count ads instead of currency. Drawn flat, as
+// Dalco draws: no shadow, glow, bevel or glass, only faces, card-coloured separators and the dim veil.
 // Styled after the jobs-by-county chart: one ramp (offered red, not offered grey, unknown light grey), a readout
 // over the ring with the active segment's name, share and ad count, and the other segments dimmed. Each segment is
 // a button: hover previews, click or the arrow keys select. The eyebrow and readout fade in and count up with the
@@ -16,8 +17,7 @@ import { SIZE, START_ANGLE, TUCK, interpolateGeometry, layoutRing, mod, pillPlac
   type SliceGeometry } from '../utils/ring-geometry'
 import type { useAllocation } from '../hooks/use-allocation'
 
-const LAYERS = [{ name: 'drop', spread: 0 }, { name: 'rim', spread: -1 }, { name: 'glow', spread: -2 },
-  { name: 'shape', spread: 0 }, { name: 'veil', spread: 0 }]
+const LAYERS = [{ name: 'shape', spread: 0 }, { name: 'veil', spread: 0 }]
 const inOutCubic = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 const percent = (value: number) => `${formatInteger(value)} %`
 
@@ -31,11 +31,9 @@ function Pill({ index, groupKey, share, geometry, dimmed }:
       [transition:opacity_300ms] [&.is-hidden]:[opacity:0] [&.is-dimmed]:[opacity:0.4]
       motion-reduce:[transition:none] ${!place.fits ? ' is-hidden' : ''}${dimmed ? ' is-dimmed' : ''}`}
     style={{ left: `${place.left / SIZE * 100}%`, top: `${place.top / SIZE * 100}%` }}>
-    {/* Card-coloured glass, like the card-coloured edges of the 3D columns: light on light, dark on dark. */}
-    <span className="allocation-glass flex items-center justify-center w-full h-full rounded-full
-      [background:linear-gradient(135deg,_color-mix(in_srgb,_var(--card)_4%,_transparent),_color-mix(in_srgb,_var(--card)_16%,_transparent))]
-      [border:1px_solid_color-mix(in_srgb,_var(--card)_35%,_transparent)] [color:var(--allocation-ink)]
-      mono-label font-medium" data-slot="allocation-glass">
+    {/* A flat card-coloured disc edged by a hairline, so the share reads on any slice in either theme. */}
+    <span className="allocation-disc flex items-center justify-center w-full h-full rounded-full bg-card
+      border border-border mono-label text-fg-soft" data-slot="allocation-disc">
       <span ref={ref} data-slot="allocation-share" data-share={share}>{percent(share)}</span>
     </span>
   </span>
@@ -120,9 +118,9 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
         if (inOutCubic(middle) < reach) lo = middle
         else hi = middle
       }
-      const glass = pill.querySelector<HTMLElement>('[data-slot="allocation-glass"]')!
+      const disc = pill.querySelector<HTMLElement>('[data-slot="allocation-disc"]')!
       // Pops in as the sweep reaches it, like the pill under the lit column.
-      timeline.add(glass, { opacity: { from: 0 }, scale: { from: 0.7 }, duration: MOTION.pill.duration,
+      timeline.add(disc, { opacity: { from: 0 }, scale: { from: 0.7 }, duration: MOTION.pill.duration,
         ease: 'outBack(1.7)', onComplete: releaseStyles('opacity', 'transform') }, marks.at + lo * marks.duration - 60)
       const value = pill.querySelector<HTMLElement>('[data-slot="allocation-share"]')!
       const counter = { t: 0 }
@@ -136,7 +134,7 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
       countingAmount.current = false
       draw(latest.current)
       showAmount(latestAmount.current)
-      for (const node of [...lines, ...all('.allocation-legend-item, .allocation-glass')]) {
+      for (const node of [...lines, ...all('.allocation-legend-item, .allocation-disc')]) {
         node.style.removeProperty('opacity'); node.style.removeProperty('transform')
       }
       for (const value of all('[data-slot="allocation-share"]')) {
@@ -200,18 +198,13 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
   // One ramp for the parts of the whole: offered lights up red from accent-300 to accent-500, as the lit column's
   // faces do, so it reads as signal red rather than pink; not offered is the darker grey and unknown the lighter
   // one, so only the red stands out. The greys stay flat: a disable-to-subdued face would end not offered in
-  // unknown's colour. Inks keep 12px shares legible on each fill in both themes; on the dark red the near-black
-  // fg-on-muted reads, fg-loud (near-white there) would not. Card-coloured strokes part
-  // neighbouring slices; the veil leaves inactive slices at the 32 % of the county chart's grey columns, and its
+  // unknown's colour. Card-coloured strokes part neighbouring slices; the veil leaves inactive slices at the 32 % of the county chart's grey columns, and its
   // surface-disable edge keeps the lightest slice's shape, which the veil alone would fade into the card.
   return <div className="portfolio-allocation
     [&_.allocation-offered]:[--allocation-color:var(--accent-500)] [&_.allocation-offered]:[--allocation-top:var(--accent-300)]
-    [&_.allocation-offered]:[--allocation-ink:var(--fg-loud)] dark:[&_.allocation-offered]:[--allocation-ink:var(--fg-on-muted)]
     [&_.allocation-not\_offered]:[--allocation-color:var(--surface-disable)] [&_.allocation-not\_offered]:[--allocation-top:var(--surface-disable)]
-    [&_.allocation-not\_offered]:[--allocation-ink:var(--fg-loud)]
     [&_.allocation-unknown]:[--allocation-color:var(--surface-subdued)] [&_.allocation-unknown]:[--allocation-top:var(--surface-subdued)]
-    [&_.allocation-unknown]:[--allocation-ink:var(--fg-loud)] flex flex-col items-center gap-6 min-w-0 w-full
-    [&_.allocation-drop]:[fill:var(--allocation-color)] [&_.allocation-glow]:[fill:var(--allocation-color)]
+    flex flex-col items-center gap-6 min-w-0 w-full
     [&_.allocation-shape]:[stroke:var(--card)] [&_.allocation-shape]:[stroke-width:1]
     [&_.allocation-veil]:fill-card [&_.allocation-veil]:[stroke:var(--surface-disable)] [&_.allocation-veil]:[stroke-width:1]
     [&_.allocation-veil]:[opacity:0] [&_.allocation-veil]:[transition:opacity_300ms]
@@ -231,34 +224,15 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
       onClick={(event) => { if (event.target === event.currentTarget) selectGroup(null) }}>
       <svg aria-hidden="true" viewBox={`0 0 ${SIZE} ${SIZE}`}>
         <defs>
-          {/* Light and shade stay black and white: they model light falling on the ring in either theme, and no
-              token holds one value across themes. */}
-          <filter id={`${id}-drop`} filterUnits="userSpaceOnUse" x="-80" y="-80" width="560" height="560">
-            <feDropShadow dx="-2" dy="2" stdDeviation="2.7" floodColor="black" floodOpacity="0.16" />
-          </filter>
-          {groups.map((group) => <filter key={group.key} id={`${id}-glow-${group.key}`} filterUnits="userSpaceOnUse" x="-80" y="-80" width="560" height="560" className={`allocation-${group.key}`}>
-            <feOffset in="SourceAlpha" dx="4" /><feGaussianBlur stdDeviation="7.2" result="blurred" />
-            <feFlood floodColor="var(--allocation-color)" floodOpacity="0.4" /><feComposite in2="blurred" operator="in" />
-          </filter>)}
           {groups.map((group) => <linearGradient key={group.key} id={`${id}-fill-${group.key}`} x1="0" y1="0" x2="0" y2="1"
             className={`allocation-${group.key}`}>
             <stop stopColor="var(--allocation-top)" /><stop offset="1" stopColor="var(--allocation-color)" />
           </linearGradient>)}
-          <filter id={`${id}-bevel`} filterUnits="userSpaceOnUse" x="-20" y="-20" width="440" height="440">
-            <feOffset in="SourceAlpha" dy="-1" /><feGaussianBlur stdDeviation="0.9" result="up" />
-            <feComposite in="SourceAlpha" in2="up" operator="arithmetic" k2="1" k3="-1" result="edge" />
-            <feFlood floodColor="black" floodOpacity="0.16" /><feComposite in2="edge" operator="in" result="shade" />
-            <feOffset in="SourceAlpha" dy="2" /><feGaussianBlur stdDeviation="0.9" result="down" />
-            <feComposite in="SourceAlpha" in2="down" operator="arithmetic" k2="1" k3="-1" result="top" />
-            <feFlood floodColor="white" floodOpacity="0.24" /><feComposite in2="top" operator="in" result="light" />
-            <feMerge><feMergeNode in="SourceGraphic" /><feMergeNode in="shade" /><feMergeNode in="light" /></feMerge>
-          </filter>
         </defs>
         {order.map((index) => <g key={groups[index].key} className={`allocation-slice allocation-${groups[index].key}`} data-key={groups[index].key}>
           {LAYERS.map((layer) => <path key={layer.name} data-layer={layer.name} data-index={index}
             d={slicePath(geometry[index], null, layer.spread)} className={`allocation-${layer.name}${layer.name === 'veil' && active !== null && active !== index ? ' is-visible' : ''}`}
-            fill={layer.name === 'shape' || layer.name === 'rim' ? `url(#${id}-fill-${groups[index].key})` : undefined}
-            filter={layer.name === 'drop' ? `url(#${id}-drop)` : layer.name === 'glow' ? `url(#${id}-glow-${groups[index].key})` : layer.name === 'shape' ? `url(#${id}-bevel)` : undefined} />)}
+            fill={layer.name === 'shape' ? `url(#${id}-fill-${groups[index].key})` : undefined} />)}
         </g>)}
       </svg>
       {groups.map((group, index) => <Pill key={group.key} index={index} groupKey={group.key} share={shares[index]}

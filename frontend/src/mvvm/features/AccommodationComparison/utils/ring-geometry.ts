@@ -1,4 +1,4 @@
-// Geometry from the supplied PortfolioAllocationChart: spiral-like stepped bands, tucked ends and glass pills.
+// Geometry from the supplied PortfolioAllocationChart: spiral-like stepped bands, tucked ends and share labels.
 export const SIZE = 400
 export const CENTER = SIZE / 2
 export const INNER = 116.82
