@@ -1,0 +1,128 @@
+@import "tailwindcss" source("../");
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* MCP hosts set data-theme; Tailwind variants follow that host setting. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-heading: var(--font-sans);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: calc(var(--radius) * 1);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  --color-card: var(--card);
+  --color-fg-loud: var(--fg-loud);
+  --color-fg-soft: var(--fg-soft);
+  --color-border: var(--border);
+  --color-surface-subdued: var(--surface-subdued);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-green-tint: var(--green-tint);
+  --color-green-on-tint: var(--green-on-tint);
+  --color-surface-disable: var(--surface-disable);
+  --color-surface-muted: var(--surface-muted);
+  --color-fg-on-muted: var(--fg-on-muted);
+  --color-orange-100: var(--orange-100);
+  --color-orange-300: var(--orange-300);
+  --color-orange-500: var(--orange-500);
+  --color-orange-wash: var(--orange-wash);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-fg: var(--warning-fg);
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --shadow-focus: var(--focus);
+}
+
+@theme {
+  --animate-fade-in: fade-in 400ms ease-out;
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+  }
+}
+
+/* Semantic tokens also feed SVG gradients and data-driven chart geometry. */
+:root {
+  --radius: 0.625rem;
+  --destructive: #b42318;
+  --background: var(--card);
+  --foreground: var(--fg-loud);
+  --card-foreground: var(--fg-loud);
+  --popover: var(--card);
+  --popover-foreground: var(--fg-loud);
+  --primary: var(--surface-muted);
+  --primary-foreground: var(--fg-on-muted);
+  --secondary: var(--surface-subdued);
+  --secondary-foreground: var(--fg-loud);
+  --muted: var(--surface-sunken);
+  --muted-foreground: var(--fg-soft);
+  --accent: var(--surface-subdued);
+  --accent-foreground: var(--fg-loud);
+  --input: var(--border);
+  --ring: var(--orange-500);
+
+  --card: #ffffff;
+  --fg-loud: #18181b;
+  --fg-soft: #71717a;
+  --border: #ececef;
+  --surface-subdued: #eceef2;
+  --surface-sunken: #f1f2f4;
+  --green-tint: #e6f6ec;
+  --green-on-tint: #1d6b3e;
+  --surface-disable: #c4c8d0;
+  --surface-muted: #27272a;
+  --fg-on-muted: #ffffff;
+  --orange-100: #ffd9c2;
+  --orange-300: #ff9a5c;
+  --orange-500: #f26419;
+  /* Translucent fill for ranges and areas; dark mode mixes the saturated orange, since a pale one turns brown. */
+  --orange-wash: color-mix(in srgb, var(--orange-100) 70%, transparent);
+  --warning-bg: #fff4e5;
+  --warning-fg: #9a4d00;
+  --focus: 0 0 0 2px color-mix(in srgb, var(--orange-500) 40%, transparent);
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --destructive: #fda29b;
+  --card: #18181b;
+  --fg-loud: #fafafa;
+  --fg-soft: #a1a1aa;
+  --border: #2e2e33;
+  --surface-subdued: #3f3f46;
+  --surface-sunken: #0f0f11;
+  --green-tint: #173322;
+  --green-on-tint: #86e0a8;
+  --surface-disable: #71717a;
+  --surface-muted: #f4f4f5;
+  --fg-on-muted: #18181b;
+  --orange-100: #ffb98f;
+  --orange-300: #e8742f;
+  --orange-wash: color-mix(in srgb, var(--orange-500) 45%, transparent);
+  --warning-bg: #3a2a14;
+  --warning-fg: #ffc77a;
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+}

@@ -1,0 +1,88 @@
+import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { cn } from 'cn'
+import { Maximize2Icon, Minimize2Icon, TriangleAlertIcon } from 'lucide-react'
+import { Alert, AlertDescription } from './ui/alert'
+import { Button } from './ui/button'
+import { Card as SurfaceCard, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
+import { Empty, EmptyDescription, EmptyHeader } from './ui/empty'
+import { Skeleton } from './ui/skeleton'
+
+interface CardProps {
+  title: string
+  description: string
+  // Buttons at the end of the header, e.g. <ExpandButton>.
+  actions?: ReactNode
+  children?: ReactNode
+  // Retained as a layout marker for the job and comparison screens.
+  sunken?: boolean
+  loading?: boolean
+}
+
+export function Card({ title, description, actions, children, sunken = false, loading = false }: CardProps) {
+  return (
+    <SurfaceCard className={cn('card min-w-0', sunken && 'sunken')} role="group" aria-label={title} aria-busy={loading}>
+      <CardHeader className="header flex min-w-0 items-center gap-3">
+        <div className="titles flex min-w-0 flex-1 flex-col gap-1.5">
+          <CardTitle className="title">{title}</CardTitle>
+          <CardDescription className="soft">{description}</CardDescription>
+        </div>
+        {actions && <CardAction>{actions}</CardAction>}
+      </CardHeader>
+      <ErrorBoundary>
+        <CardContent className="body flex min-w-0 flex-col gap-6">
+          {loading ? <div className="flex flex-col gap-3" aria-hidden="true">
+            <Skeleton className="h-5 w-2/3 motion-reduce:animate-none" />
+            <Skeleton className="h-24 w-full motion-reduce:animate-none" />
+          </div> : children}
+        </CardContent>
+      </ErrorBoundary>
+    </SurfaceCard>
+  )
+}
+
+export function Warning({ text }: { text: string | null | undefined }) {
+  return text ? <Alert variant="warning" className="warning">
+    <TriangleAlertIcon aria-hidden="true" />
+    <AlertDescription>{text}</AlertDescription>
+  </Alert> : null
+}
+
+export function EmptyState({ children }: { children: ReactNode }) {
+  return <Empty className="empty" role="status">
+    <EmptyHeader><EmptyDescription>{children}</EmptyDescription></EmptyHeader>
+  </Empty>
+}
+
+type Text = string | null | undefined
+
+/** How current the data is, as a warning, and under it one or more quieter notes; nothing when all are empty. */
+export function Notes({ warning, note }: { warning: Text; note: Text | Text[] }) {
+  const notes = (Array.isArray(note) ? note : [note]).filter((text): text is string => Boolean(text))
+  if (!warning && !notes.length) return null
+  return <div className="notes flex flex-col gap-2 animate-fade-in motion-reduce:animate-none">
+    <Warning text={warning} />
+    {notes.map((text) => <p key={text} className="note m-0 text-xs leading-relaxed text-muted-foreground">{text}</p>)}
+  </div>
+}
+
+export function ExpandButton({ expanded, label, onClick }: { expanded: boolean; label: string; onClick: () => void }) {
+  const Icon = expanded ? Minimize2Icon : Maximize2Icon
+  return <Button className="icon-button" variant="outline" size="icon" type="button" title={label} aria-label={label} onClick={onClick}>
+    <Icon data-icon="inline-start" aria-hidden="true" />
+  </Button>
+}
+
+// A failure shows in the card instead of leaving it empty.
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null }
+
+  static getDerivedStateFromError(error: Error) { return { error } }
+
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error(error, info.componentStack) }
+
+  render() {
+    const { error } = this.state
+    if (error) return <Warning text={`Graf se nije mogao prikazati: ${error.message}`} />
+    return this.props.children
+  }
+}
