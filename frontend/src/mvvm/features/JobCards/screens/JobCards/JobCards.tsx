@@ -50,7 +50,7 @@ export function JobCards({ data, cards, loading, error, actions, comparison,
       <Warning text={error} />
       {cards.length > 0 && (
         <div className="cards-foot flex items-center gap-3 [&_.soft]:flex-1">
-          <p className="soft footer m-0 mono-label uppercase text-fg-soft">Prikazano {formatAds(cards.length)}</p>
+          <p className="soft footer m-0 mono-label text-fg-soft"><span className="uppercase">Prikazano</span> {formatAds(cards.length)}</p>
           {loadMore && (
             <Button variant="outline" size="lg" className="more" type="button" disabled={loading} onClick={(event) => {
               finish(animate(event.currentTarget, { scale: [0.94, 1], duration: MOTION.pop, ease: 'outBack(2)',

@@ -1,6 +1,6 @@
 // One job on a tile of the Performance chart, laid out after the reference job row (without the company logo): labels
 // for how long ago it was published and its category, the title, the employer in capitals over a slash and its
-// county, then the details on a sunken tile, each with its icon, like Dalco's spec panels. Picking the job for a
+// county, then the details on a sunken tile, each with its icon, like Dalco's spec panels, and the pill to the ad. Picking the job for a
 // comparison is the card's only red. Animated with anime.js on the DESIGN.md timings: the tile rises in after the
 // ones before it, its labels come in, then the details one after another.
 
@@ -51,7 +51,7 @@ const DETAIL_ICONS: Record<DetailKind, string[]> = {
   accommodation: ['M3 10.5 12 3l9 7.5', 'M5 9v11h14V9', 'M10 20v-6h4v6'],
 }
 
-// The short mono values of a detail are uppercase like any label; a place is a name and keeps its own case.
+// Mono for the short values (the conditions, the age); values keep their own case, only label words go uppercase.
 const MONO_LABEL = 'font-mono text-[12px] font-normal tracking-[0.04em]'
 
 function Icon({ paths }: { paths: string[] }) {
@@ -87,7 +87,7 @@ function Action({ label, icon: IconComponent, onClick }: { label: string; icon: 
  */
 function OpenAd({ onClick }: { onClick: () => void }) {
   return (
-    <Button className="open-ad" variant="outline" type="button" title="Otvori oglas na HZZ-u"
+    <Button className="open-ad self-start" variant="outline" type="button" title="Otvori oglas na HZZ-u"
       aria-label="Otvori oglas na HZZ-u" onClick={(event) => {
         pop(event.currentTarget)
         onClick()
@@ -142,7 +142,7 @@ export function JobCardView({ job, today, order, actions, compare }: {
       <CardHeader className="job-top flex min-w-0 flex-row flex-wrap items-center gap-2">
         <ul className="labels flex basis-full flex-1 flex-wrap gap-1.5 min-w-0 m-0 p-0 [list-style:none]" aria-label="Oznake">
           {published && <li data-slot="label" className="min-w-0 max-w-full">
-            <Badge className={cn('label age uppercase', MONO_LABEL)} variant="success">{published}</Badge>
+            <Badge className={cn('label age', MONO_LABEL)} variant="success">{published}</Badge>
           </li>}
           {job.category && (
             <li data-slot="label" className="min-w-0 max-w-full"><Badge variant={job.category_source === 'feed' ? 'provisional' : 'secondary'} className="label max-w-full" title={job.category_source === 'feed' ? FEED_CATEGORY : undefined}>
@@ -161,7 +161,6 @@ export function JobCardView({ job, today, order, actions, compare }: {
             </FieldLabel>
           </Field>
         )}
-        <OpenAd onClick={() => actions.open(job)} />
         {actions.ask && <Action label="Pitaj o ovom oglasu" icon={MessageCircleIcon} onClick={() => actions.ask?.(job)} />}
       </CardHeader>
       <CardContent className="flex min-w-0 flex-col gap-3">
@@ -179,13 +178,15 @@ export function JobCardView({ job, today, order, actions, compare }: {
             {items.map((item) => (
               <li key={item.kind} className={cn('detail flex items-start gap-2 min-w-0 leading-[16px] text-fg-loud',
                 '[&_svg]:flex-none [&_svg]:size-4 [&_svg]:text-fg-soft [&_span]:min-w-0 [&_span]:line-clamp-2',
-                MONO_LABEL, item.kind !== 'place' && 'uppercase', item.kind)} data-slot="detail" title={item.text}>
+                MONO_LABEL, item.kind)} data-slot="detail" title={item.text}>
                 <Icon paths={DETAIL_ICONS[item.kind]} />
                 <span>{item.text}</span>
               </li>
             ))}
           </ul>
         )}
+        {/* Under the text, like Dalco's "Details ›", so the card reads title, facts, then the way to the ad. */}
+        <OpenAd onClick={() => actions.open(job)} />
       </CardContent>
     </SurfaceCard>
   )
