@@ -23,7 +23,8 @@ interface CardProps {
 export function Card({ eyebrow, title, description, actions, children, sunken = false, loading = false }: CardProps) {
   return (
     <SurfaceCard className={cn('card min-w-0', sunken && 'sunken')} role="group" aria-label={title} aria-busy={loading}>
-      <CardHeader className="header flex min-w-0 items-center gap-3">
+      {/* With an eyebrow, actions sit beside the eyebrow line rather than centred on three lines. */}
+      <CardHeader className={cn('header flex min-w-0 gap-3', eyebrow ? 'items-start' : 'items-center')}>
         <div className="titles flex min-w-0 flex-1 flex-col gap-1.5">
           {eyebrow && <Eyebrow text={eyebrow} />}
           <CardTitle className="title">{title}</CardTitle>
