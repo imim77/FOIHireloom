@@ -10,7 +10,7 @@ export function Sources({ onOpenLink, links, children }: {
   children?: ReactNode
 }) {
   if (!links.length && !children) return null
-  // DESIGN.md's footer line: uppercase mono, which the links inherit.
+  // DESIGN.md's footer line in uppercase mono; the sources are names and keep their own case.
   return (
     <p className="sources flex flex-wrap [gap:4px_12px] m-0 [padding:0_12px] mono-label uppercase text-fg-soft">
       {links.length > 0 && (
@@ -20,10 +20,10 @@ export function Sources({ onOpenLink, links, children }: {
             <span key={link.label}>
               {i > 0 && ', '}
               {link.url ? (
-                <Button type="button" variant="link" size="xs" className="link h-auto p-0 whitespace-normal text-left font-normal uppercase text-fg-loud" title={link.url} onClick={() => onOpenLink(link.url!)}>
+                <Button type="button" variant="link" size="xs" className="link h-auto p-0 whitespace-normal text-left font-normal normal-case text-fg-loud" title={link.url} onClick={() => onOpenLink(link.url!)}>
                   <RollLabel>{link.label}</RollLabel>
                 </Button>
-              ) : link.label}
+              ) : <span className="normal-case">{link.label}</span>}
             </span>
           ))}
         </span>
