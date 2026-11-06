@@ -9,7 +9,7 @@ import { animate, type JSAnimation, stagger } from 'animejs'
 import { type MouseEvent, type PointerEvent, type ReactNode, useId, useLayoutEffect, useRef } from 'react'
 import { fadeIn, finish, MOTION, releaseStyles, useChartEntrance, useReducedMotion } from '../../../hooks/chart-motion'
 import { useChartWidth } from '../../../hooks/use-chart-size'
-import { forecastChart, formatChange, formatPeriod, formatValue } from '../utils/forecast-chart'
+import { forecastChart, formatChange, formatPeriod, formatPeriodGenitive, formatValue } from '../utils/forecast-chart'
 import type { useForecast } from '../hooks/use-forecast'
 import type { CountyForecast, ForecastData, ObservedPoint } from '../types'
 
@@ -118,12 +118,15 @@ export function ForecastView(model: ReturnType<typeof useForecast>) {
   const sliderLabel = `${sliderId}-label`
   return <div className="forecast-content min-w-0 flex flex-col gap-6">
     {point && <Readout context={`${period(point.period)} · medijan prognoze`} median={point.median} format={value}>
-      <p className="forecast-interval m-0 mono-label uppercase text-fg-soft" data-slot="forecast-interval">{value(point.low)} – {value(point.high)} · {interval}</p>
+      {/* Values keep their units' own case; only the label words are uppercase. */}
+      <p className="forecast-interval m-0 mono-label text-fg-soft" data-slot="forecast-interval">
+        {value(point.low)} – {value(point.high)} · <span className="uppercase">{interval}</span></p>
       {/* The badges keep their own case, as in the other views' readouts. */}
       <div className="forecast-last flex flex-wrap items-center [gap:4px_8px] mono-label text-fg-soft"
         data-slot="forecast-last">
-        <span className="uppercase">Posljednji podatak: {last?.value == null ? 'nema podatka' : value(last.value)}
-          {last && ` · ${period(last.period)}`}</span>
+        <span><span className="uppercase">Posljednji podatak: </span>
+          {last?.value == null ? <span className="uppercase">nema podatka</span> : value(last.value)}
+          {last && <> · <span className="uppercase">{period(last.period)}</span></>}</span>
         {last && <Flags point={last} />}
       </div>
     </Readout>}
@@ -140,10 +143,10 @@ export function ForecastView(model: ReturnType<typeof useForecast>) {
               + `${value(selectedPoint.low)} – ${value(selectedPoint.high)}` }} />
       </Field>
     </FieldGroup>}
-    {end && county.change_to_horizon !== null && <p className="forecast-change flex flex-wrap items-baseline [gap:6px_12px] m-0 mono-label uppercase text-fg-soft
+    {end && county.change_to_horizon !== null && <p className="forecast-change flex flex-wrap items-baseline [gap:6px_12px] m-0 mono-label text-fg-soft
       [&_strong]:text-fg-loud [&_strong]:text-[14px] [&_strong]:font-medium">
       <strong>{formatChange(county.change_to_horizon, data.unit)}</strong>
-      <span>do {period(end.period)}, u odnosu na posljednji podatak</span>
+      <span className="uppercase">do {formatPeriodGenitive(end.period, data.frequency)}, u odnosu na posljednji podatak</span>
     </p>}
     {county.forecast.length > 0 && <div className="forecast-table-scroll focus-visible:outline-none focus-visible:shadow-focus overflow-auto [max-height:290px]
       border border-border rounded-[10px]" tabIndex={0} role="region" aria-label="Prognozirane vrijednosti">

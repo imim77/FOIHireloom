@@ -1,4 +1,4 @@
-import { formatDay, formatInteger, formatMonth, formatPoints, formatRate } from '../../../utils/format.ts'
+import { formatDay, formatInteger, formatMonth, formatMonthGenitive, formatPoints, formatRate } from '../../../utils/format.ts'
 import type { CountyForecast, ForecastFrequency, ForecastUnit } from '../types.ts'
 
 export const formatValue = (value: number, unit: ForecastUnit) =>
@@ -6,6 +6,10 @@ export const formatValue = (value: number, unit: ForecastUnit) =>
 
 export const formatPeriod = (period: string, frequency: ForecastFrequency) =>
   frequency === 'month' ? formatMonth(period) : `tjedan od ${formatDay(period)}`
+
+/** A period in the genitive, after "do": "ožujka 2027.", "tjedna od 02. 11. 2026.". */
+export const formatPeriodGenitive = (period: string, frequency: ForecastFrequency) =>
+  frequency === 'month' ? formatMonthGenitive(period) : `tjedna od ${formatDay(period)}`
 
 export function formatChange(value: number, unit: ForecastUnit) {
   if (unit === 'percent') return formatPoints(value)

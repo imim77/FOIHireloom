@@ -93,8 +93,10 @@ function Tile({ county, lit }: { county: CountyHistory; lit: boolean }) {
         </div>
       )}
       {before && (
-        <p className="tile-before mono-label uppercase text-fg-soft">
-          {formatMonth(before.period)}: {before.rate === null ? 'nema podatka' : formatRate(before.rate)}
+        <p className="tile-before mono-label text-fg-soft">
+          {/* The rate keeps its unit's own case; the month and "nema podatka" are label words. */}
+          <span className="uppercase">{formatMonth(before.period)}:</span>{' '}
+          {before.rate === null ? <span className="uppercase">nema podatka</span> : formatRate(before.rate)}
         </p>
       )}
       {change !== null ? (

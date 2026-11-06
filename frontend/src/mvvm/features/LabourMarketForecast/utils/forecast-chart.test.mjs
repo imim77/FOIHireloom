@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { forecastChart, formatChange, formatPeriod, formatValue } from './forecast-chart.ts'
+import { forecastChart, formatChange, formatPeriod, formatPeriodGenitive, formatValue } from './forecast-chart.ts'
 import { sample } from './sample.ts'
 
 test('the chart includes interval extremes, preserves missing observations and stays within its bounds', () => {
@@ -39,4 +39,10 @@ test('units and time labels distinguish rates, people and weekly advertisements'
   assert.equal(formatChange(15, 'persons'), '+15 osoba')
   assert.equal(formatPeriod('2026-09-01', 'month'), 'rujan 2026.')
   assert.equal(formatPeriod('2026-11-02', 'week'), 'tjedan od 02. 11. 2026.')
+})
+
+test('periods after "do" take the genitive', () => {
+  assert.equal(formatPeriodGenitive('2027-03-01', 'month'), 'ožujka 2027.')
+  assert.equal(formatPeriodGenitive('2026-11-01', 'month'), 'studenoga 2026.')
+  assert.equal(formatPeriodGenitive('2026-11-02', 'week'), 'tjedna od 02. 11. 2026.')
 })

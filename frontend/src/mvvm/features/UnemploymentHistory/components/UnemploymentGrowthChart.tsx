@@ -216,7 +216,7 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
                 <span className={cn('swatch h-[3px] w-3 flex-none rounded-[2px] transition-colors duration-300 motion-reduce:transition-none',
                   lit ? 'bg-accent-500' : 'bg-surface-disable')} aria-hidden="true" />
                 {s.shortLabel}
-                <span className="uppercase">{rate}</span>
+                <span>{rate}</span>
                 {/* keyboard focus rings the chip */}
                 <span className="focus-ring pointer-events-none absolute -inset-1 rounded-full opacity-0 shadow-focus
                   transition-opacity duration-150 group-focus-visible/button:opacity-100" aria-hidden="true" />

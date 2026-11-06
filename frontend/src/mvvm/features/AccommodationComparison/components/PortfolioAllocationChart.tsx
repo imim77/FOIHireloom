@@ -210,10 +210,11 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
     [&_.allocation-veil]:[opacity:0] [&_.allocation-veil]:[transition:opacity_300ms]
     [&_.allocation-veil.is-visible]:[opacity:0.68] motion-reduce:[&_.allocation-veil]:[transition:none]" ref={root} data-slot="accommodation-chart">
     <div className="allocation-readout flex flex-col items-start gap-2.5 self-stretch" data-slot="allocation-readout">
-      {/* Clips the name as it rolls in from below on a new segment. Only what is not a name is uppercase. */}
+      {/* Clips the name as it rolls in from below on a new segment. Only label words are uppercase: names and
+          values with their units keep their own case. */}
       <div className="overflow-clip">
         <p className="allocation-context m-0 mono-label text-fg-soft" ref={contextRef}>
-          {readout.name && <>{readout.name} · </>}<span className="uppercase">{readout.detail}</span>
+          {readout.name && <>{readout.name} · </>}{readout.share && <>{readout.share} </>}<span className="uppercase">{readout.detail}</span>
         </p>
       </div>
       <p className="allocation-amount m-0 mono-headline whitespace-nowrap text-fg-loud" ref={amountRef}>{formatAds(readout.amount)}</p>
