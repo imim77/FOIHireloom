@@ -1,4 +1,5 @@
 import { Button } from './ui/button'
+import { RollLabel } from './RollLabel'
 import type { ReactNode } from 'react'
 import type { SourceLink } from '../types'
 
@@ -19,7 +20,7 @@ export function Sources({ onOpenLink, links, children }: {
               {i > 0 && ', '}
               {link.url ? (
                 <Button type="button" variant="link" size="xs" className="link h-auto p-0" title={link.url} onClick={() => onOpenLink(link.url!)}>
-                  {link.label}
+                  <RollLabel>{link.label}</RollLabel>
                 </Button>
               ) : link.label}
             </span>

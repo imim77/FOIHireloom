@@ -8,6 +8,8 @@ import { Empty, EmptyDescription, EmptyHeader } from './ui/empty'
 import { Skeleton } from './ui/skeleton'
 
 interface CardProps {
+  // The kind of view, e.g. "Broj oglasa", as a red-dotted mono label over the title; not for data.
+  eyebrow?: string
   title: string
   description: string
   // Buttons at the end of the header, e.g. <ExpandButton>.
@@ -18,11 +20,12 @@ interface CardProps {
   loading?: boolean
 }
 
-export function Card({ title, description, actions, children, sunken = false, loading = false }: CardProps) {
+export function Card({ eyebrow, title, description, actions, children, sunken = false, loading = false }: CardProps) {
   return (
     <SurfaceCard className={cn('card min-w-0', sunken && 'sunken')} role="group" aria-label={title} aria-busy={loading}>
       <CardHeader className="header flex min-w-0 items-center gap-3">
         <div className="titles flex min-w-0 flex-1 flex-col gap-1.5">
+          {eyebrow && <Eyebrow text={eyebrow} />}
           <CardTitle className="title">{title}</CardTitle>
           <CardDescription className="soft">{description}</CardDescription>
         </div>
@@ -38,6 +41,14 @@ export function Card({ title, description, actions, children, sunken = false, lo
       </ErrorBoundary>
     </SurfaceCard>
   )
+}
+
+// Uppercase comes from CSS, so screen readers read words rather than letters.
+function Eyebrow({ text }: { text: string }) {
+  return <p className="eyebrow m-0 mb-1 flex items-center gap-2 font-mono text-[12px] leading-[1.25] font-normal
+    tracking-[0.04em] uppercase text-fg-soft" data-slot="eyebrow">
+    <span className="size-1.5 flex-none rounded-full bg-accent-500" aria-hidden="true" />{text}
+  </p>
 }
 
 export function Warning({ text }: { text: string | null | undefined }) {
