@@ -15,7 +15,8 @@ const EDGES = [
   'M23.5824 188.628C23.966 188.749 24.3359 188.472 24.3359 188.063L0.180678 180.413L0.18066 181.217Z',
 ].join('')
 
-export function BarLook({ ids, lit, opacity }: { ids: string; lit: boolean; opacity: number }) {
+// opacity may be a CSS value, e.g. a var() that differs per theme.
+export function BarLook({ ids, lit, opacity }: { ids: string; lit: boolean; opacity: number | string }) {
   const look = `${ids}-${lit ? 'lit' : 'grey'}`
   return (
     <g className="look" style={{ opacity }}>

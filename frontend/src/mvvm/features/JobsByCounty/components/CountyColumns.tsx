@@ -249,7 +249,7 @@ export function CountyColumns({ counties, values, selected, active, county, work
                   [mask-image:linear-gradient(to_bottom,_#000_72%,_transparent_100%)]
                   [&_.look]:[transition:opacity_300ms] motion-reduce:[&_.look]:[transition:none]" data-slot="bar" viewBox={BAR_VIEW} preserveAspectRatio="none" aria-hidden="true"
                   style={{ width: `${barWidth}px`, left: `calc(50% - ${barWidth / 2}px)`, height: `${heights[i]}px` }}>
-                  <BarLook ids={ids} lit={false} opacity={i === active ? 0 : 0.32} />
+                  <BarLook ids={ids} lit={false} opacity={i === active ? 0 : 'var(--grey-look-opacity)'} />
                   <BarLook ids={ids} lit opacity={i === active ? 1 : 0} />
                 </svg>
                 {/* the count, centred 4px over the bar */}
