@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/Card'
 import { cn } from 'cn'
 // Local adaptation of the supplied Keitoto RevenueGrowthChart in the jobs-by-county look: every county is a grey
-// curve and the focused one is lit orange over them, with its rate for the inspected month read out above the chart.
+// curve and the focused one is lit red over them, with its rate for the inspected month read out above the chart.
 // The legend picks the county (hover previews, click or the arrow keys select); the plot's scrubber picks the month.
 // Rates retain the original DZS gaps and provenance; provisional runs are dashed.
 import { animate, stagger } from 'animejs'
@@ -205,7 +205,7 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
                 aria-pressed={i === selectedSeries} tabIndex={i === selectedSeries ? 0 : -1}
                 onPointerEnter={() => hoverSeries(i)} onClick={() => selectSeries(i)} onKeyDown={onCountyKeyDown}>
                 <span className={cn('swatch h-[3px] w-3 flex-none rounded-[2px] transition-colors duration-300 motion-reduce:transition-none',
-                  lit ? 'bg-orange-500' : 'bg-surface-disable')} aria-hidden="true" />
+                  lit ? 'bg-accent-500' : 'bg-surface-disable')} aria-hidden="true" />
                 {s.shortLabel}
                 <span className="font-medium">{rate}</span>
                 {/* keyboard focus rings the chip */}
@@ -242,8 +242,8 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
                       <line x1="0" y1="0" x2="0" y2="6" className="growth-hatch stroke-surface-disable [stroke-width:1] [opacity:0.35]" />
                     </pattern>
                     <linearGradient id={`${id}-fade`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0" className="[stop-color:var(--orange-500)]" stopOpacity="0.14" />
-                      <stop offset="1" className="[stop-color:var(--orange-500)]" stopOpacity="0" />
+                      <stop offset="0" className="[stop-color:var(--accent-500)]" stopOpacity="0.14" />
+                      <stop offset="1" className="[stop-color:var(--accent-500)]" stopOpacity="0" />
                     </linearGradient>
                   </defs>
                   {bands.map((band) => <rect key={band.first} data-slot="growth-provisional-band"
@@ -267,7 +267,7 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
                     {/* Lit copies over all grey curves, so the focus is never painted under another county; only the
                         focused one is visible and a new focus cross-fades. */}
                     {series.map((s, i) => <g key={s.id} data-focus-series={s.id} data-lit={i === activeSeries}
-                      className={cn('growth-focus text-orange-500 [transition:opacity_300ms] motion-reduce:[transition:none]',
+                      className={cn('growth-focus text-accent-500 [transition:opacity_300ms] motion-reduce:[transition:none]',
                         i === activeSeries ? 'opacity-100' : 'opacity-0')}>
                       <SeriesShape series={s} points={points} active={active} x={x} y={y} step={step} lit fill={`url(#${id}-fade)`} />
                     </g>)}

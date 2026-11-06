@@ -93,7 +93,7 @@ function RowHead({ row, index }: { row: ComparisonRow; index: number }) {
         {row.condition_label && <span className="aspect-you text-[12px] text-fg-soft">vi: {row.condition_label}</span>}
         {row.differs && <span className="aspect-differs inline-flex items-center [gap:5px] text-[12px] font-medium text-fg-soft
           whitespace-nowrap [&::before]:[content:''] [&::before]:flex-none [&::before]:w-1.5 [&::before]:h-1.5
-          [&::before]:rounded-full [&::before]:bg-orange-500">razlikuje se</span>}
+          [&::before]:rounded-full [&::before]:bg-accent-500">razlikuje se</span>}
       </div>
     </TableHead>
   )

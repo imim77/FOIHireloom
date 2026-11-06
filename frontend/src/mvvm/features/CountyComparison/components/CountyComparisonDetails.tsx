@@ -119,11 +119,11 @@ export function ComparisonTable({ data, expanded }: { data: CountyComparisonData
                             {marked && cell.value === high && <span className="extreme inline-flex items-center gap-1 text-[12px] font-medium not-italic
                               text-fg-soft whitespace-nowrap [&::before]:[content:''] [&::before]:flex-none
                               [&::before]:w-1.5 [&::before]:h-1.5 [&::before]:rounded-full
-                              [&::before]:bg-orange-500">najviše</span>}
+                              [&::before]:bg-accent-500">najviše</span>}
                             {marked && cell.value === low && <span className="extreme inline-flex items-center gap-1 text-[12px] font-medium not-italic
                               text-fg-soft whitespace-nowrap [&::before]:[content:''] [&::before]:flex-none
                               [&::before]:w-1.5 [&::before]:h-1.5 [&::before]:rounded-full
-                              [&::before]:bg-orange-500">najmanje</span>}
+                              [&::before]:bg-accent-500">najmanje</span>}
                           </span>
                           {(cell.note || cell.provisional) && (
                             <span className="cell-note flex flex-wrap items-center [gap:4px_6px] text-[12px] text-fg-soft tabular-nums hyphens-manual">

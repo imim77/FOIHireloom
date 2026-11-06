@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { cn } from 'cn'
 // The counties as 3D columns, after the "Investment App User Age Chart" from the Keitoto library: the active county
-// is orange with its count in orange and its name in a dark pill, the others grey; the selected county's workers sought
+// is red with its count in red and its name in a dark pill, the others grey; the selected county's workers sought
 // stand over the chart. Hover previews a county, click or the arrow keys select one. Animated with anime.js: the
 // workers count up, the columns rise one after another while their counts count up and the pill pops in; a new county
 // cross-fades the columns, pops its count, slides the pill over and counts the workers to the new number; new data

@@ -181,9 +181,9 @@ export function ForecastView(model: ReturnType<typeof useForecast>) {
   </div>
 }
 
-// The interval is the orange wash, edged in orange-300 so it still reads as orange on the dark card.
-const WASH = '[fill:var(--orange-wash)] [stroke:var(--orange-300)] [stroke-opacity:.6] [stroke-width:1]'
-const WASH_KEY = 'bg-orange-wash border border-orange-300/60'
+// The interval is the red wash, edged in accent-300 so it still reads as red on the dark card.
+const WASH = '[fill:var(--accent-wash)] [stroke:var(--accent-300)] [stroke-opacity:.6] [stroke-width:1]'
+const WASH_KEY = 'bg-accent-wash border border-accent-300/60'
 
 function ForecastChart({ data, county, active, onSelect, onHover }: {
   data: ForecastData; county: CountyForecast; active: number
@@ -208,7 +208,7 @@ function ForecastChart({ data, county, active, onSelect, onHover }: {
     <ul className="forecast-legend flex flex-wrap [gap:8px_16px] p-0 [margin:0_0_16px] [list-style:none] text-fg-soft
       text-[12px] font-medium leading-[1.25] [&_li]:inline-flex [&_li]:items-center [&_li]:gap-1.5" aria-label="Legenda">
       <li><span className="forecast-key history w-4 h-0 border-t-2 border-fg-soft" />Povijest</li>
-      <li><span className="forecast-key median w-4 h-0 border-t-2 border-dashed border-orange-500" />Prognoza (medijan)</li>
+      <li><span className="forecast-key median w-4 h-0 border-t-2 border-dashed border-accent-500" />Prognoza (medijan)</li>
       <li><span className={`forecast-key interval w-4 h-2.5 ${WASH_KEY}`} />
         {Math.round(data.interval * 100)}% interval</li>
       {flags && <li><span className="forecast-key estimated w-4 h-0 border-t-2 border-dashed border-fg-soft" />
@@ -245,13 +245,13 @@ function ForecastChart({ data, county, active, onSelect, onHover }: {
             })}
             {chart.history.map((p) => p.y !== null && <circle key={p.period} cx={p.x} cy={p.y} r={2.5}
               className="forecast-observed-node [fill:var(--fg-soft)]" data-slot="history-node" data-value={p.value} data-period={p.period} />)}
-            {/* Projected values are dashed, like provisional history; orange because the forecast is the focus. */}
+            {/* Projected values are dashed, like provisional history; red because the forecast is the focus. */}
             {chart.forecast.length > 0 && <path d={chart.median} strokeDasharray="6 4"
-              className="forecast-predicted [fill:none] [stroke:var(--orange-500)] [stroke-width:2.5]" />}
-            {chart.forecast.map((p) => <circle key={p.period} cx={p.x} cy={p.y} r={2.5} className="forecast-predicted-node [fill:var(--orange-500)]" />)}
+              className="forecast-predicted [fill:none] [stroke:var(--accent-500)] [stroke-width:2.5]" />}
+            {chart.forecast.map((p) => <circle key={p.period} cx={p.x} cy={p.y} r={2.5} className="forecast-predicted-node [fill:var(--accent-500)]" />)}
             {cursor && <g data-slot="forecast-cursor" data-period={cursor.period}>
-              <line x1={cursor.x} x2={cursor.x} y1={cursor.highY} y2={cursor.lowY} className="forecast-range-line [stroke:var(--orange-500)] [stroke-width:1.5]" />
-              <circle cx={cursor.x} cy={cursor.y} r={5} className="forecast-active-node [fill:var(--orange-500)] [stroke:var(--card)] [stroke-width:2]" />
+              <line x1={cursor.x} x2={cursor.x} y1={cursor.highY} y2={cursor.lowY} className="forecast-range-line [stroke:var(--accent-500)] [stroke-width:1.5]" />
+              <circle cx={cursor.x} cy={cursor.y} r={5} className="forecast-active-node [fill:var(--accent-500)] [stroke:var(--card)] [stroke-width:2]" />
             </g>}
           </svg>
         </div>

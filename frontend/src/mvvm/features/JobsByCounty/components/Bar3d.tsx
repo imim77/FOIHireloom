@@ -1,5 +1,5 @@
 // One 3D column drawn once (48 × 188.921) and stretched to each bar's height: two faces, a lid and white edges.
-// The grey look shows for other counties, the lit (orange) one for the active county.
+// The grey look shows for other counties, the lit (red) one for the active county.
 
 export const BAR_VIEW = '0 0 48 188.921'
 const RIGHT = 'M23.9683 15.685L47.0527 8.2763V181.04L23.9683 188.449Z'
@@ -20,7 +20,7 @@ export function BarLook({ ids, lit, opacity }: { ids: string; lit: boolean; opac
   return (
     <g className="look" style={{ opacity }}>
       <path d={RIGHT} fill={`url(#${look}-right)`} />
-      <path d={LID} className={lit ? 'fill-orange-100' : 'fill-surface-subdued'} />
+      <path d={LID} className={lit ? 'fill-accent-100' : 'fill-surface-subdued'} />
       <path d={LEFT} fill={`url(#${look}-left)`} />
       <path d={EDGES} className="fill-card" />
     </g>
@@ -43,8 +43,8 @@ export function BarGradients({ ids }: { ids: string }) {
       <defs>
         <Gradient id={`${ids}-grey-right`} x1="35.8613" y1="8.0502" x2="35.8613" y2="188.448" from="--surface-disable" to="--surface-subdued" />
         <Gradient id={`${ids}-grey-left`} x1="23.9673" y1="0" x2="0.181152" y2="0" from="--surface-disable" to="--surface-subdued" />
-        <Gradient id={`${ids}-lit-right`} x1="23.9683" y1="0" x2="47.7538" y2="0" from="--orange-100" to="--orange-300" />
-        <Gradient id={`${ids}-lit-left`} x1="23.9672" y1="0" x2="0.181641" y2="0" from="--orange-100" to="--orange-300" />
+        <Gradient id={`${ids}-lit-right`} x1="23.9683" y1="0" x2="47.7538" y2="0" from="--accent-100" to="--accent-300" />
+        <Gradient id={`${ids}-lit-left`} x1="23.9672" y1="0" x2="0.181641" y2="0" from="--accent-100" to="--accent-300" />
       </defs>
     </svg>
   )

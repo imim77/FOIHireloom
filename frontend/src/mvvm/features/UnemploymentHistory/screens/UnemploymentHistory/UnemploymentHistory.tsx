@@ -77,7 +77,7 @@ function Tile({ county, lit }: { county: CountyHistory; lit: boolean }) {
       [&_>_.soft]:leading-[1.35]" data-slot="tile" data-lit={lit} aria-label={county.name}>
       <p className="tile-name flex items-center gap-2 text-[14px] font-semibold">
         <span className={cn('swatch h-[3px] w-3 flex-none rounded-[2px] transition-colors duration-300 motion-reduce:transition-none',
-          lit ? 'bg-orange-500' : 'bg-surface-disable')} aria-hidden="true" />{county.name}</p>
+          lit ? 'bg-accent-500' : 'bg-surface-disable')} aria-hidden="true" />{county.name}</p>
       {latest && (
         <div className="tile-latest flex flex-col gap-1.5 [&_.soft]:flex [&_.soft]:items-center [&_.soft]:gap-1.5">
           <p className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft">

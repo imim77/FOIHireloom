@@ -83,7 +83,7 @@ async function layout(frame) {
       index > 0 && el.getBoundingClientRect().left < labels[index - 1].getBoundingClientRect().right + 2),
   }))
 }
-// The focus is drawn by colour alone, so read it as the browser paints it: one lit county in orange-500 over grey ones.
+// The focus is drawn by colour alone, so read it as the browser paints it: one lit county in accent-500 over grey ones.
 async function looks(frame) {
   return frame.evaluate(() => ({
     lit: [...document.querySelectorAll('[data-focus-series][data-lit="true"]')].map((g) => g.dataset.focusSeries),
@@ -96,7 +96,7 @@ async function looks(frame) {
     readout: document.querySelector('.growth-readout-name')?.textContent,
   }))
 }
-const ORANGE = 'rgb(242, 100, 25)'
+const ACCENT = 'rgb(251, 41, 14)'
 // Once the cross-fade ends, only the lit copy is painted.
 async function painted(frame) {
   await frame.waitForFunction(() => [...document.querySelectorAll('[data-focus-series]')].every((g) =>
@@ -164,14 +164,14 @@ test('the legend lights one county: hover previews, click and keys select, reado
     await painted(frame)
     // The first county is lit by default; the others are grey at reduced opacity.
     assert.deepEqual(await looks(frame), {
-      lit: [first], litColor: [ORANGE], greyColor: ['rgb(196, 200, 208)'], greyOpacity: ['0.5'],
+      lit: [first], litColor: [ACCENT], greyColor: ['rgb(205, 205, 205)'], greyOpacity: ['0.5'],
       pressed: ['true', 'false', 'false'], tabbable: [0, -1, -1], tiles: ['true', 'false', 'false'],
       readout: 'Varaždinska županija · rujan 2026.privremeno',
     })
     assert.equal(await frame.locator('.growth-value').textContent(), '2,3\u00a0%')
     assert.equal(await frame.locator('[data-focus-series]').first().evaluate((g) => getComputedStyle(g).transitionDuration), '0.3s')
     const chips = frame.locator('[data-slot="legend-county"]')
-    assert.equal(await chips.first().evaluate((chip) => getComputedStyle(chip).backgroundColor), 'rgb(39, 39, 42)')
+    assert.equal(await chips.first().evaluate((chip) => getComputedStyle(chip).backgroundColor), 'rgb(25, 25, 25)')
 
     // Hover previews without selecting; leaving the legend falls back to the selection.
     await chips.nth(1).hover()
@@ -226,12 +226,12 @@ test('two-county dark mobile view supports real touch dragging and reduced motio
     await frame.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
     assert.equal(await frame.locator('[data-slot="legend-county"]').count(), 2)
     assert.equal(await frame.locator('clipPath rect').getAttribute('width'), '100%')
-    // Dark tokens come from the root theme: lit orange-500, grey surface-disable, an inverted pill, no transitions.
+    // Dark tokens come from the root theme: lit accent-500, grey surface-disable, an inverted pill, no transitions.
     await painted(frame)
     const state = await looks(frame)
-    assert.deepEqual([state.lit, state.litColor, state.greyColor], [[data.counties[0].code], [ORANGE], ['rgb(113, 113, 122)']])
+    assert.deepEqual([state.lit, state.litColor, state.greyColor], [[data.counties[0].code], [ACCENT], ['rgb(110, 110, 110)']])
     assert.equal(await frame.locator('[data-slot="legend-county"]').first().evaluate((chip) => getComputedStyle(chip).backgroundColor),
-      'rgb(244, 244, 245)')
+      'rgb(244, 244, 244)')
     assert.equal(await frame.locator('[data-focus-series]').first().evaluate((g) => getComputedStyle(g).transitionDuration), '0s')
     assert.deepEqual(await layout(frame), { overflow: false, finite: true, labelsOverlap: false })
     const slider = frame.getByRole('slider')
@@ -266,7 +266,7 @@ test('new MCP results reset selection and render six series, one lit, at 560 px 
     await painted(frame)
     const state = await looks(frame)
     assert.deepEqual([state.lit, state.litColor, state.greyColor, state.pressed.indexOf('true')],
-      [[six.counties[0].code], [ORANGE], ['rgb(196, 200, 208)'], 0])
+      [[six.counties[0].code], [ACCENT], ['rgb(205, 205, 205)'], 0])
     assert.equal(await frame.getByRole('slider').getAttribute('data-period'), data.last_period)
     assert.deepEqual(await layout(frame), { overflow: false, finite: true, labelsOverlap: false })
     // Resize in the middle of the next entrance animation, then inspect the final geometry.

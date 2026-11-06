@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 // Domain adaptation of the supplied PortfolioAllocationChart. Geometry, stepped bands, sweep, morphing,
 // glass pills and interactive legend follow the reference; values count ads instead of currency.
-// Styled after the jobs-by-county chart: one ramp (offered orange, not offered grey, unknown light grey), a readout
+// Styled after the jobs-by-county chart: one ramp (offered red, not offered grey, unknown light grey), a readout
 // over the ring with the active segment's name, share and ad count, and the other segments dimmed. Each segment is
 // a button: hover previews, click or the arrow keys select. The readout fades in and counts up with the sweep, and
 // counts to the new number when another segment becomes active.
@@ -190,14 +190,14 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
     root.current?.querySelector<SVGPathElement>(`[data-slot="allocation-slice-button"][data-index="${next}"]`)?.focus()
   }
 
-  // One ramp for the parts of the whole: offered lights up orange (a lighter top, as on the lit columns), not offered
-  // is the darker grey and unknown the lighter one, so only the orange stands out. The greys stay flat: a
+  // One ramp for the parts of the whole: offered lights up red (a lighter top, as on the lit columns), not offered
+  // is the darker grey and unknown the lighter one, so only the red stands out. The greys stay flat: a
   // disable-to-subdued face would end not offered in unknown's colour. Inks keep 12px shares legible on each fill in
-  // both themes; on dark orange-300 the near-black fg-on-muted reads, fg-loud (near-white there) would not. Card-coloured strokes part
+  // both themes; on dark accent-300 the near-black fg-on-muted reads, fg-loud (near-white there) would not. Card-coloured strokes part
   // neighbouring slices; the veil leaves inactive slices at the 32 % of the county chart's grey columns, and its
   // surface-disable edge keeps the lightest slice's shape, which the veil alone would fade into the card.
   return <div className="portfolio-allocation
-    [&_.allocation-offered]:[--allocation-color:var(--orange-300)] [&_.allocation-offered]:[--allocation-top:var(--orange-100)]
+    [&_.allocation-offered]:[--allocation-color:var(--accent-300)] [&_.allocation-offered]:[--allocation-top:var(--accent-100)]
     [&_.allocation-offered]:[--allocation-ink:var(--fg-loud)] dark:[&_.allocation-offered]:[--allocation-ink:var(--fg-on-muted)]
     [&_.allocation-not\_offered]:[--allocation-color:var(--surface-disable)] [&_.allocation-not\_offered]:[--allocation-top:var(--surface-disable)]
     [&_.allocation-not\_offered]:[--allocation-ink:var(--fg-loud)]
@@ -259,7 +259,7 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
           aria-label={`${groups[index].label}: ${formatAds(values[index])}, ${formatShare(shares[index])} ${denominator}`}
           className="allocation-slice-button pointer-events-auto cursor-pointer [fill:transparent] outline-none
             [-webkit-tap-highlight-color:transparent] [stroke-linejoin:round]
-            focus-visible:[stroke:color-mix(in_srgb,_var(--orange-500)_40%,_transparent)] focus-visible:[stroke-width:4]"
+            focus-visible:[stroke:color-mix(in_srgb,_var(--accent-500)_40%,_transparent)] focus-visible:[stroke-width:4]"
           onPointerEnter={(event) => { if (event.pointerType === 'mouse') hoverGroup(index) }}
           onClick={() => selectGroup(index)} onKeyDown={(event) => onSliceKeyDown(event, index)} />)}
       </svg>
