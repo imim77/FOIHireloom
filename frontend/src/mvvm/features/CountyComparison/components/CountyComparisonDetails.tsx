@@ -91,9 +91,11 @@ export function ComparisonTable({ data, expanded }: { data: CountyComparisonData
               <TableHead key={county.code} scope="col" className="county-head">
                 <div className="county-head-inner flex flex-col gap-1 min-w-0" data-slot="county">
                   <span className="county-name text-[14px] font-medium leading-[1.4]">{county.short_name}</span>
-                  <span className="county-total mono-label uppercase text-fg-soft hyphens-manual">
-                    {noHzz(county) ? 'HZZ oglasi nisu učitani'
-                      : `svih aktivnih oglasa: ${formatInteger(county.all_active_jobs.jobs)}`}
+                  {/* The label is uppercase, the number keeps its own case. */}
+                  <span className="county-total mono-label text-fg-soft hyphens-manual">
+                    {noHzz(county) ? <span className="uppercase">HZZ oglasi nisu učitani</span> : <>
+                      <span className="uppercase">svih aktivnih oglasa:</span> {formatInteger(county.all_active_jobs.jobs)}
+                    </>}
                   </span>
                 </div>
               </TableHead>
