@@ -3,19 +3,21 @@ import { formatAds, formatWorkers } from '../../../../utils/format'
 import { CountyColumns } from '../../components/CountyColumns'
 import type { useJobsByCounty } from '../../hooks/use-jobs-by-county'
 
+const EYEBROW = 'Broj oglasa'
+
 /** show_jobs_by_county: the top counties as 3D columns, every county once expanded. */
 export function JobsByCounty({ data, columns, shown, label, canExpand, expanded, toggle }:
   ReturnType<typeof useJobsByCounty> & { expanded: boolean; toggle: () => void }) {
-  if (!data) return <Card title="Broj oglasa po županijama" description="Učitavanje…" loading />
+  if (!data) return <Card eyebrow={EYEBROW} title="Broj oglasa po županijama" description="Učitavanje…" loading />
 
   return (
-    <Card title={data.title} description={data.description}
+    <Card eyebrow={EYEBROW} title={data.title} description={data.description}
       actions={canExpand && <ExpandButton expanded={expanded} label={label} onClick={toggle} />}>
       <Notes warning={data.coverage_note} note={data.unknown_note} />
       {columns.counties.length ? (
         <>
           <CountyColumns {...columns} />
-          <p className="soft footer m-0 text-[12px] font-medium leading-[1.25] text-fg-soft [margin-top:-8px]">
+          <p className="soft footer m-0 mono-label uppercase text-fg-soft [margin-top:-8px]">
             {shown} · ukupno {formatAds(data.total_jobs)}, {formatWorkers(data.total_workers_needed)}
           </p>
         </>

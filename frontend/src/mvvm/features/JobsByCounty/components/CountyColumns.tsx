@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { cn } from 'cn'
 // The counties as 3D columns, after the "Investment App User Age Chart" from the Keitoto library: the active county
-// is red with its count in red and its name in a dark pill, the others grey; the selected county's workers sought
+// is red with its name in a dark pill, the others grey; the selected county's workers sought
 // stand over the chart. Hover previews a county, click or the arrow keys select one. Animated with anime.js: the
 // workers count up, the columns rise one after another while their counts count up and the pill pops in; a new county
 // cross-fades the columns, pops its count, slides the pill over and counts the workers to the new number; new data
@@ -23,8 +23,9 @@ const BAR_RATIO = 48 / 64
 const VALUE_HEIGHT = 16
 const VALUE_GAP = 4 // between a bar's top and its value
 const MAX_BAR = PLOT_HEIGHT - VALUE_HEIGHT - VALUE_GAP
-// The narrowest column; the plot scrolls sideways below it.
-const MIN_COLUMN = 84
+// The narrowest column; the plot scrolls sideways below it. Wide enough for the longest mono name part,
+// "Koprivničko-" (92px), and the label's 2px sides, so no name is cut mid-word.
+const MIN_COLUMN = 96
 
 const round = (n: number) => Math.round(n * 1000) / 1000
 
@@ -225,9 +226,12 @@ export function CountyColumns({ counties, values, selected, active, county, work
       <div className="selection flex flex-col items-start gap-2.5" data-slot="selection">
         {/* Clips the name as it rolls in from below on a new county. */}
         <div className="overflow-clip">
-          <p className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft" ref={nameRef}>{county.name} · {formatAds(county.jobs)}</p>
+          {/* Mono like every label, but only the count is uppercase: county names keep their own case. */}
+          <p className="soft m-0 mono-label text-fg-soft" ref={nameRef}>
+            {county.name} · <span className="uppercase">{formatAds(county.jobs)}</span>
+          </p>
         </div>
-        <p className="big m-0 text-[28px] font-semibold leading-[1] whitespace-nowrap tabular-nums" ref={workersRef}>{formatWorkers(workers)}</p>
+        <p className="big m-0 mono-headline text-fg-loud whitespace-nowrap" ref={workersRef}>{formatWorkers(workers)}</p>
       </div>
       <div className="scroller overflow-x-auto overflow-y-hidden p-1 [margin:-4px]">
         <div className="chart flex flex-col gap-2" style={{ minWidth: `${n * MIN_COLUMN + gaps}px` }}>
@@ -235,7 +239,7 @@ export function CountyColumns({ counties, values, selected, active, county, work
             onPointerLeave={() => hoverCounty(null)}>
             <BarGradients ids={ids} />
             {counties.map((county, i) => (
-              <Button variant="ghost" key={i} type="button" data-slot="column" className={cn('column relative h-full min-w-0 flex-1 p-0', i === active && 'active')}
+              <Button variant="ghost" key={i} type="button" data-slot="column" className={cn('column relative h-full min-w-0 flex-1 rounded-[12px] p-0', i === active && 'active')}
                 aria-label={`${county.name}: ${formatAds(county.jobs)}, ${formatWorkers(county.workers_needed)}, `
                   + formatShare(county.share)}
                 aria-pressed={i === selected} tabIndex={i === selected ? 0 : -1}
@@ -250,7 +254,7 @@ export function CountyColumns({ counties, values, selected, active, county, work
                 </svg>
                 {/* the count, centred 4px over the bar */}
                 <span className="value absolute [left:50%] [z-index:1] [transform:translateX(-50%)] pointer-events-none
-                  text-[12px] font-medium leading-[16px] whitespace-nowrap text-fg-soft tabular-nums
+                  mono-label leading-[16px] whitespace-nowrap text-fg-soft
                   [transition:color_200ms] [&_span]:block motion-reduce:[transition:none]" data-slot="value" aria-hidden="true"
                   style={{ bottom: `${round(heights[i] + VALUE_GAP)}px` }}>
                   <BarValue value={values[i]} />
@@ -262,14 +266,14 @@ export function CountyColumns({ counties, values, selected, active, county, work
             ))}
           </div>
           <div className="axis relative flex gap-2" aria-hidden="true">
-            <span className="pill absolute [inset-block:0] rounded-[8px] bg-surface-muted" ref={pill}
+            <span className="pill absolute [inset-block:0] rounded-full bg-surface-muted" ref={pill}
               style={{ width: `calc${fraction}`, left: `calc(${active} * (${fraction} + ${COLUMN_GAP}px))` }} />
             {counties.map((county, i) => (
               <span key={i} data-slot="axis-label" className={`axis-label relative flex flex-1 min-w-0 justify-center [padding:6px_2px]
                 [&_span]:[display:-webkit-box] [&_span]:[-webkit-box-orient:vertical]
                 [&_span]:[-webkit-line-clamp:2] [&_span]:overflow-hidden [&_span]:text-ellipsis
-                [&_span]:text-center [&_span]:text-[12px] [&_span]:leading-[1.25] [&_span]:text-fg-soft
-                [&_span]:[transition:color_200ms] [&.active_span]:font-semibold [&.active_span]:text-fg-on-muted
+                [&_span]:text-center [&_span]:mono-label [&_span]:text-fg-soft
+                [&_span]:[transition:color_300ms] [&.active_span]:font-medium [&.active_span]:text-fg-on-muted
                 motion-reduce:[&_span]:[transition:none] ${i === active ? ' active' : ''}`}
                 title={county.name}>
                 {/* A break after each hyphen: "Splitsko-" over "dalmatinska" instead of a cut word. */}
