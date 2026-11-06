@@ -119,9 +119,10 @@ export function ForecastView(model: ReturnType<typeof useForecast>) {
   return <div className="forecast-content min-w-0 flex flex-col gap-6">
     {point && <Readout context={`${period(point.period)} · medijan prognoze`} median={point.median} format={value}>
       <p className="forecast-interval m-0 mono-label uppercase text-fg-soft" data-slot="forecast-interval">{value(point.low)} – {value(point.high)} · {interval}</p>
-      <div className="forecast-last flex flex-wrap items-center [gap:4px_8px] mono-label uppercase text-fg-soft"
+      {/* The badges keep their own case, as in the other views' readouts. */}
+      <div className="forecast-last flex flex-wrap items-center [gap:4px_8px] mono-label text-fg-soft"
         data-slot="forecast-last">
-        <span>Posljednji podatak: {last?.value == null ? 'nema podatka' : value(last.value)}
+        <span className="uppercase">Posljednji podatak: {last?.value == null ? 'nema podatka' : value(last.value)}
           {last && ` · ${period(last.period)}`}</span>
         {last && <Flags point={last} />}
       </div>
