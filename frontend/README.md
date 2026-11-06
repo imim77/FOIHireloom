@@ -28,7 +28,7 @@ Use component variants for appearance and `className` for layout; pass actions f
 Add future primitives from the frontend directory with `npx shadcn@latest add @shadcn/<component>`.
 
 Every view follows [`DESIGN.md`](../DESIGN.md), which takes the jobs-by-county chart as its reference: grey data
-with one orange focus, a readout over the chart, a 28/16/14/12 px type scale and tokens only.
+with one red focus after dalco.ch, Geist with uppercase mono labels, a readout over the chart, a 28/16/14/12 px type scale and tokens only.
 
 Shared job conditions and search filters live in `src/mvvm/utils/jobs.ts`, independent of any view.
 `FilterChips` renders removable filters, and `useServerTool` owns request status and ignores replies after
@@ -105,7 +105,7 @@ comparison messages and retries, source/advertisement link callbacks, request fa
 selection/expansion, loading skeletons, keyboard-operated selection/toggles, and replacement results
 arriving before pending tool replies.
 
-The unemployment chart adapts the supplied `RevenueGrowthChart` to monthly DZS rates. One county is lit orange
+The unemployment chart adapts the supplied `RevenueGrowthChart` to monthly DZS rates. One county is lit red
 and the others stay grey; the legend selects it by pointer or arrow keys, and each legend item shows its rate for
 the inspected month. The readout over the chart follows the lit county and inspected month; the annual comparison
 tiles stay anchored to the server's latest month. Missing values remain gaps, provisional segments stay dashed,
@@ -125,7 +125,7 @@ the accommodation filter itself, so the population always includes all three sta
 ads into offered (shared/single/family), explicitly not offered, and unknown. The stored shares use all matching
 ads. Legend buttons can temporarily hide groups; the view then names its visible denominator and offers a reset.
 Mouse, touch and keyboard selection (each segment is a button) show the count and share in the readout over
-the ring; offered is orange, not offered and unknown are grey. Zero groups stay in the
+the ring; offered is red, not offered and unknown are grey. Zero groups stay in the
 legend, and the last visible positive group cannot be hidden. The preview uses the real local response for
 Varaždinska and query `kuhar` (2/7/1 ads), with its freshness warning.
 
