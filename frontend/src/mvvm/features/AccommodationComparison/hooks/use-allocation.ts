@@ -45,10 +45,11 @@ export function useAllocation(groups: AccommodationGroup[], total: number) {
 
   const filtered = visibleTotal !== total
   const denominator = filtered ? 'prikazanih oglasa' : 'svih oglasa'
-  // Over the ring: what the active segment is, then its ad count; every visible ad without one.
+  // Over the ring: the active segment's name and share, then its ad count; every visible ad without one. The name
+  // is apart from the detail so the view can set the detail in uppercase while the name keeps its own case.
   const readout = active === null
-    ? { context: `Ukupno oglasa · ${filtered ? 'u prikazanim skupinama' : 'u odabranom skupu'}`, amount: visibleTotal }
-    : { context: `${groups[active].label} · ${formatShare(shares[active])} ${denominator}`, amount: values[active] }
+    ? { name: null, detail: `Ukupno oglasa · ${filtered ? 'u prikazanim skupinama' : 'u odabranom skupu'}`, amount: visibleTotal }
+    : { name: groups[active].label, detail: `${formatShare(shares[active])} ${denominator}`, amount: values[active] }
 
   return { groups, total, hidden, values, shown, visibleTotal, shares, active, selected, tabStop,
     filtered, denominator, readout, showGroups, selectGroup,

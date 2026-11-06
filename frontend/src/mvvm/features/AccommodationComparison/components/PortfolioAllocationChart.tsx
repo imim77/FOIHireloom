@@ -1,22 +1,21 @@
 import { cn } from 'cn'
 import { Button } from '@/components/ui/button'
+import { RollLabel } from '@/components/RollLabel'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 // Domain adaptation of the supplied PortfolioAllocationChart. Geometry, stepped bands, sweep, morphing,
 // glass pills and interactive legend follow the reference; values count ads instead of currency.
 // Styled after the jobs-by-county chart: one ramp (offered red, not offered grey, unknown light grey), a readout
 // over the ring with the active segment's name, share and ad count, and the other segments dimmed. Each segment is
-// a button: hover previews, click or the arrow keys select. The readout fades in and counts up with the sweep, and
-// counts to the new number when another segment becomes active.
+// a button: hover previews, click or the arrow keys select. The eyebrow and readout fade in and count up with the
+// sweep; another active segment rolls its name in and counts to its number.
 import { animate, type JSAnimation, stagger } from 'animejs'
 import { type KeyboardEvent, useCallback, useId, useLayoutEffect, useMemo, useRef } from 'react'
-import { fadeIn, finish, releaseStyles, useChartEntrance, useCountUp, useReducedMotion } from '../../../hooks/chart-motion'
+import { fadeIn, finish, MOTION, releaseStyles, useChartEntrance, useCountUp, useReducedMotion } from '../../../hooks/chart-motion'
 import { formatAds, formatInteger, formatShare } from '../../../utils/format'
 import { SIZE, START_ANGLE, TUCK, interpolateGeometry, layoutRing, mod, pillPlace, slicePath, untucked,
   type SliceGeometry } from '../utils/ring-geometry'
 import type { useAllocation } from '../hooks/use-allocation'
 
-const SWEEP_AT = 150
-const SWEEP = 1400
 const LAYERS = [{ name: 'drop', spread: 0 }, { name: 'rim', spread: -1 }, { name: 'glow', spread: -2 },
   { name: 'shape', spread: 0 }, { name: 'veil', spread: 0 }]
 const inOutCubic = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
@@ -25,7 +24,7 @@ const percent = (value: number) => `${formatInteger(value)} %`
 function Pill({ index, groupKey, share, geometry, dimmed }:
   { index: number; groupKey: string; share: number; geometry: SliceGeometry; dimmed: boolean }) {
   const ref = useRef<HTMLSpanElement>(null)
-  useCountUp(ref, share, percent, { duration: 700 })
+  useCountUp(ref, share, percent)
   const place = pillPlace(geometry)
   return <span aria-hidden="true" data-slot="allocation-pill" data-index={index}
     className={`allocation-pill allocation-${groupKey} absolute pointer-events-none [width:12%] [aspect-ratio:1]
@@ -36,7 +35,7 @@ function Pill({ index, groupKey, share, geometry, dimmed }:
     <span className="allocation-glass flex items-center justify-center w-full h-full rounded-full
       [background:linear-gradient(135deg,_color-mix(in_srgb,_var(--card)_4%,_transparent),_color-mix(in_srgb,_var(--card)_16%,_transparent))]
       [border:1px_solid_color-mix(in_srgb,_var(--card)_35%,_transparent)] [color:var(--allocation-ink)]
-      text-[12px] font-medium tabular-nums" data-slot="allocation-glass">
+      mono-label font-medium" data-slot="allocation-glass">
       <span ref={ref} data-slot="allocation-share" data-share={share}>{percent(share)}</span>
     </span>
   </span>
@@ -89,22 +88,27 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
   }
 
   useChartEntrance(root, (timeline) => {
-    const lines = all('[data-slot="allocation-readout"] > *')
-    timeline.add(lines, { ...fadeIn(lines, 6), duration: 600, delay: stagger(80) }, 100)
+    const { readout, headline, marks, labels } = MOTION
+    // The card's eyebrow comes in with the readout, ahead of it.
+    const eyebrow = root.current?.closest('[data-slot="card"]')?.querySelector<HTMLElement>('[data-slot="eyebrow"]')
+    const lines = [...(eyebrow ? [eyebrow] : []), ...all('[data-slot="allocation-readout"] > *')]
+    timeline.add(lines, { ...fadeIn(lines, readout.rise), duration: readout.duration, delay: stagger(readout.stagger) },
+      readout.at)
     const up = { t: 0 }
     const countUp = () => showAmount(latestAmount.current * up.t)
     countingAmount.current = true
     countUp()
-    timeline.add(up, { t: [0, 1], duration: 1400, ease: 'outExpo', onUpdate: countUp,
-      onComplete: () => { countingAmount.current = false } }, 150)
+    timeline.add(up, { t: [0, 1], duration: headline.duration, ease: 'outExpo', onUpdate: countUp,
+      onComplete: () => { countingAmount.current = false } }, headline.at)
     const state = { t: 0 }
     sweep.current = state
     const paint = () => draw(latest.current, { from: START_ANGLE, upTo: inOutCubic(state.t) * (360 + TUCK) })
     paint()
-    timeline.add(state, { t: [0, 1], duration: SWEEP, ease: 'linear', onUpdate: paint,
-      onComplete: () => { sweep.current = null; draw(latest.current) } }, SWEEP_AT)
+    timeline.add(state, { t: [0, 1], duration: marks.duration, ease: 'linear', onUpdate: paint,
+      onComplete: () => { sweep.current = null; draw(latest.current) } }, marks.at)
     const buttons = all('.allocation-legend-item')
-    timeline.add(buttons, { ...fadeIn(buttons, 8), duration: 700, ease: 'outExpo', delay: stagger(80) }, 500)
+    timeline.add(buttons, { ...fadeIn(buttons, labels.rise), duration: labels.duration, delay: stagger(labels.stagger) },
+      labels.at)
     for (const pill of all('[data-slot="allocation-pill"]')) {
       const index = Number(pill.dataset.index)
       const g = latest.current[index]
@@ -117,13 +121,15 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
         else hi = middle
       }
       const glass = pill.querySelector<HTMLElement>('[data-slot="allocation-glass"]')!
-      timeline.add(glass, { opacity: { from: 0 }, scale: { from: 0.4 }, duration: 650, ease: 'outBack(1.8)',
-        onComplete: releaseStyles('opacity', 'transform') }, SWEEP_AT + lo * SWEEP - 60)
+      // Pops in as the sweep reaches it, like the pill under the lit column.
+      timeline.add(glass, { opacity: { from: 0 }, scale: { from: 0.7 }, duration: MOTION.pill.duration,
+        ease: 'outBack(1.7)', onComplete: releaseStyles('opacity', 'transform') }, marks.at + lo * marks.duration - 60)
       const value = pill.querySelector<HTMLElement>('[data-slot="allocation-share"]')!
       const counter = { t: 0 }
       const count = () => { value.textContent = percent(Number(value.dataset.share) * counter.t) }
       count()
-      timeline.add(counter, { t: [0, 1], duration: 900, ease: 'outExpo', onUpdate: count }, SWEEP_AT + lo * SWEEP)
+      timeline.add(counter, { t: [0, 1], duration: marks.duration, ease: 'outExpo', onUpdate: count },
+        marks.at + lo * marks.duration)
     }
     return () => {
       sweep.current = null
@@ -153,19 +159,20 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
     const paint = () => draw(geometry.map((g, index) => interpolateGeometry(from[index] ?? g, g, state.t)))
     paint()
     const sameSpans = before.every((g, index) => g.span === geometry[index].span)
-    const animation = finish(animate(state, { t: 1, duration: sameSpans ? 380 : 800, ease: 'outExpo', onUpdate: paint,
+    // Same spans: only the active slice popped out, as fast as a value pops; else new shares morph the ring.
+    const animation = finish(animate(state, { t: 1, duration: sameSpans ? MOTION.pop : MOTION.morph, ease: 'outExpo', onUpdate: paint,
       onComplete: () => draw(latest.current) }))
     return () => { animation.cancel() }
   }, [geometry, reduced, draw])
 
-  // Another active segment fades its name in over the ring.
+  // Another active segment rolls its name in from below.
   const lastActive = useRef(active)
   useLayoutEffect(() => {
     const before = lastActive.current
     lastActive.current = active
     if (reduced || before === active || !contextRef.current) return
-    finish(animate(contextRef.current, { opacity: [0.4, 1], duration: 300, ease: 'outQuad',
-      onComplete: releaseStyles('opacity') }))
+    finish(animate(contextRef.current, { translateY: ['100%', '0%'], duration: MOTION.roll, ease: 'outExpo',
+      onComplete: releaseStyles('transform') }))
   }, [active, reduced])
 
   // The ad count counts from the number on screen to the new one; during the entrance its count-up carries on to it.
@@ -177,7 +184,7 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
     if (reduced) { showAmount(readout.amount); return }
     const state = { value: count.value }
     const target = readout.amount
-    count.tween = finish(animate(state, { value: target, duration: 600, ease: 'outExpo',
+    count.tween = finish(animate(state, { value: target, duration: MOTION.count, ease: 'outExpo',
       onUpdate: () => showAmount(state.value),
       onComplete: () => { count.tween = null; showAmount(target) } }))
   }, [readout.amount, reduced])
@@ -190,14 +197,15 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
     root.current?.querySelector<SVGPathElement>(`[data-slot="allocation-slice-button"][data-index="${next}"]`)?.focus()
   }
 
-  // One ramp for the parts of the whole: offered lights up red (a lighter top, as on the lit columns), not offered
-  // is the darker grey and unknown the lighter one, so only the red stands out. The greys stay flat: a
-  // disable-to-subdued face would end not offered in unknown's colour. Inks keep 12px shares legible on each fill in
-  // both themes; on dark accent-300 the near-black fg-on-muted reads, fg-loud (near-white there) would not. Card-coloured strokes part
+  // One ramp for the parts of the whole: offered lights up red from accent-300 to accent-500, as the lit column's
+  // faces do, so it reads as signal red rather than pink; not offered is the darker grey and unknown the lighter
+  // one, so only the red stands out. The greys stay flat: a disable-to-subdued face would end not offered in
+  // unknown's colour. Inks keep 12px shares legible on each fill in both themes; on the dark red the near-black
+  // fg-on-muted reads, fg-loud (near-white there) would not. Card-coloured strokes part
   // neighbouring slices; the veil leaves inactive slices at the 32 % of the county chart's grey columns, and its
   // surface-disable edge keeps the lightest slice's shape, which the veil alone would fade into the card.
   return <div className="portfolio-allocation
-    [&_.allocation-offered]:[--allocation-color:var(--accent-300)] [&_.allocation-offered]:[--allocation-top:var(--accent-100)]
+    [&_.allocation-offered]:[--allocation-color:var(--accent-500)] [&_.allocation-offered]:[--allocation-top:var(--accent-300)]
     [&_.allocation-offered]:[--allocation-ink:var(--fg-loud)] dark:[&_.allocation-offered]:[--allocation-ink:var(--fg-on-muted)]
     [&_.allocation-not\_offered]:[--allocation-color:var(--surface-disable)] [&_.allocation-not\_offered]:[--allocation-top:var(--surface-disable)]
     [&_.allocation-not\_offered]:[--allocation-ink:var(--fg-loud)]
@@ -209,9 +217,13 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
     [&_.allocation-veil]:[opacity:0] [&_.allocation-veil]:[transition:opacity_300ms]
     [&_.allocation-veil.is-visible]:[opacity:0.68] motion-reduce:[&_.allocation-veil]:[transition:none]" ref={root} data-slot="accommodation-chart">
     <div className="allocation-readout flex flex-col items-start gap-2.5 self-stretch" data-slot="allocation-readout">
-      <p className="allocation-context m-0 text-[12px] font-medium leading-[1.25] text-fg-soft" ref={contextRef}>{readout.context}</p>
-      <p className="allocation-amount m-0 text-[28px] font-semibold leading-[1] whitespace-nowrap text-fg-loud tabular-nums"
-        ref={amountRef}>{formatAds(readout.amount)}</p>
+      {/* Clips the name as it rolls in from below on a new segment. Only what is not a name is uppercase. */}
+      <div className="overflow-clip">
+        <p className="allocation-context m-0 mono-label text-fg-soft" ref={contextRef}>
+          {readout.name && <>{readout.name} · </>}<span className="uppercase">{readout.detail}</span>
+        </p>
+      </div>
+      <p className="allocation-amount m-0 mono-headline whitespace-nowrap text-fg-loud" ref={amountRef}>{formatAds(readout.amount)}</p>
     </div>
     <div className="allocation-ring relative [width:min(100%,_400px)] [aspect-ratio:1] m-2 [&_>_svg]:absolute [&_>_svg]:inset-0
       [&_>_svg]:w-full [&_>_svg]:h-full [&_>_svg]:overflow-visible [&_>_svg]:pointer-events-none
@@ -265,13 +277,13 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
       </svg>
     </div>
     <ToggleGroup multiple value={groups.filter((group) => group.jobs > 0 && !hidden.includes(group.key)).map((group) => group.key)}
-      onValueChange={showGroups} className="allocation-legend grid w-full grid-cols-3 gap-3 [@media(max-width:_400px)]:grid-cols-1"
+      onValueChange={showGroups} className="allocation-legend flex w-full flex-wrap gap-3"
       aria-label="Skupine smještaja">
       {groups.map((group, index) => {
         const off = hidden.includes(group.key) || group.jobs === 0
         return <ToggleGroupItem key={group.key} value={group.key}
-          className={cn('allocation-legend-item h-auto min-w-0 justify-start gap-2 whitespace-normal p-2 text-left',
-            'text-[12px] leading-[1.25] text-fg-soft [transition:color_200ms] motion-reduce:[transition:none]',
+          className={cn('allocation-legend-item h-auto min-w-0 justify-start gap-2 whitespace-normal px-3 py-2 text-left',
+            'mono-label text-fg-soft [transition:color_300ms] motion-reduce:[transition:none]',
             `allocation-${group.key}`, off && 'is-off', index === active && 'is-active text-fg-loud')}
           disabled={group.jobs === 0} aria-disabled={!off && shown.length <= 1 ? true : undefined}
           aria-label={`${group.label}: ${formatAds(group.jobs)}, ${formatShare(group.share)} svih oglasa`}
@@ -280,14 +292,14 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
           <span className="allocation-dot flex-none w-2.5 h-2.5 rounded-full
             [background:linear-gradient(var(--allocation-top),_var(--allocation-color))]
             [box-shadow:0_0_0_2px_var(--card),_0_0_0_3px_color-mix(in_srgb,_var(--allocation-color)_40%,_transparent)]" /><span className="allocation-legend-label flex-1">{group.label}</span>
-          <span className="allocation-legend-count font-semibold tabular-nums">{formatInteger(group.jobs)}</span>
+          <span className="allocation-legend-count font-medium">{formatInteger(group.jobs)}</span>
         </ToggleGroupItem>
       })}
     </ToggleGroup>
     {filtered && <div className="allocation-filter-note flex flex-wrap items-center justify-center [gap:8px_16px] w-full text-[12px]
       leading-[1.25] text-fg-soft" role="status">
       <span>Prikazano {formatInteger(visibleTotal)} od {formatInteger(total)} oglasa. Udjeli su među prikazanim oglasima.</span>
-      <Button type="button" variant="link" size="sm" className="link text-[12px]" onClick={resetGroups}>Prikaži sve skupine</Button>
+      <Button type="button" variant="link" size="sm" className="link text-[12px]" onClick={resetGroups}><RollLabel>Prikaži sve skupine</RollLabel></Button>
     </div>}
     <p id={`${id}-hint`} className="soft allocation-hint m-0 text-[12px] font-medium leading-[1.25] text-fg-soft w-full">Odaberite segment za broj i udio oglasa. Klikom na legendu sakrivate ili vraćate skupinu; strelicama birate segment.</p>
   </div>

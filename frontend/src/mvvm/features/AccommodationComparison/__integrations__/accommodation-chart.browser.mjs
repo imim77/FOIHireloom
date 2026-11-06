@@ -125,8 +125,8 @@ test('real sample renders counts, percentages, source, filters and freshness wit
     assert.deepEqual(await frame.locator('.allocation-legend-count').allTextContents(), ['2', '7', '1'])
     assert.deepEqual(await frame.locator('[data-slot="allocation-share"]').allTextContents(), ['20 %', '70 %', '10 %'])
     assert.equal(await frame.locator('[data-slot="allocation-slice-button"]').count(), 3)
-    // accent-300 / surface-disable / surface-subdued, with fg-loud ink on all three.
-    assert.deepEqual(await ramp(frame), [['rgb(255, 122, 102)', 'rgb(25, 25, 25)'],
+    // accent-500 / surface-disable / surface-subdued, with fg-loud ink on all three.
+    assert.deepEqual(await ramp(frame), [['rgb(251, 41, 14)', 'rgb(25, 25, 25)'],
       ['rgb(205, 205, 205)', 'rgb(25, 25, 25)'], ['rgb(238, 238, 238)', 'rgb(25, 25, 25)']])
     assert.match(await frame.locator('.header .soft').textContent(), /kuhar.*Varaždinska/)
     assert.match(await frame.locator('.sources').textContent(), /HZZ/)
@@ -214,8 +214,9 @@ test('320px dark mobile supports touch selection, second-tap clearing and reduce
     await deliver(page, frame, sample())
     await page.evaluate(() => window.setTheme('dark'))
     await frame.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
-    // The same ramp in dark tokens; near-black ink on the darker red, where fg-loud would be too faint.
-    assert.deepEqual(await ramp(frame), [['rgb(240, 83, 60)', 'rgb(25, 25, 25)'],
+    // The same ramp in dark tokens (accent-500 is one red in both); near-black ink on the red, where fg-loud
+    // (near-white there) would be too faint.
+    assert.deepEqual(await ramp(frame), [['rgb(251, 41, 14)', 'rgb(25, 25, 25)'],
       ['rgb(110, 110, 110)', 'rgb(244, 244, 244)'], ['rgb(58, 58, 58)', 'rgb(244, 244, 244)']])
     await frame.locator('.allocation-ring').scrollIntoViewIfNeeded()
     const point = await pointOn(frame, 2)
