@@ -8,15 +8,17 @@ import { Card, ExpandButton, Notes } from '../../../../components/Card'
 import { ComparisonTable } from '../../components/ComparisonTable'
 import type { JobComparisonData } from '../../types'
 
+const EYEBROW = 'Usporedba oglasa'
+
 export function JobComparison({ data, expanded, toggle, onOpenLink }: {
   data: JobComparisonData | null
   expanded: boolean
   toggle: () => void
   onOpenLink: (url: string) => void
 }) {
-  if (!data) return <Card sunken title="Usporedba oglasa" description="Učitavanje…" loading />
+  if (!data) return <Card sunken eyebrow={EYEBROW} title="Usporedba oglasa" description="Učitavanje…" loading />
   return (
-    <Card sunken title={data.title} description={data.description} actions={(
+    <Card sunken eyebrow={EYEBROW} title={data.title} description={data.description} actions={(
       <ExpandButton expanded={expanded} label={expanded ? 'Smanji prikaz' : 'Prikaži usporedbu preko cijelog zaslona'}
         onClick={toggle} />
     )}>

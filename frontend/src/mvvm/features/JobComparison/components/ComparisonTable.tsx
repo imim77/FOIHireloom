@@ -22,14 +22,16 @@ function where(job: ComparedJob): string | null {
 export function ComparisonTable({ data, onOpenLink, expanded }: { data: JobComparisonData; onOpenLink: (url: string) => void; expanded: boolean }) {
   const root = useComparisonEntrance('job', ROW_STAGGER)
 
+  // The narrow aspect column (112px) still fits the longest aspect name, a mono "OBRAZOVANJE" (85px), beside its
+  // 24px padding, so no name breaks mid-word.
   return (
     <div className={`compare-scroll [--aspect:132px] [--column:168px] @container overflow-x-auto [overscroll-behavior-x:contain]
-      max-w-full rounded-[12px]
+      max-w-full rounded-[10px]
       [background:linear-gradient(to_left,_var(--card)_40%,_transparent)_right_/_32px_100%_no-repeat_local,_radial-gradient(farthest-side_at_100%_50%,_rgb(0_0_0_/_0.14),_transparent)_right_/_14px_100%_no-repeat_scroll]
       [&:focus-visible]:[outline:none] [&:focus-visible]:shadow-focus [&.expanded]:[--aspect:168px]
       [&.expanded]:[--column:240px] ${expanded ? ' expanded' : ''}`} ref={root} role="region" tabIndex={0}
       aria-label="Usporedba oglasa po uvjetima">
-      <Table variant="comparison" containerClassName="contents" className="compare [@container(max-width:_520px)]:[--aspect:100px] [@container(max-width:_520px)]:[--column:128px]
+      <Table variant="comparison" containerClassName="contents" className="compare [@container(max-width:_520px)]:[--aspect:112px] [@container(max-width:_520px)]:[--column:128px]
         hyphens-auto [overflow-wrap:break-word] w-full
         [min-width:calc(var(--aspect)_+_var(--jobs)_*_var(--column))] table-fixed border-separate
         border-spacing-0 [&_th]:p-3 [&_th]:text-left [&_th]:align-top [&_td]:p-3 [&_td]:text-left
@@ -77,9 +79,10 @@ function JobHead({ job, onOpenLink }: { job: ComparedJob; onOpenLink: (url: stri
           </Button>
         </div>
         {/* "Kuhar/kuharica" may break after the slash in a narrow column. */}
-        <span className="job-name text-[14px] font-semibold leading-[1.25]">{title.replaceAll('/', '/​')}</span>
+        <span className="job-name text-[14px] font-medium leading-[1.4]">{title.replaceAll('/', '/​')}</span>
         <span className="job-employer text-[12px] font-medium">{employer}</span>
-        {place && <span className="job-where text-[12px] text-fg-soft">{place}</span>}
+        {/* Mono like the other short labels; the town and county keep their own case. */}
+        {place && <span className="job-where mono-label text-fg-soft hyphens-manual">{place}</span>}
       </div>
     </TableHead>
   )
@@ -89,10 +92,10 @@ function RowHead({ row, index }: { row: ComparisonRow; index: number }) {
   return (
     <TableHead scope="row" sticky="column" className="aspect w-(--aspect)">
       <div className="aspect-inner flex flex-col gap-1 min-w-0" data-row={index}>
-        <span className="aspect-name font-semibold">{row.name}</span>
+        <span className="aspect-name mono-label font-medium uppercase text-fg-loud hyphens-manual">{row.name}</span>
         {row.condition_label && <span className="aspect-you text-[12px] text-fg-soft">vi: {row.condition_label}</span>}
-        {row.differs && <span className="aspect-differs inline-flex items-center [gap:5px] text-[12px] font-medium text-fg-soft
-          whitespace-nowrap [&::before]:[content:''] [&::before]:flex-none [&::before]:w-1.5 [&::before]:h-1.5
+        {row.differs && <span className="aspect-differs flex items-start gap-1.5 mono-label uppercase text-fg-soft
+          hyphens-manual [&::before]:[content:''] [&::before]:flex-none [&::before]:size-1.5 [&::before]:mt-[4.5px]
           [&::before]:rounded-full [&::before]:bg-accent-500">razlikuje se</span>}
       </div>
     </TableHead>
@@ -105,7 +108,7 @@ function Cell({ row, cell, job, index }: { row: ComparisonRow; cell: ComparisonC
     <TableCell className={`cell [&.unknown_.cell-text]:text-fg-soft [&.unknown_.cell-text]:italic
       [&.expired_.cell-text]:text-warning-fg [&.expired_.cell-text]:font-medium ${expired ? ' expired' : ''}${cell.unknown_reason && !cell.note ? ' unknown' : ''}`}>
       <div className="cell-inner flex flex-col items-start gap-1.5 min-w-0" data-row={index}>
-        {cell.verdict && <Badge className={cn('verdict', cell.verdict)} variant={cell.verdict === 'match' ? 'success' : cell.verdict === 'no_match' ? 'warning' : 'secondary'}>{cell.verdict_label}</Badge>}
+        {cell.verdict && <Badge className={cn('verdict font-mono font-normal uppercase tracking-[0.04em]', cell.verdict)} variant={cell.verdict === 'match' ? 'success' : cell.verdict === 'no_match' ? 'warning' : 'secondary'}>{cell.verdict_label}</Badge>}
         <span className="cell-text">{capitalise(cell.text)}</span>
         {cell.note && <span className="cell-note text-[12px] text-fg-soft">{capitalise(cell.note)}</span>}
       </div>
