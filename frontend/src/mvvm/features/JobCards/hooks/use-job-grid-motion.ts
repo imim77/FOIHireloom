@@ -1,9 +1,8 @@
 import { animate } from 'animejs'
 import { useLayoutEffect, useRef } from 'react'
-import { finish, releaseStyles, useReducedMotion } from '../../../hooks/chart-motion'
+import { finish, MOTION, releaseStyles, useReducedMotion } from '../../../hooks/chart-motion'
 
 // Expanding or collapsing moves every tile; each slides over from where it was, as the charts' bars morph.
-const MOVE = 650
 const MOVE_STAGGER = 30
 
 /** useJobGridMotion animates tiles between their collapsed and expanded positions. */
@@ -23,7 +22,7 @@ export function useJobGridMotion(expanded: boolean) {
       const to = rects.get(tile.dataset.id!)
       if (!from || !to) return
       finish(animate(tile, {
-        translateX: [from.left - to.left, 0], translateY: [from.top - to.top, 0], duration: MOVE, ease: 'outExpo',
+        translateX: [from.left - to.left, 0], translateY: [from.top - to.top, 0], duration: MOTION.morph, ease: 'outExpo',
         delay: i * MOVE_STAGGER, onComplete: releaseStyles('transform'),
       }))
     })
