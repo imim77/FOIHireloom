@@ -5,7 +5,7 @@ from .tool_provider import ToolGroup
 
 
 class AppViews(ToolGroup):
-    """Serve every MCP App page as a ui:// resource; tools point at one through AppConfig(resource_uri=view.uri).
+    """Serve every MCP App page as a ui:// resource; tools point at one through view.app_config.
 
     The pages load nothing from the web, so they need no CSP exceptions.
     """
