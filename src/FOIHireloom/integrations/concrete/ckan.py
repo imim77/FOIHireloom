@@ -1,5 +1,3 @@
-import math
-
 import httpx
 from pydantic import ValidationError
 
@@ -12,13 +10,17 @@ from FOIHireloom.exceptions import (
 )
 from FOIHireloom.integrations.interfaces.ckan import CkanClientInterface
 
+from .http import HttpSourceClient
 
-class CkanClient(CkanClientInterface):
+
+class CkanClient(HttpSourceClient, CkanClientInterface):
     """Read CKAN metadata using a caller-owned async HTTP client.
 
     This client neither filters counties nor downloads RSS contents. The caller
     closes the injected httpx.AsyncClient, normally with an async context.
     """
+
+    source = "CKAN"
 
     def __init__(
         self,
@@ -29,28 +31,13 @@ class CkanClient(CkanClientInterface):
         url = httpx.URL(base_url)
         if url.scheme not in {"http", "https"} or not url.host or url.query or url.fragment:
             raise ValueError("CKAN base URL must be an HTTP(S) URL without query or fragment.")
-        if not math.isfinite(timeout) or timeout <= 0:
-            raise ValueError("CKAN timeout must be positive and finite.")
-        self._client = client
+        super().__init__(client, timeout)
         self._url = f"{str(url).rstrip('/')}/api/3/action/package_show"
-        self._timeout = timeout
 
     async def get_resources(self, dataset_id: str) -> list[CkanResource]:
         if not dataset_id.strip():
             raise ValueError("CKAN dataset ID must not be blank.")
-        try:
-            response = await self._client.get(
-                self._url, params={"id": dataset_id}, timeout=self._timeout,
-                follow_redirects=True,
-            )
-        except httpx.RequestError as error:
-            raise CkanTransportError("Could not reach the CKAN API.") from error
-        if not response.is_success:
-            raise CkanHttpError(response.status_code)
-        try:
-            payload = response.json()
-        except ValueError as error:
-            raise CkanResponseError("CKAN did not return valid JSON.") from error
+        payload = await self._package_show(dataset_id)
         if not isinstance(payload, dict) or type(payload.get("success")) is not bool:
             raise CkanResponseError("CKAN response must contain a boolean success field.")
         if payload["success"] is False:
@@ -59,3 +46,18 @@ class CkanClient(CkanClientInterface):
             return CkanPackage.model_validate(payload.get("result")).resources
         except ValidationError as error:
             raise CkanResponseError("CKAN returned invalid dataset resources.") from error
+
+    async def _package_show(self, dataset_id: str) -> object:
+        """Return the decoded JSON body of package_show for the dataset."""
+        try:
+            response = await self._client.get(
+                self._url, params={"id": dataset_id}, timeout=self._timeout, follow_redirects=True,
+            )
+        except httpx.RequestError as error:
+            raise CkanTransportError("Could not reach the CKAN API.") from error
+        if not response.is_success:
+            raise CkanHttpError(response.status_code)
+        try:
+            return response.json()
+        except ValueError as error:
+            raise CkanResponseError("CKAN did not return valid JSON.") from error
