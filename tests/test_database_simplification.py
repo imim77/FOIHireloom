@@ -21,7 +21,7 @@ from FOIHireloom.dto.job_search import JobCursorDTO, JobSearchCriteriaDTO
 from FOIHireloom.services.concrete.croatian_counties import CroatianCountyCatalog
 from FOIHireloom.services.concrete.dzs_import import DzsImportService
 from FOIHireloom.services.concrete.dzs_release_parser import DzsReleaseParser
-from FOIHireloom.services.concrete.job_sync import JobSyncService
+from FOIHireloom.services.concrete.job_sync import CountyFeedSync
 
 
 @unittest.skipUnless(os.environ.get("TEST_DATABASE_URL"), "Set TEST_DATABASE_URL for PostgreSQL integration tests")
@@ -87,15 +87,15 @@ class DatabaseSimplificationTests(unittest.IsolatedAsyncioTestCase):
                            category=None, location_text=None, municipality=None, quality_flags=(), content_hash="first")
         async with self.work() as work:
             now = await work.transaction_time()
-            ids, added, changed, unchanged = await JobSyncService._upsert_jobs(work, (job,), now)
-            self.assertEqual((added, changed, unchanged), (1, 0, 0))
-            original_id = ids[job.source_job_id]
-            _, added, changed, unchanged = await JobSyncService._upsert_jobs(work, (job,), now)
-            self.assertEqual((added, changed, unchanged), (0, 0, 1))
+            linked = await CountyFeedSync.upsert_jobs(work, (job,), now)
+            self.assertEqual((linked.added, linked.changed, linked.unchanged), (1, 0, 0))
+            original_id = linked.job_ids[job.source_job_id]
+            linked = await CountyFeedSync.upsert_jobs(work, (job,), now)
+            self.assertEqual((linked.added, linked.changed, linked.unchanged), (0, 0, 1))
             replacement = job.model_copy(update={"title": "Changed job", "content_hash": "second"})
-            ids, added, changed, unchanged = await JobSyncService._upsert_jobs(work, (replacement,), now)
-            self.assertEqual((added, changed, unchanged), (0, 1, 0))
-            self.assertEqual(ids[job.source_job_id], original_id)
+            linked = await CountyFeedSync.upsert_jobs(work, (replacement,), now)
+            self.assertEqual((linked.added, linked.changed, linked.unchanged), (0, 1, 0))
+            self.assertEqual(linked.job_ids[job.source_job_id], original_id)
             snapshots = await work.jobs.list_snapshots((job.source_job_id,))
             self.assertEqual([(s.id, s.content_hash) for s in snapshots], [(original_id, "second")])
 
