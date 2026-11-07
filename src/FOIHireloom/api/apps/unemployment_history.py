@@ -14,7 +14,7 @@ from FOIHireloom.dto.county_indicators import (
 )
 from FOIHireloom.dto.dzs import DzsSex
 
-from .labels import PROVISIONAL_NOTE, UNAVAILABLE_REASONS, month_label, sentence, source_links
+from .labels import PROVISIONAL_NOTE, UNAVAILABLE_REASONS, month_label, sentence, short_county_name, source_links
 
 TITLE = "Stopa registrirane nezaposlenosti"
 WHOSE: dict[DzsSex, str] = {"total": "", "women": " (žene)", "men": " (muškarci)"}
@@ -60,6 +60,6 @@ def change_reason(county: CountyUnemploymentHistoryDTO) -> str | None:
 
 def _county(county: CountyUnemploymentHistoryDTO) -> CountyUnemploymentHistoryViewDTO:
     return CountyUnemploymentHistoryViewDTO(
-        **county.model_dump(), short_name=county.name.removesuffix(" županija"),
+        **county.model_dump(), short_name=short_county_name(county.name),
         change_unavailable_label=change_reason(county),
     )
