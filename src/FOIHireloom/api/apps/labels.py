@@ -117,6 +117,28 @@ def day(today: date, include_expired: bool) -> str:
     return f"{'svi' if include_expired else 'aktivni'} oglasi na dan {date_label(today)}"
 
 
+def query_label(query: str | None) -> str | None:
+    """'upit „kuhar”' for a query with words; None for a blank or missing one."""
+    query = (query or "").strip()
+    return f"upit „{query}”" if query else None
+
+
+def filters_description(filters: JobSearchFiltersDTO | JobCountFiltersDTO, today: date) -> str:
+    """The query, the other filters that are set and which ads on which day, as one sentence.
+
+    "Upit „kuhar” · uz smještaj · svi oglasi na dan 30. 10. 2026."; the day
+    says whether expired ads count, so include_expired is not named again.
+    """
+    labels = [label.label for label in active_filters(filters) if label.argument != "include_expired"]
+    parts = (query_label(filters.query), *labels, day(today, filters.include_expired))
+    return sentence(" · ".join(part for part in parts if part))
+
+
+def short_county_name(name: str) -> str:
+    """"Varaždinska županija" → "Varaždinska", short enough for a chart axis or a table heading."""
+    return name.removesuffix(" županija")
+
+
 def active_filters(filters: JobSearchFiltersDTO | JobCountFiltersDTO) -> tuple[ActiveFilterDTO, ...]:
     """A label for each filter that is set, except the query, in the order of the tool arguments.
 

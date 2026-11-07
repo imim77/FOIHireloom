@@ -26,7 +26,7 @@ export function useHistoryChart(counties: CountyHistory[]) {
     return `${s.label}: ${value.rate === null ? 'nema podatka' : formatRate(value.rate)}${value.is_provisional ? ', privremeno' : ''}`
   }).join('; ')}` : ''
 
-  // The county lit orange and read out above the chart: the first one until the legend picks another.
+  // The county lit red and read out above the chart: the first one until the legend picks another.
   const n = series.length
   const [selectedIndex, setSelectedSeries] = useState(0)
   const [hoveredSeries, setHoveredSeries] = useState<number | null>(null)

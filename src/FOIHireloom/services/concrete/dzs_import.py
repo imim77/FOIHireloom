@@ -1,18 +1,20 @@
 import hashlib
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from FOIHireloom.db.uow.base import UnitOfWorkFactory
+from FOIHireloom.db.uow.base import UnitOfWork, UnitOfWorkFactory
 from FOIHireloom.dto.dzs import (
     DzsFileDTO,
+    DzsFileResponseDTO,
     DzsImportOutcomeDTO,
     DzsImportResultDTO,
     DzsReleaseDTO,
     DzsSourceDTO,
     DzsValueChangeDTO,
     DzsValueDTO,
+    DzsValueSnapshotDTO,
 )
 from FOIHireloom.exceptions import DzsError, DzsValidationError, PersistenceError
 from FOIHireloom.integrations.interfaces.dzs import DzsClientInterface
@@ -29,8 +31,7 @@ class DzsImportService(DzsImportServiceInterface):
     """Files are obtained, parsed and validated before any transaction opens;
     all values are then written in one transaction. A value is unchanged when
     its value, missing reason, provisional flag and source are all equal;
-    otherwise the row is updated and points to this import, and revised_at
-    is set when the value or missing reason changed.
+    otherwise the row is updated and points to this import.
 
     Without a uow_factory only validate_release works.
     """
@@ -81,38 +82,29 @@ class DzsImportService(DzsImportServiceInterface):
         """Return both files' bytes, appending each file's provenance as soon as it is obtained."""
         contents = []
         for role, source in (("t1", t1), ("workbook", workbook)):
-            if source.local:
-                response = await self._client.read(Path(source.location))
-            else:
-                response = await self._client.fetch(source.location)
+            response = await self._download(source)
             files.append(DzsFileDTO(
                 role=role, location=source.location, sheets=SHEETS[role],
                 sha256=hashlib.sha256(response.content).hexdigest(), size_bytes=len(response.content),
-                etag=response.etag, last_modified=response.last_modified, fetched_at=datetime.now(timezone.utc),
+                last_modified=response.last_modified, fetched_at=datetime.now(timezone.utc),
             ))
             contents.append(response.content)
         return contents[0], contents[1]
 
+    async def _download(self, source: DzsSourceDTO) -> DzsFileResponseDTO:
+        if source.local:
+            return await self._client.read(Path(source.location))
+        return await self._client.fetch(source.location)
+
     async def _apply(self, import_id: int, release: DzsReleaseDTO, files: list[DzsFileDTO]) -> DzsImportResultDTO:
         async with self._uow_factory() as work:
             now = await work.transaction_time()
-            stored_counties = {county.iso_code for county in await work.counties.list_all()}
-            missing = [county.iso_code for county in self._catalog.definitions if county.iso_code not in stored_counties]
-            if missing:
-                raise DzsError(f"Counties {', '.join(sorted(missing))} are not stored; run foihireloom-register-sources first.")
+            await self._require_counties(work)
             existing = {snapshot.key: snapshot for snapshot in await work.dzs_indicator_values.list_snapshots()}
-            new: list[DzsValueDTO] = []
-            changes: list[DzsValueChangeDTO] = []
-            for value in release.values:
-                stored = existing.get(value.key)
-                if stored is None:
-                    new.append(value)
-                elif self._content(stored) != self._content(value):
-                    revised = (stored.value, stored.missing_reason) != (value.value, value.missing_reason)
-                    changes.append(DzsValueChangeDTO(id=stored.id, value=value, revised=revised))
+            new, changes = self._differences(release.values, existing)
             unchanged = len(release.values) - len(new) - len(changes)
-            await work.dzs_indicator_values.create_many(new, import_id, now)
-            await work.dzs_indicator_values.update_many(changes, import_id, now)
+            await work.dzs_indicator_values.create_many(new, import_id)
+            await work.dzs_indicator_values.update_many(changes, import_id)
             await work.dzs_imports.finish(import_id, DzsImportOutcomeDTO(
                 status="succeeded", values_inserted=len(new), values_updated=len(changes), values_unchanged=unchanged,
                 files=tuple(files),
@@ -122,6 +114,27 @@ class DzsImportService(DzsImportServiceInterface):
             import_id=import_id, status="succeeded", files=tuple(files), series=release.series,
             values_inserted=len(new), values_updated=len(changes), values_unchanged=unchanged,
         )
+
+    async def _require_counties(self, work: UnitOfWork) -> None:
+        """Raise DzsError unless every catalog county is stored, since values reference them."""
+        stored_counties = {county.iso_code for county in await work.counties.list_all()}
+        missing = [county.iso_code for county in self._catalog.definitions if county.iso_code not in stored_counties]
+        if missing:
+            raise DzsError(f"Counties {', '.join(sorted(missing))} are not stored; run foihireloom-register-sources first.")
+
+    def _differences(
+        self, values: Sequence[DzsValueDTO], existing: Mapping[tuple, DzsValueSnapshotDTO],
+    ) -> tuple[list[DzsValueDTO], list[DzsValueChangeDTO]]:
+        """Split the release into values not stored yet and stored values whose content changed."""
+        new: list[DzsValueDTO] = []
+        changes: list[DzsValueChangeDTO] = []
+        for value in values:
+            stored = existing.get(value.key)
+            if stored is None:
+                new.append(value)
+            elif self._content(stored) != self._content(value):
+                changes.append(DzsValueChangeDTO(id=stored.id, value=value))
+        return new, changes
 
     async def _record_failure(
         self, import_id: int, status: Literal["failed", "rejected"], files: list[DzsFileDTO], errors: tuple[str, ...]

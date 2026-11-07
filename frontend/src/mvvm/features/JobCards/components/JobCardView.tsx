@@ -1,28 +1,26 @@
 // One job on a tile of the Performance chart, laid out after the reference job row (without the company logo): labels
 // for how long ago it was published and its category, the title, the employer in capitals over a slash and its
-// county, then under a rule the details in three columns, each with its icon. Animated with anime.js like the
-// Performance chart: the tile rises in after the ones before it, its labels come in, its rule draws across like the
-// chart's grid lines and the details come in one after another.
+// county, then the details on a sunken tile, each with its icon, like Dalco's spec panels, and the pill to the ad. Picking the job for a
+// comparison is the card's only red. Animated with GSAP on the DESIGN.md timings: the tile rises in after the
+// ones before it, its labels come in, then the details one after another.
 
-import { animate, stagger, utils } from 'animejs'
+import { cn } from 'cn'
 import { useId, useRef } from 'react'
-import { ExternalLinkIcon, MessageCircleIcon, type LucideIcon } from 'lucide-react'
+import { MessageCircleIcon, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card as SurfaceCard, CardContent, CardHeader } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldLabel } from '@/components/ui/field'
-import { Separator } from '@/components/ui/separator'
-import { fadeIn, finish, releaseStyles, useChartEntrance } from '../../../hooks/chart-motion'
+import { RollLabel } from '../../../components/RollLabel'
+import { clearEntrance, enter, MOTION, pop, useChartEntrance } from '../../../hooks/chart-motion'
 import { FEED_CATEGORY, sentenceCase } from '../../../utils/text'
 import { age, type DetailKind, details } from '../utils/job-format'
 import type { JobCard } from '../types'
 
-// The Performance chart's tile entrance: each tile rises 10px over 800ms after the one before it (70ms).
-const CARD_STAGGER = 70
+// Within a tile's entrance: when its labels and its details start after the tile itself.
 const LABELS_AT = 150
-const RULES_AT = 200
-const DETAILS_AT = 350
+const DETAILS_AT = 250
 
 export interface CardActions {
   // Open the advertisement on the HZZ site.
@@ -52,6 +50,9 @@ const DETAIL_ICONS: Record<DetailKind, string[]> = {
   accommodation: ['M3 10.5 12 3l9 7.5', 'M5 9v11h14V9', 'M10 20v-6h4v6'],
 }
 
+// Mono for the short values (the conditions, the age); values keep their own case, only label words go uppercase.
+const MONO_LABEL = 'font-mono text-[12px] font-normal tracking-[0.04em]'
+
 function Icon({ paths }: { paths: string[] }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
@@ -61,15 +62,31 @@ function Icon({ paths }: { paths: string[] }) {
   )
 }
 
-/** An action at the end of the label row: its icon pops when pressed. */
+/** An icon action at the end of the label row: its icon pops when pressed. */
 function Action({ label, icon: IconComponent, onClick }: { label: string; icon: LucideIcon; onClick: () => void }) {
   return (
     <Button className="icon-button" variant="outline" size="icon" type="button" title={label} aria-label={label} onClick={(event) => {
-      finish(animate(event.currentTarget.firstElementChild!, { scale: [0.7, 1], duration: 500, ease: 'outBack(2.4)',
-        onComplete: releaseStyles('transform') }))
+      pop(event.currentTarget.firstElementChild!)
       onClick()
     }}>
       <IconComponent data-icon="inline-start" aria-hidden="true" />
+    </Button>
+  )
+}
+
+/**
+ * OpenAd opens the advertisement on the HZZ site: DESIGN.md's outline pill for a secondary action, its label rolling
+ * on hover. The accessible name keeps saying where the ad opens, and starts with the visible words.
+ */
+function OpenAd({ onClick }: { onClick: () => void }) {
+  return (
+    <Button className="open-ad self-start" variant="outline" type="button" title="Otvori oglas na HZZ-u"
+      aria-label="Otvori oglas na HZZ-u" onClick={(event) => {
+        pop(event.currentTarget)
+        onClick()
+      }}>
+      <RollLabel>Otvori oglas</RollLabel>
+      <span aria-hidden="true">›</span>
     </Button>
   )
 }
@@ -92,30 +109,25 @@ export function JobCardView({ job, today, order, actions, compare }: {
 
   useChartEntrance(root, (timeline) => {
     const card = root.current!
-    const at = order * CARD_STAGGER
-    timeline.add(card, { ...fadeIn([card], 10), duration: 800, ease: 'outExpo' }, at)
+    const at = order * MOTION.readout.stagger
+    enter(timeline, [card], at, MOTION.readout)
     const all = (selector: string) => [...card.querySelectorAll<HTMLElement>(selector)]
     const labels = all('[data-slot="label"]')
-    if (labels.length) timeline.add(labels, { ...fadeIn(labels, 4), duration: 500, delay: stagger(60) }, at + LABELS_AT)
-    const rules = all('[data-slot="rule"]')
-    utils.set(rules, { scaleX: 0 })
-    timeline.add(rules, { scaleX: [0, 1], duration: 900, ease: 'outQuad', onComplete: releaseStyles('transform') },
-      at + RULES_AT)
+    enter(timeline, labels, at + LABELS_AT)
     const items = all('[data-slot="detail"]')
-    if (items.length) timeline.add(items, { ...fadeIn(items, 4), duration: 500, delay: stagger(40) }, at + DETAILS_AT)
-    return () => {
-      for (const el of [card, ...labels, ...rules, ...items]) {
-        el.style.removeProperty('opacity')
-        el.style.removeProperty('transform')
-      }
-    }
+    enter(timeline, items, at + DETAILS_AT)
+    return () => clearEntrance([card, ...labels, ...items])
   })
 
   return (
-    <SurfaceCard className="job @container min-w-0" role="article" ref={root} data-slot="job" data-id={job.id} aria-label={`${title}, ${employer}`}>
+    <SurfaceCard className={cn('job @container min-w-0 [transition:box-shadow_300ms] motion-reduce:[transition:none]',
+      compare?.checked && 'compared ring-accent-500')} role="article" ref={root} data-slot="job" data-id={job.id}
+      aria-label={`${title}, ${employer}`}>
       <CardHeader className="job-top flex min-w-0 flex-row flex-wrap items-center gap-2">
         <ul className="labels flex basis-full flex-1 flex-wrap gap-1.5 min-w-0 m-0 p-0 [list-style:none]" aria-label="Oznake">
-          {published && <li data-slot="label" className="min-w-0 max-w-full"><Badge className="label age" variant="success">{published}</Badge></li>}
+          {published && <li data-slot="label" className="min-w-0 max-w-full">
+            <Badge className={cn('label age', MONO_LABEL)} variant="success">{published}</Badge>
+          </li>}
           {job.category && (
             <li data-slot="label" className="min-w-0 max-w-full"><Badge variant={job.category_source === 'feed' ? 'provisional' : 'secondary'} className="label max-w-full" title={job.category_source === 'feed' ? FEED_CATEGORY : undefined}>
               <span className="truncate">{sentenceCase(job.category)}</span>
@@ -126,35 +138,39 @@ export function JobCardView({ job, today, order, actions, compare }: {
           <Field orientation="horizontal" className="compare-toggle w-auto shrink-0" data-disabled={compare.disabled}
             title={compare.disabled ? 'Usporediti se mogu najviše 3 oglasa' : undefined}>
             <Checkbox id={compareId} checked={compare.checked} disabled={compare.disabled}
+              className="data-checked:border-accent-500 data-checked:bg-accent-500 data-checked:text-card"
               onCheckedChange={compare.onChange} aria-label={`Usporedi oglas ${title}`} />
-            <FieldLabel htmlFor={compareId} aria-hidden="true">Usporedi</FieldLabel>
+            <FieldLabel htmlFor={compareId} aria-hidden="true" className={cn('uppercase text-fg-soft', MONO_LABEL)}>
+              Usporedi
+            </FieldLabel>
           </Field>
         )}
-        <Action label="Otvori oglas na HZZ-u" icon={ExternalLinkIcon} onClick={() => actions.open(job)} />
         {actions.ask && <Action label="Pitaj o ovom oglasu" icon={MessageCircleIcon} onClick={() => actions.ask?.(job)} />}
       </CardHeader>
       <CardContent className="flex min-w-0 flex-col gap-3">
         <div className="job-heading flex flex-col gap-1 min-w-0">
-          <h2 className="job-title m-0 text-[16px] font-semibold leading-[1.25] [overflow-wrap:anywhere]">{title}</h2>
-          <p className="employer-line m-0 text-[12px] font-medium leading-[1.25] text-fg-loud [overflow-wrap:anywhere] [&_.where]:text-fg-soft">
+          <h2 className="job-title m-0 text-[16px] font-medium leading-[1.4] tracking-[-0.01em] [overflow-wrap:anywhere]">{title}</h2>
+          <p className="employer-line m-0 text-[14px] leading-[1.5] text-fg-loud [overflow-wrap:anywhere] [&_.where]:text-fg-soft">
             <span className="employer" title={employer}>{employer}</span>
             {job.county_name && <> / <span className="where">{job.county_name}</span></>}
           </p>
         </div>
-        {items.length > 0 && <Separator className="rule origin-left" aria-hidden="true" data-slot="rule" />}
         {items.length > 0 && (
-          <ul className="details grid [grid-template-columns:repeat(3,_minmax(0,_1fr))] [gap:8px_16px] m-0 p-0 [list-style:none]
+          <ul className="details grid [grid-template-columns:repeat(3,_minmax(0,_1fr))] [gap:12px_16px] m-0 p-3
+            rounded-[10px] bg-surface-sunken [list-style:none]
             [@container(max-width:_520px)]:[grid-template-columns:repeat(2,_minmax(0,_1fr))]" aria-label="Uvjeti">
             {items.map((item) => (
-              <li key={item.kind} className={`detail flex items-center gap-2 min-w-0 text-[12px] font-medium leading-[1.25] text-fg-loud [&_svg]:flex-none
-                [&_svg]:w-4 [&_svg]:h-4 [&_svg]:text-fg-soft [&_span]:min-w-0 [&_span]:overflow-hidden
-                [&_span]:whitespace-nowrap [&_span]:text-ellipsis ${item.kind}`} data-slot="detail">
+              <li key={item.kind} className={cn('detail flex items-start gap-2 min-w-0 leading-[16px] text-fg-loud',
+                '[&_svg]:flex-none [&_svg]:size-4 [&_svg]:text-fg-soft [&_span]:min-w-0 [&_span]:line-clamp-2',
+                MONO_LABEL, item.kind)} data-slot="detail" title={item.text}>
                 <Icon paths={DETAIL_ICONS[item.kind]} />
                 <span>{item.text}</span>
               </li>
             ))}
           </ul>
         )}
+        {/* Under the text, like Dalco's "Details ›", so the card reads title, facts, then the way to the ad. */}
+        <OpenAd onClick={() => actions.open(job)} />
       </CardContent>
     </SurfaceCard>
   )

@@ -24,7 +24,9 @@ from .labels import (
     coverage_note,
     day,
     month_label,
+    query_label,
     sentence,
+    short_county_name,
     source_links,
 )
 
@@ -60,9 +62,8 @@ def county_comparison(comparison: CountyComparisonDTO) -> CountyComparisonViewDT
 
 def description(comparison: CountyComparisonDTO) -> str:
     """The query, if any, and which ads on which day: "Upit „kuhar” · aktivni oglasi na dan 2. 11. 2026."."""
-    query = (comparison.filters.query or "").strip()
-    parts = [*([f"upit „{query}”"] if query else []), day(comparison.today, comparison.filters.include_expired)]
-    return sentence(" · ".join(parts))
+    parts = (query_label(comparison.filters.query), day(comparison.today, comparison.filters.include_expired))
+    return sentence(" · ".join(part for part in parts if part))
 
 
 def value_reason(value: DzsCountyValueDTO, about: bool = False) -> str | None:
@@ -104,7 +105,7 @@ def _county(county: ComparedCountyDTO) -> ComparedCountyViewDTO:
     shown = {"unemployed", "active_population", "unemployment_rate", "unemployed_per_worker", "jobs_per_1000_active"}
     return ComparedCountyViewDTO(
         **county.model_dump(exclude=shown),
-        short_name=county.name.removesuffix(" županija"),
+        short_name=short_county_name(county.name),
         unemployed=_value(county.unemployed),
         active_population=_value(county.active_population),
         unemployment_rate=_value(county.unemployment_rate),

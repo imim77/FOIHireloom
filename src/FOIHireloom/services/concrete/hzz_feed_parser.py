@@ -78,7 +78,6 @@ class HzzFeedParser:
             source_job_id=match.group(1),
             canonical_url=CANONICAL_URL.format(match.group(1)),
             title=title,
-            description_raw=raw,
             description_text=html_to_text(decode_entities(body)),
             published_on=published_on,
             deadline_on=deadline_on,

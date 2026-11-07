@@ -6,20 +6,21 @@
 """
 
 import argparse
-import asyncio
 import json
-import sys
 from pathlib import Path
 
 from FOIHireloom.config.settings import Settings
 from FOIHireloom.dto.category_snapshot import CategorySnapshotDTO
-from FOIHireloom.exceptions import PersistenceError
 from FOIHireloom.services.dependency import DependencyService
 from FOIHireloom.services.interfaces.category_snapshot import CategorySnapshotServiceInterface
 from FOIHireloom.services.interfaces.lifecycle import ServiceOpener
 
+from .command_line import CommandLine, CommandRun
+
 
 class CategorySnapshotCommand:
+    """CategorySnapshotCommand takes the category snapshot through an injected service opener."""
+
     def __init__(self, service: ServiceOpener[CategorySnapshotServiceInterface]) -> None:
         self._open_service = service
 
@@ -36,22 +37,27 @@ def render(snapshot: CategorySnapshotDTO) -> str:
     return f'{head},\n  "jobs": [\n{rows}\n  ]\n}}\n'
 
 
+class CategorySnapshotCommandLine(CommandLine[CategorySnapshotDTO]):
+    description = "Save a reference snapshot of the job category fill and its coverage."
+    failure = "Category snapshot failed"
+
+    def _add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--out", type=Path, required=True, help="Write the JSON snapshot to this file.")
+
+    def _start(self, args: argparse.Namespace) -> CommandRun[CategorySnapshotDTO]:
+        return CategorySnapshotCommand(DependencyService(Settings()).category_snapshot_service).run()
+
+    def _report(self, args: argparse.Namespace, result: CategorySnapshotDTO) -> int:
+        try:
+            args.out.write_text(render(result), encoding="utf-8")
+        except OSError as error:
+            self._fail(f"cannot write {args.out}: {error.strerror}")
+        print(json.dumps(result.coverage.model_dump()))
+        return 0
+
+
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Save a reference snapshot of the job category fill and its coverage.")
-    parser.add_argument("--out", type=Path, required=True, help="Write the JSON snapshot to this file.")
-    args = parser.parse_args(argv)
-    try:
-        command = CategorySnapshotCommand(DependencyService(Settings()).category_snapshot_service)
-        snapshot = asyncio.run(command.run())
-    except (PersistenceError, OSError):
-        print("Category snapshot failed: check DATABASE_URL and apply Alembic migrations.", file=sys.stderr)
-        raise SystemExit(1) from None
-    try:
-        args.out.write_text(render(snapshot), encoding="utf-8")
-    except OSError as error:
-        print(f"Category snapshot failed: cannot write {args.out}: {error.strerror}", file=sys.stderr)
-        raise SystemExit(1) from None
-    print(json.dumps(snapshot.coverage.model_dump()))
+    CategorySnapshotCommandLine().main(argv)
 
 
 if __name__ == "__main__":

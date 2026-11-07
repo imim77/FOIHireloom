@@ -13,6 +13,7 @@ from FOIHireloom.exceptions import PersistenceError
 from FOIHireloom.factories.category_snapshot import CategorySnapshotServiceFactory
 from FOIHireloom.factories.county_indicators import CountyIndicatorServiceFactory
 from FOIHireloom.factories.dzs_import import DzsImportServiceFactory
+from FOIHireloom.factories.forecast_accuracy import ForecastAccuracyServiceFactory
 from FOIHireloom.factories.job_conditions import JobConditionsServiceFactory
 from FOIHireloom.factories.job_page import JobPageServiceFactory
 from FOIHireloom.factories.job_search import JobSearchServiceFactory
@@ -22,6 +23,7 @@ from FOIHireloom.factories.source_feed_registration import SourceFeedRegistratio
 from FOIHireloom.services.interfaces.category_snapshot import CategorySnapshotServiceInterface
 from FOIHireloom.services.interfaces.county_indicators import CountyIndicatorServiceInterface
 from FOIHireloom.services.interfaces.dzs_import import DzsImportServiceInterface
+from FOIHireloom.services.interfaces.forecast_accuracy import ForecastAccuracyServiceInterface
 from FOIHireloom.services.interfaces.job_conditions import JobConditionsServiceInterface
 from FOIHireloom.services.interfaces.job_page import JobPageServiceInterface
 from FOIHireloom.services.interfaces.job_search import JobSearchServiceInterface
@@ -123,6 +125,12 @@ class DependencyService:
                 return
             async with self._open_uow() as uow_factory:
                 yield factory.create(http, uow_factory)
+
+    @asynccontextmanager
+    async def forecast_accuracy_service(self) -> AsyncIterator[ForecastAccuracyServiceInterface]:
+        """Yield a read-only backtest service, sharing one model instance across every historical origin."""
+        async with self._open_uow() as uow_factory:
+            yield ForecastAccuracyServiceFactory(self._settings).create(uow_factory)
 
     @asynccontextmanager
     async def category_snapshot_service(self) -> AsyncIterator[CategorySnapshotServiceInterface]:

@@ -10,55 +10,65 @@ test('Chronos displays exact medians and intervals, preserves gaps and supports 
   county.history[4].is_estimated = true
   const { page, frame } = await open('labour-market-forecast', data)
   try {
+    // Exact values, sources and notes wait behind one details control, so the chart is the focus.
+    assert.equal(await frame.locator('[data-slot="forecast-row"], .sources, .notes').count(), 0)
+    await frame.getByRole('button', { name: 'Detalji, izvori i napomene' }).click()
     assert.equal(await frame.locator('[data-slot="forecast-row"]').count(), county.forecast.length)
-    assert.equal(await frame.locator('[data-slot="forecast-band"]').count(), 1)
+    assert.equal(await frame.locator('.sources').count(), 1)
+    assert.equal(await frame.locator('.forecast-band .recharts-area-area').count(), 1)
     assert.equal(await frame.locator('[data-slot="history-node"]').count(), county.history.length - 1)
-    assert.equal(await frame.locator(`[data-slot="history-segment"][data-from="${county.history[2].period}"]`).count(), 0)
-    assert.equal(await frame.locator(`[data-slot="history-segment"][data-from="${county.history[3].period}"]`).count(), 0)
+    // No history line crosses the missing month; the estimated month starts a dashed run.
+    const runs = await frame.locator('[data-slot="history-run"]').evaluateAll((paths) =>
+      paths.map((p) => ({ from: p.dataset.from, to: p.dataset.to, flagged: p.dataset.flagged === 'true' })))
+    const gap = county.history[3].period
+    assert.ok(runs.length > 1 && runs.every((run) => !(run.from <= gap && gap <= run.to)))
+    assert.ok(runs.some((run) => run.flagged && run.from === county.history[4].period))
     const slider = frame.getByRole('slider', { name: 'Mjesec prognoze' })
     await slider.focus()
     await slider.press('Home')
     await frame.waitForFunction(() => document.querySelector('[data-slot="forecast-cursor"]').dataset.period === '2026-10-01')
     assert.match(await frame.locator('[data-slot="forecast-median"]').textContent(), /2,6.*%/)
     assert.match(await frame.locator('[data-slot="forecast-interval"]').textContent(), /2,3.*2,9.*80%/)
+    // One sentence carries the interval and the change against the last observed value.
+    assert.match(await frame.locator('[data-slot="forecast-summary"]').textContent(),
+      /\+0,1\s?p\.\s?b\. u odnosu na rujan 2026\. \(privremeno\)/)
     await slider.press('ArrowRight')
     await frame.waitForFunction(() => document.querySelector('[data-slot="forecast-cursor"]').dataset.period === '2026-11-01')
     // Hover previews the last period, leaving falls back to the selection, a click selects.
     const cursor = (period) => frame.waitForFunction((period) =>
       document.querySelector('[data-slot="forecast-cursor"]').dataset.period === period, period)
     const plot = await frame.locator('.forecast-plot').boundingBox()
-    await page.mouse.move(plot.x + plot.width - 2, plot.y + plot.height / 2)
+    await page.mouse.move(plot.x + plot.width - 8, plot.y + plot.height / 2)
     await cursor('2027-03-01')
     assert.match(await frame.locator('[data-slot="forecast-median"]').textContent(), /2,7.*%/)
     assert.match(await frame.locator('[data-slot="forecast-period"]').textContent(), /ožujak 2027/)
     assert.match(await slider.getAttribute('aria-valuetext'), /studeni 2026/)
     await page.mouse.move(plot.x + plot.width / 2, plot.y - 200)
     await cursor('2026-11-01')
-    await page.mouse.click(plot.x + plot.width - 2, plot.y + plot.height / 2)
+    await page.mouse.click(plot.x + plot.width - 8, plot.y + plot.height / 2)
     await page.mouse.move(plot.x + plot.width / 2, plot.y - 200)
     await cursor('2027-03-01')
     assert.match(await slider.getAttribute('aria-valuetext'), /ožujak 2027/)
-    await frame.getByText('Povijesni podaci (24)', { exact: true }).click()
     assert.ok(await frame.getByRole('region', { name: 'Povijesne vrijednosti' }).getByText('procijenjeno', { exact: true }).count())
-    // Grey history, dashed orange projection, in both themes.
+    // Grey history, dashed red projection, in both themes.
     const strokes = () => frame.evaluate(() => ({
-      history: getComputedStyle(document.querySelector('.forecast-observed')).stroke,
-      forecast: getComputedStyle(document.querySelector('.forecast-predicted')).stroke,
-      dashed: document.querySelector('.forecast-predicted').getAttribute('stroke-dasharray') !== null,
+      history: getComputedStyle(document.querySelector('.forecast-observed .recharts-curve')).stroke,
+      forecast: getComputedStyle(document.querySelector('.forecast-predicted .recharts-curve')).stroke,
+      dashed: document.querySelector('.forecast-predicted .recharts-curve').getAttribute('stroke-dasharray') !== null,
     }))
-    assert.deepEqual(await strokes(), { history: 'rgb(113, 113, 122)', forecast: 'rgb(242, 100, 25)', dashed: true })
+    assert.deepEqual(await strokes(), { history: 'rgb(110, 110, 110)', forecast: 'rgb(251, 41, 14)', dashed: true })
     await page.evaluate(() => window.setTheme('dark'))
     await frame.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
-    assert.deepEqual(await strokes(), { history: 'rgb(161, 161, 170)', forecast: 'rgb(242, 100, 25)', dashed: true })
-    // The dark wash mixes the saturated orange, so the interval reads orange rather than brown on the dark card.
-    assert.match(await frame.evaluate(() => getComputedStyle(document.querySelector('[data-slot="forecast-band"]')).fill),
-      /0\.94902 0\.392157 0\.0980392 \/ 0\.45\)$/)
+    assert.deepEqual(await strokes(), { history: 'rgb(154, 154, 154)', forecast: 'rgb(251, 41, 14)', dashed: true })
+    // The dark wash mixes the saturated red, so the interval reads red rather than muddy on the dark card.
+    assert.match(await frame.evaluate(() => getComputedStyle(document.querySelector('.forecast-band .recharts-area-area')).fill),
+      /0\.984314 0\.160784 0\.054902 \/ 0\.4\)$/)
     const replacement = { ...data, title: 'Prognoza nije dostupna', unavailable_label: 'Potrebna su 24 mjeseca podataka.',
       counties: [{ ...county, forecast: [], change_to_horizon: null, unavailable_reason: 'not_enough_history' }] }
     await deliver(page, frame, replacement)
     await frame.getByText(replacement.unavailable_label, { exact: true }).waitFor()
     assert.equal(await frame.getByRole('slider').count(), 0)
-    assert.equal(await frame.locator('[data-slot="forecast-row"], [data-slot="forecast-band"]').count(), 0)
+    assert.equal(await frame.locator('[data-slot="forecast-row"], .forecast-band').count(), 0)
     assert.ok(await frame.locator('[data-slot="history-node"]').count())
   } finally { await page.close() }
 })

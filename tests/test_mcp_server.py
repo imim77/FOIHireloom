@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import socket
@@ -6,6 +7,7 @@ import unittest
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, date, datetime
+from pathlib import Path
 from unittest import mock
 
 import httpx
@@ -147,7 +149,8 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(tools), {"search_jobs", "show_jobs", "job_market_stats", "show_jobs_by_county", "get_job",
                                       "compare_jobs", "show_job_comparison", "list_regions", "list_categories",
                                       "compare_counties", "show_county_comparison", "unemployment_history",
-                                      "show_unemployment_history", "show_accommodation_comparison", "forecast_labour_market"})
+                                      "show_unemployment_history", "show_accommodation_comparison",
+                                      "forecast_labour_market", "show_labour_market_forecast"})
         for tool in tools.values():
             with self.subTest(tool=tool.name):
                 self.assertTrue(tool.annotations.readOnlyHint)
@@ -157,8 +160,30 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("ctx", tools["search_jobs"].inputSchema["properties"])
         self.assertEqual(tools["search_jobs"].inputSchema["properties"]["limit"]["maximum"], 20)
         self.assertEqual(tools["job_market_stats"].inputSchema["properties"]["top"]["maximum"], 50)
-        # The data tool has no view; show_job_comparison draws it.
-        self.assertNotIn("ui", tools["compare_jobs"].meta or {})
+        # Apps can still call raw endpoints; model routing prefers their complete workflows.
+        for name in ("search_jobs", "compare_jobs", "compare_counties", "unemployment_history", "forecast_labour_market"):
+            self.assertEqual(tools[name].meta["ui"]["visibility"], ["app"])
+            self.assertNotIn("resourceUri", tools[name].meta["ui"])
+
+    async def test_routing_cases_target_model_visible_tools_with_valid_arguments(self) -> None:
+        cases_path = Path(__file__).resolve().parents[1] / "evals" / "tool-routing-cases.json"
+        cases = json.loads(cases_path.read_text())
+        self.assertEqual(len({case["id"] for case in cases}), len(cases))
+        async with Client(self.server) as client:
+            tools = {tool.name: tool for tool in await client.list_tools()}
+        visible = {name for name, tool in tools.items()
+                   if "model" in (tool.meta or {}).get("ui", {}).get("visibility", ["model", "app"])}
+        self.assertEqual(visible, {"show_jobs", "show_jobs_by_county", "show_accommodation_comparison",
+                                   "show_job_comparison", "show_county_comparison", "show_unemployment_history",
+                                   "get_job", "job_market_stats", "list_regions", "list_categories",
+                                   "show_labour_market_forecast"})
+        for name in visible:
+            if name.startswith("show_"):
+                self.assertTrue(tools[name].meta["ui"]["resourceUri"].startswith("ui://"))
+        for case in cases:
+            with self.subTest(case=case["id"]):
+                self.assertIn(case["tool"], visible)
+                validate(case["arguments"], tools[case["tool"]].inputSchema)
 
     async def test_all_seven_job_filters_publish_skill_codes_and_reject_unknown_skills(self) -> None:
         from FOIHireloom.domain.skill_catalog import SKILL_PATTERNS
@@ -299,8 +324,8 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tool.inputSchema, tools["compare_jobs"].inputSchema)
         self.assertTrue(tool.annotations.readOnlyHint and tool.annotations.idempotentHint)
         description = " ".join(tool.description.split())
-        for expected in ("use compare_jobs when only the data is needed", "never guessed or inferred",
-                         "never that the employer will accept the user", "report 'unknown' as unknown"):
+        for expected in ("Call directly", "never guessed or inferred",
+                         "never that the employer will accept the user", "Report 'unknown' as unknown"):
             with self.subTest(expected=expected):
                 self.assertIn(expected, description)
         self.assertIn("show_job_comparison", " ".join(tools["compare_jobs"].description.split()))
@@ -506,7 +531,7 @@ class McpHttpTransportTests(unittest.IsolatedAsyncioTestCase):
     async def test_tools_and_health_are_served_over_http(self) -> None:
         base = await self.serve(MCP_PATH="/tools")
         async with Client(f"{base}/tools") as client:
-            self.assertEqual(len(await client.list_tools()), 15)
+            self.assertEqual(len(await client.list_tools()), 16)
             page = (await client.call_tool("search_jobs", {"query": "kuhar"})).structured_content
         self.assertEqual(page["jobs"][0]["title"], "KUHAR/KUHARICA")
         async with httpx.AsyncClient() as http:

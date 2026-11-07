@@ -48,10 +48,10 @@ test('all standalone previews render with shared styling and both themes at mobi
       }
       await page.evaluate(() => { document.documentElement.dataset.theme = 'dark' })
       assert.equal(await page.locator('.card').evaluate((card) => getComputedStyle(card).color),
-        'rgb(250, 250, 250)', view)
+        'rgb(244, 244, 244)', view)
       await page.evaluate(() => { document.documentElement.dataset.theme = 'light' })
       assert.equal(await page.locator('.card').evaluate((card) => getComputedStyle(card).color),
-        'rgb(24, 24, 27)', view)
+        'rgb(25, 25, 25)', view)
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, view)
     } finally { await page.close() }
   }
@@ -64,6 +64,8 @@ test('source callbacks open the requested URLs through the host', async () => {
   ]) {
     const { page, frame } = await open(view, data)
     try {
+      // The forecast keeps its sources behind its details control.
+      if (view === 'labour-market-forecast') await frame.getByRole('button', { name: 'Detalji, izvori i napomene' }).click()
       const source = frame.locator('.sources button').first()
       const url = await source.getAttribute('title')
       await source.click()

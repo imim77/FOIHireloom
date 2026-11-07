@@ -28,6 +28,9 @@ export function formatPoints(value: number): string {
 
 const MONTHS = ['siječanj', 'veljača', 'ožujak', 'travanj', 'svibanj', 'lipanj', 'srpanj', 'kolovoz', 'rujan',
   'listopad', 'studeni', 'prosinac']
+// The genitive, for "do ožujka 2027." and other phrases after a preposition.
+const MONTHS_GENITIVE = ['siječnja', 'veljače', 'ožujka', 'travnja', 'svibnja', 'lipnja', 'srpnja', 'kolovoza',
+  'rujna', 'listopada', 'studenoga', 'prosinca']
 const SHORT_MONTHS = ['sij', 'velj', 'ožu', 'tra', 'svi', 'lip', 'srp', 'kol', 'ruj', 'lis', 'stu', 'pro']
 
 // A month as the tools give it, by its first day ("2026-09-01"), read without time zones.
@@ -37,6 +40,12 @@ const monthOf = (iso: string) => ({ year: Number(iso.slice(0, 4)), month: Number
 export function formatMonth(iso: string): string {
   const { year, month } = monthOf(iso)
   return `${MONTHS[month - 1]} ${year}.`
+}
+
+/** "2027-03-01" → "ožujka 2027.", the month in the genitive, as after "do" or "od". */
+export function formatMonthGenitive(iso: string): string {
+  const { year, month } = monthOf(iso)
+  return `${MONTHS_GENITIVE[month - 1]} ${year}.`
 }
 
 /** "2026-09-01" → "ruj", or with the year "ruj 2026.", for an axis. */

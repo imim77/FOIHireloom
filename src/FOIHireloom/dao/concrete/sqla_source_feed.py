@@ -1,8 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import ColumnElement, select
 
 from FOIHireloom.db.models import SourceFeed
 from FOIHireloom.db.models.source_feed import SYNCED_SCOPES
@@ -16,33 +15,18 @@ from FOIHireloom.dto.source_feed import (
 from FOIHireloom.exceptions import NotFoundError
 from FOIHireloom.dao.interfaces.source_feed import SourceFeedRepository
 
+from .sqla_base import SqlAlchemyRepository
 
-class SqlAlchemySourceFeedRepository(SourceFeedRepository):
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
 
+class SqlAlchemySourceFeedRepository(SqlAlchemyRepository, SourceFeedRepository):
     async def get_by_id(self, feed_id: int) -> SourceFeed | None:
-        statement = select(SourceFeed).where(
-            SourceFeed.scope.in_(SYNCED_SCOPES),
-            SourceFeed.id == feed_id,
-        )
-        result = await self._session.execute(statement)
-        return result.scalar_one_or_none()
+        return await self._find_synced(SourceFeed.id == feed_id)
 
     async def get_by_ckan_resource_id(self, resource_id: UUID) -> SourceFeed | None:
-        statement = select(SourceFeed).where(
-            SourceFeed.scope.in_(SYNCED_SCOPES),
-            SourceFeed.ckan_resource_id == resource_id,
-        )
-        result = await self._session.execute(statement)
-        return result.scalar_one_or_none()
+        return await self._find_synced(SourceFeed.ckan_resource_id == resource_id)
 
     async def get_by_feed_url(self, feed_url: str) -> SourceFeed | None:
-        statement = select(SourceFeed).where(
-            SourceFeed.scope.in_(SYNCED_SCOPES), SourceFeed.feed_url == feed_url
-        )
-        result = await self._session.execute(statement)
-        return result.scalar_one_or_none()
+        return await self._find_synced(SourceFeed.feed_url == feed_url)
 
     async def list_enabled(self) -> list[SourceFeed]:
         statement = (
@@ -70,9 +54,7 @@ class SqlAlchemySourceFeedRepository(SourceFeedRepository):
         return SourceFeedDTO.model_validate(entity)
 
     async def update(self, feed_id: int, changes: SourceFeedUpdateDTO) -> SourceFeedDTO:
-        feed = await self.get_by_id(feed_id)
-        if feed is None:
-            raise NotFoundError("source feed", str(feed_id))
+        feed = await self._require(feed_id)
         if feed.scope != changes.scope:
             raise ValueError("A source feed cannot change its scope.")
         feed.county_id, feed.ckan_resource_id = changes.county_id, changes.ckan_resource_id
@@ -85,9 +67,7 @@ class SqlAlchemySourceFeedRepository(SourceFeedRepository):
         return SourceFeedDTO.model_validate(feed)
 
     async def record_check(self, feed_id: int, check: FeedCheckDTO, checked_at: datetime) -> None:
-        feed = await self.get_by_id(feed_id)
-        if feed is None:
-            raise NotFoundError("source feed", str(feed_id))
+        feed = await self._require(feed_id)
         feed.last_checked_at = checked_at
         if check.succeeded:
             feed.last_success_at = checked_at
@@ -99,9 +79,7 @@ class SqlAlchemySourceFeedRepository(SourceFeedRepository):
     async def record_category_mapping(
         self, feed_id: int, mapping: FeedCategoryMappingDTO, verified_at: datetime
     ) -> None:
-        feed = await self.get_by_id(feed_id)
-        if feed is None:
-            raise NotFoundError("source feed", str(feed_id))
+        feed = await self._require(feed_id)
         if feed.scope != "occupation":
             raise ValueError("Only occupation feeds have a category mapping.")
         feed.mapped_category, feed.mapping_status = mapping.category, mapping.status
@@ -109,3 +87,14 @@ class SqlAlchemySourceFeedRepository(SourceFeedRepository):
         feed.mapping_contradicting_examples = mapping.contradicting_examples
         feed.mapping_verified_at = verified_at
         await self._session.flush()
+
+    async def _find_synced(self, condition: ColumnElement[bool]) -> SourceFeed | None:
+        """Return the county or occupation feed matching condition; other scopes stay hidden."""
+        result = await self._session.execute(select(SourceFeed).where(SourceFeed.scope.in_(SYNCED_SCOPES), condition))
+        return result.scalar_one_or_none()
+
+    async def _require(self, feed_id: int) -> SourceFeed:
+        feed = await self.get_by_id(feed_id)
+        if feed is None:
+            raise NotFoundError("source feed", str(feed_id))
+        return feed

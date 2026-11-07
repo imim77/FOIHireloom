@@ -1,6 +1,5 @@
-import { stagger } from 'animejs'
 import { useRef } from 'react'
-import { fadeIn, useChartEntrance } from './chart-motion'
+import { clearEntrance, EASE, fadeIn, s, useChartEntrance } from './chart-motion'
 
 const HEAD_STAGGER = 70
 const ROWS_AT = 250
@@ -12,17 +11,12 @@ export function useComparisonEntrance(column: 'job' | 'county', rowStagger: numb
   useChartEntrance(root, (timeline) => {
     const all = (selector: string) => [...root.current!.querySelectorAll<HTMLElement>(selector)]
     const heads = all(`[data-slot="${column}"]`)
-    timeline.add(heads, { ...fadeIn(heads, 10), duration: 800, ease: 'outExpo', delay: stagger(HEAD_STAGGER) }, 0)
+    if (heads.length) timeline.to(heads, { ...fadeIn(heads, 10), duration: s(800), ease: EASE.arrive, stagger: s(HEAD_STAGGER) }, 0)
     // A row's heading and cells come in together, each row after the one above.
     const cells = all('[data-row]')
-    timeline.add(cells, { ...fadeIn(cells, 4), duration: 500, delay: (target?: unknown) =>
-      Number((target as HTMLElement | undefined)?.dataset.row ?? 0) * rowStagger }, ROWS_AT)
-    return () => {
-      for (const el of [...heads, ...cells]) {
-        el.style.removeProperty('opacity')
-        el.style.removeProperty('transform')
-      }
-    }
+    if (cells.length) timeline.to(cells, { ...fadeIn(cells, 4), duration: s(500),
+      stagger: (_index: number, target: HTMLElement) => s(Number(target.dataset.row ?? 0) * rowStagger) }, s(ROWS_AT))
+    return () => clearEntrance([...heads, ...cells])
   })
 
   return root

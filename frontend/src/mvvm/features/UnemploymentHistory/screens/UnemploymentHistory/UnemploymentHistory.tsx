@@ -5,28 +5,28 @@ import { Badge } from '@/components/ui/badge'
 // same month a year earlier; the focused county's tile is marked like its curve. The tiles fade in one after another
 // once the lines have drawn in.
 
-import { stagger } from 'animejs'
 import { useRef } from 'react'
 import { Card, Notes, Warning } from '../../../../components/Card'
-import { fadeIn, useChartEntrance } from '../../../../hooks/chart-motion'
+import { clearEntrance, enter, MOTION, useChartEntrance } from '../../../../hooks/chart-motion'
 import { formatDay, formatMonth, formatPoints, formatRate, plural } from '../../../../utils/format'
 import { Sources } from '../../../../components/Sources'
 import { UnemploymentGrowthChart } from '../../components/UnemploymentGrowthChart'
 import type { CountyHistory, UnemploymentHistoryData } from '../../types'
 import type { useHistoryChart } from '../../hooks/use-history-chart'
 
-const TILES_AT = 700
-const TILE_STAGGER = 80
+const EYEBROW = 'Nezaposlenost'
+// The tiles come in once the curves are half drawn.
+const TILES_AT = MOTION.marks.at + MOTION.marks.duration / 2
 
 export function UnemploymentHistory({ data, chart, onOpenLink }: {
   data: UnemploymentHistoryData | null
   chart: ReturnType<typeof useHistoryChart>
   onOpenLink: (url: string) => void
 }) {
-  if (!data) return <Card title="Stopa registrirane nezaposlenosti" description="Učitavanje…" loading />
+  if (!data) return <Card eyebrow={EYEBROW} title="Stopa registrirane nezaposlenosti" description="Učitavanje…" loading />
   const charted = data.counties.some((county) => county.series.length)
   return (
-    <Card title={data.title} description={data.description}>
+    <Card eyebrow={EYEBROW} title={data.title} description={data.description}>
       {charted ? <History chart={chart} data={data} onOpenLink={onOpenLink} /> : (
         <>
           <Warning text={data.unavailable_label ?? 'Podaci o nezaposlenosti nisu dostupni.'} />
@@ -47,13 +47,8 @@ function History({ data, chart, onOpenLink }: {
 
   useChartEntrance(root, (timeline) => {
     const tiles = [...root.current!.querySelectorAll<HTMLElement>('[data-slot="tile"]')]
-    timeline.add(tiles, { ...fadeIn(tiles, 10), duration: 700, ease: 'outExpo', delay: stagger(TILE_STAGGER) }, TILES_AT)
-    return () => {
-      for (const el of tiles) {
-        el.style.removeProperty('opacity')
-        el.style.removeProperty('transform')
-      }
-    }
+    enter(timeline, tiles, TILES_AT, { ...MOTION.readout, stagger: MOTION.marks.stagger })
+    return () => clearEntrance(tiles)
   })
 
   return (
@@ -73,25 +68,28 @@ function Tile({ county, lit }: { county: CountyHistory; lit: boolean }) {
   const missing = county.series.filter((point) => point.rate === null).length
   const direction = change === null ? null : change < 0 ? 'down' : change > 0 ? 'up' : 'same'
   return (
-    <section className="tile flex flex-col gap-2 min-w-0 p-3 rounded-[14px] bg-surface-sunken [&_p]:m-0 [&_>_.soft]:font-normal
+    <section className="tile flex flex-col gap-2 min-w-0 p-3 rounded-[10px] bg-surface-sunken [&_p]:m-0 [&_>_.soft]:font-normal
       [&_>_.soft]:leading-[1.35]" data-slot="tile" data-lit={lit} aria-label={county.name}>
-      <p className="tile-name flex items-center gap-2 text-[14px] font-semibold">
+      <p className="tile-name flex items-center gap-2 text-[14px] font-medium">
         <span className={cn('swatch h-[3px] w-3 flex-none rounded-[2px] transition-colors duration-300 motion-reduce:transition-none',
-          lit ? 'bg-orange-500' : 'bg-surface-disable')} aria-hidden="true" />{county.name}</p>
+          lit ? 'bg-accent-500' : 'bg-surface-disable')} aria-hidden="true" />{county.name}</p>
       {latest && (
         <div className="tile-latest flex flex-col gap-1.5 [&_.soft]:flex [&_.soft]:items-center [&_.soft]:gap-1.5">
-          <p className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft">
-            {formatMonth(latest.period)}
+          {/* The badge keeps its own case, as in the readout; the month never breaks. */}
+          <p className="soft m-0 flex-wrap mono-label text-fg-soft">
+            <span className="whitespace-nowrap uppercase">{formatMonth(latest.period)}</span>
             {latest.is_provisional && <Badge variant="provisional" className="provisional">privremeno</Badge>}
           </p>
-          <p className={latest.rate === null ? "tile-missing text-[14px] italic text-fg-soft" : "big m-0 text-[16px] font-semibold leading-[1.25] whitespace-nowrap tabular-nums"}>
+          <p className={latest.rate === null ? "tile-missing text-[14px] italic text-fg-soft" : "big m-0 font-mono text-[16px] font-medium leading-[1.25] whitespace-nowrap"}>
             {latest.rate === null ? 'nema podatka' : formatRate(latest.rate)}
           </p>
         </div>
       )}
       {before && (
-        <p className="tile-before text-[12px] text-fg-soft tabular-nums">
-          {formatMonth(before.period)}: {before.rate === null ? 'nema podatka' : formatRate(before.rate)}
+        <p className="tile-before mono-label text-fg-soft">
+          {/* The rate keeps its unit's own case; the month and "nema podatka" are label words. */}
+          <span className="uppercase">{formatMonth(before.period)}:</span>{' '}
+          {before.rate === null ? <span className="uppercase">nema podatka</span> : formatRate(before.rate)}
         </p>
       )}
       {change !== null ? (

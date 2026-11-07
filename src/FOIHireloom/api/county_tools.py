@@ -1,9 +1,6 @@
-from collections.abc import Awaitable
 from typing import Annotated
 
 from fastmcp import Context, FastMCP
-from fastmcp.apps import AppConfig
-from fastmcp.exceptions import ToolError
 from pydantic import Field
 
 from FOIHireloom.dto.county_indicators import (
@@ -22,7 +19,7 @@ from FOIHireloom.dto.county_indicators import (
 )
 from FOIHireloom.dto.dzs import DzsSex
 from FOIHireloom.dto.job_market import JobCountFiltersDTO
-from FOIHireloom.exceptions import InvalidIndicatorRequestError, InvalidJobSearchError, PersistenceError
+from FOIHireloom.exceptions import InvalidIndicatorRequestError, InvalidJobSearchError
 from FOIHireloom.services.interfaces.county_indicators import CountyIndicatorServiceInterface
 
 from .apps import county_comparison
@@ -30,8 +27,8 @@ from .apps import unemployment_history as history_view
 from .apps.labels import active_filters
 from .apps.views import COUNTY_COMPARISON, UNEMPLOYMENT_HISTORY
 from .job_filters import (
-    CATEGORY_DESCRIPTION,
     Accommodation,
+    Category,
     ContractFilter,
     Education,
     EmploymentTags,
@@ -41,7 +38,7 @@ from .job_filters import (
     SearchQuery,
     Skills,
 )
-from .tool_provider import READ_ONLY, ToolGroup
+from .tool_provider import DATA_ONLY, ServiceToolGroup, tool_arguments
 
 # Key of the indicator service in the server's lifespan context.
 COUNTY_INDICATOR_SERVICE = "county_indicator_service"
@@ -54,7 +51,6 @@ ComparedCounties = Annotated[list[CountyLabel], Field(
     description=f"{MIN_COMPARED_COUNTIES} to {MAX_COMPARED_COUNTIES} different counties to compare, as codes or names "
                 "from list_regions, e.g. ['varazdinska', 'medimurska'], in the order to show them.",
 )]
-CountyCategory = Annotated[str | None, Field(description=CATEGORY_DESCRIPTION)]
 CountyIncludeExpired = Annotated[bool, Field(
     description="Also count jobs whose application deadline has passed in filtered_jobs.",
 )]
@@ -76,14 +72,12 @@ HistoryMonths = Annotated[int, Field(
                 "for every requested county.",
 )]
 HistorySex = Annotated[DzsSex, Field(description="Whose unemployment rate: 'total', 'women' or 'men'.")]
-DATA_ONLY = AppConfig(visibility=["app"])
 
 
-class CountyIndicatorTools(ToolGroup):
-    """MCP tools comparing counties by HZZ job ads and DZS registered unemployment, with and without a view.
+class CountyToolGroup(ServiceToolGroup[CountyIndicatorServiceInterface]):
+    """CountyToolGroup is a group of MCP tools over HZZ job ads and DZS registered unemployment by county.
 
-    Tools only translate arguments and errors; CountyIndicatorService holds
-    the rules. The server's lifespan must provide the service under
+    The server's lifespan must provide CountyIndicatorService under
     COUNTY_INDICATOR_SERVICE.
 
     The data-only tools are visible to apps, not to the model: Claude picked
@@ -92,188 +86,152 @@ class CountyIndicatorTools(ToolGroup):
     visibility and list both.
     """
 
+    _service_key = COUNTY_INDICATOR_SERVICE
+    _caller_errors = (InvalidIndicatorRequestError, InvalidJobSearchError)
+    _unavailable_message = "County data is temporarily unavailable; try again later."
+
+
+class CountyComparisonTools(CountyToolGroup):
+    """CountyComparisonTools compare 2 to 6 counties by job demand and registered unemployment."""
+
     def register(self, server: FastMCP) -> None:
-        @server.tool(app=DATA_ONLY, annotations=READ_ONLY)
-        async def compare_counties(
-            ctx: Context,
-            counties: ComparedCounties,
-            query: SearchQuery = None,
-            category: CountyCategory = None,
-            max_experience_months: MaxExperienceMonths = None,
-            contract: ContractFilter = None,
-            full_time: FullTime = None,
-            education: Education = None,
-            accommodation: Accommodation = None,
-            employment_tags: EmploymentTags = None,
-            place: Place = None,
-            skills: Skills = None,
-            include_expired: CountyIncludeExpired = False,
-            period: Period = None,
-        ) -> CountyComparisonDTO:
-            """Return the data of a comparison of 2 to 6 Croatian counties, without a view.
+        self._add_tool(server, self.compare_counties, app=DATA_ONLY)
+        self._add_tool(server, self.show_county_comparison, app=COUNTY_COMPARISON.app_config)
 
-            When the user asks to compare counties, call show_county_comparison
-            instead: it returns the same data and also shows it. Use this tool
-            only when you need the numbers without showing them, e.g. to choose
-            counties before showing a comparison. Per county:
-            filtered_jobs counts the HZZ ads matching the job filters, which
-            work as in job_market_stats: jobs, workers_needed with
-            workers_needed_coverage (ads stating the number out of all; an
-            unknown number is not 0), permanent_share (permanent contracts out
-            of the ads whose contract is known; whole is that denominator)
-            with contract_coverage, and closing_soon (deadline within
-            window_days days). all_active_jobs are the same counts over every
-            active ad of the county, ignoring the filters.
-            unemployed, active_population and unemployment_rate are DZS values
-            for their reference month (period, first day of the month), with
-            is_provisional.
+    async def compare_counties(
+        self,
+        ctx: Context,
+        counties: ComparedCounties,
+        query: SearchQuery = None,
+        category: Category = None,
+        max_experience_months: MaxExperienceMonths = None,
+        contract: ContractFilter = None,
+        full_time: FullTime = None,
+        education: Education = None,
+        accommodation: Accommodation = None,
+        employment_tags: EmploymentTags = None,
+        place: Place = None,
+        skills: Skills = None,
+        include_expired: CountyIncludeExpired = False,
+        period: Period = None,
+    ) -> CountyComparisonDTO:
+        """App-only county data endpoint. For user county comparisons use show_county_comparison.
 
-            The two indicators describe each county as a whole, never one
-            occupation: unemployed_per_worker is registered unemployed divided
-            by all_active_jobs.workers_needed, and jobs_per_1000_active is
-            all_active_jobs.jobs per 1,000 active population. They do not use
-            the job filters; report the filtered counts next to them, never
-            divide the unemployed by one occupation's ads. Each gives the
-            numerator and denominator used. A null value has an
-            unavailable_reason: 'no_dzs_data' (no DZS import),
-            'no_common_period', 'dzs_value_missing' (no value for that month;
-            another month is never substituted), 'no_hzz_data' (the county's
-            HZZ feeds were never loaded), 'no_known_workers' or
-            'zero_denominator'. Say "the indicator is not available" and why;
-            never show 0 or infinity instead.
+        show_county_comparison returns the same HZZ/DZS data with an automatic
+        comparison, even without a request for a table or chart. This endpoint
+        remains callable by apps consuming raw county data. Compare 2 to 6 distinct
+        county codes or names. Job filters apply only to filtered_jobs; the
+        indicators always use all_active_jobs. Missing values remain null with
+        unavailable_reason. Preserve HZZ check times, DZS reference periods,
+        sources and provisional flags; indicators describe county-wide statistics.
+        """
+        filters = JobCountFiltersDTO(**tool_arguments(locals(), "counties", "period"))
+        return await self._compare(ctx, counties, filters, period)
 
-            dzs_periods gives each DZS indicator's month, which may differ
-            between indicators. HZZ counts are as of hzz_coverage.data_as_of
-            and DZS values for a past month; tell the user both dates. Name
-            the sources, mark 2026 months as provisional and pass on the
-            notes, in particular that the indicators describe HZZ ads and
-            registered unemployment, not the whole labour market or anyone's
-            chance of employment. When hzz_coverage.warning is set, tell the
-            user the HZZ counts may be outdated or incomplete. active_filters
-            are the Croatian labels of the set filters.
-            """
-            filters = JobCountFiltersDTO(
-                query=query, category=category, max_experience_months=max_experience_months, contract=contract,
-                full_time=full_time, education=education, accommodation=accommodation,
-                employment_tags=employment_tags, place=place, skills=skills, include_expired=include_expired,
-            )
-            return await self._compare(ctx, counties, filters, period)
+    async def show_county_comparison(
+        self,
+        ctx: Context,
+        counties: ComparedCounties,
+        query: SearchQuery = None,
+        category: Category = None,
+        max_experience_months: MaxExperienceMonths = None,
+        contract: ContractFilter = None,
+        full_time: FullTime = None,
+        education: Education = None,
+        accommodation: Accommodation = None,
+        employment_tags: EmploymentTags = None,
+        place: Place = None,
+        skills: Skills = None,
+        include_expired: CountyIncludeExpired = False,
+        period: Period = None,
+    ) -> CountyComparisonViewDTO:
+        """Compare job demand and registered unemployment in 2 to 6 Croatian counties.
 
-        @server.tool(app=AppConfig(resource_uri=COUNTY_COMPARISON.uri), annotations=READ_ONLY)
-        async def show_county_comparison(
-            ctx: Context,
-            counties: ComparedCounties,
-            query: SearchQuery = None,
-            category: CountyCategory = None,
-            max_experience_months: MaxExperienceMonths = None,
-            contract: ContractFilter = None,
-            full_time: FullTime = None,
-            education: Education = None,
-            accommodation: Accommodation = None,
-            employment_tags: EmploymentTags = None,
-            place: Place = None,
-            skills: Skills = None,
-            include_expired: CountyIncludeExpired = False,
-            period: Period = None,
-        ) -> CountyComparisonViewDTO:
-            """Show the user 2 to 6 Croatian counties side by side by HZZ job ads and DZS registered unemployment.
+        DEFAULT when the user compares named counties or asks about county-wide
+        unemployment relative to jobs: "Usporedi Istru i Varaždinsku", "Kakva je
+        potražnja za kuharima u Varaždinskoj i Međimurskoj?" or "Compare jobs and
+        unemployment in Zagreb and Split-Dalmatia". Call directly; the user does
+        not need to say "tablica", "graf", "prikaži" or pick a format.
+        Automatically presents a county comparison and returns its data.
 
-            Use it whenever the user asks to compare counties, e.g. "compare
-            demand for cooks in Varaždinska and Međimurska" or "where are the
-            most unemployed per sought worker". Hosts that support
-            MCP Apps draw a column per county with the ads matching the
-            filters, the DZS values with their reference months and the two
-            county-wide indicators, each unavailable value with its reason,
-            next to the HZZ check time, the sources and the notes. Every host
-            also gets the data, as in compare_counties, whose rules apply:
-            the indicators describe each county as a whole, never the
-            filtered ads; say "the indicator is not available" and why,
-            never 0 or infinity; tell the user both dates and the sources.
-            title, description, short_name, unavailable_label, coverage_note,
-            source_links, view_notes and disclaimer are the Croatian wording
-            the view shows.
-            """
-            filters = JobCountFiltersDTO(
-                query=query, category=category, max_experience_months=max_experience_months, contract=contract,
-                full_time=full_time, education=education, accommodation=accommodation,
-                employment_tags=employment_tags, place=place, skills=skills, include_expired=include_expired,
-            )
-            return county_comparison.county_comparison(await self._compare(ctx, counties, filters, period))
+        Pass distinct county codes or names in the requested order. Use query
+        and job-condition filters only when stated. period selects a requested
+        DZS month (YYYY-MM); otherwise use the latest common month per indicator.
+        Returns filtered and all-active HZZ ad/worker counts, DZS unemployed,
+        active population, unemployment rate and county-wide ratios. Indicators
+        always use all_active_jobs, never just one occupation's ads. Preserve
+        unavailable reasons, provisional flags, sources and both data dates;
+        unknown is not zero. These statistics do not predict personal employment chances.
 
-        @server.tool(app=DATA_ONLY, annotations=READ_ONLY)
-        async def unemployment_history(
-            ctx: Context,
-            counties: HistoryCounties,
-            months: HistoryMonths = DEFAULT_HISTORY_MONTHS,
-            sex: HistorySex = "total",
-        ) -> UnemploymentHistoryDTO:
-            """Return the monthly registered unemployment rate of 1 to 6 counties (DZS), without a view.
-
-            When the user asks how unemployment changed, call
-            show_unemployment_history instead: it returns the same data and
-            also draws a chart. Use this tool only when you need the numbers
-            without showing them. Each county's
-            series runs from first_period to last_period (first days of the
-            months), oldest first; each point has the rate in percent with
-            one decimal and is_provisional. A null rate has
-            unavailable_reason 'dzs_value_missing'. latest is the last month,
-            same_month_previous_year the same month a year earlier, and
-            change_pp their difference in percentage points, null with
-            change_unavailable_reason when either is unknown. Report the
-            change in percentage points, not percent. Comparing with the same
-            month a year earlier reduces seasonality but is not seasonal
-            adjustment; months of 2026 are provisional, so mark them. Without
-            DZS data, every series is empty and unavailable_reason says why.
-            Name the sources and pass on the notes.
-            """
-            return await self._history(ctx, counties, months, sex)
-
-        @server.tool(app=AppConfig(resource_uri=UNEMPLOYMENT_HISTORY.uri), annotations=READ_ONLY)
-        async def show_unemployment_history(
-            ctx: Context,
-            counties: HistoryCounties,
-            months: HistoryMonths = DEFAULT_HISTORY_MONTHS,
-            sex: HistorySex = "total",
-        ) -> UnemploymentHistoryViewDTO:
-            """Show the user a line chart of the monthly registered unemployment rate of 1 to 6 counties (DZS).
-
-            Use it whenever the user asks how unemployment changed, e.g. "how
-            did unemployment in Varaždinska change over the last year". Hosts
-            that
-            support MCP Apps draw a line per county, with provisional months
-            dashed and missing months as gaps, and per county the latest
-            rate, the same month a year earlier and the change in percentage
-            points, with the sources and the notes. Every host also gets the
-            data, as in unemployment_history, whose rules apply: report the
-            change in percentage points, mark 2026 months as provisional and
-            say that comparing with the same month is not seasonal
-            adjustment. title, description, short_name,
-            change_unavailable_label, unavailable_label, source_links and
-            view_notes are the Croatian wording the view shows.
-            """
-            return history_view.unemployment_history(await self._history(ctx, counties, months, sex))
+        For an all-county ranking by jobs or workers use show_jobs_by_county.
+        For unemployment changes over time use show_unemployment_history.
+        For individual job vacancies use show_jobs.
+        """
+        filters = JobCountFiltersDTO(**tool_arguments(locals(), "counties", "period"))
+        return county_comparison.county_comparison(await self._compare(ctx, counties, filters, period))
 
     async def _compare(
         self, ctx: Context, counties: list[str], filters: JobCountFiltersDTO, period: str | None,
     ) -> CountyComparisonDTO:
         request = CountyComparisonRequestDTO(counties=tuple(counties), filters=filters, period=period)
-        comparison = await self._call(service(ctx).compare_counties(request))
+        comparison = await self._call(self._service(ctx).compare_counties(request))
         return comparison.model_copy(update={"active_filters": active_filters(filters)})
+
+
+class UnemploymentHistoryTools(CountyToolGroup):
+    """UnemploymentHistoryTools return 1 to 6 counties' monthly registered unemployment rate."""
+
+    def register(self, server: FastMCP) -> None:
+        self._add_tool(server, self.unemployment_history, app=DATA_ONLY)
+        self._add_tool(server, self.show_unemployment_history, app=UNEMPLOYMENT_HISTORY.app_config)
+
+    async def unemployment_history(
+        self,
+        ctx: Context,
+        counties: HistoryCounties,
+        months: HistoryMonths = DEFAULT_HISTORY_MONTHS,
+        sex: HistorySex = "total",
+    ) -> UnemploymentHistoryDTO:
+        """App-only unemployment-series endpoint. For user trend questions use show_unemployment_history.
+
+        show_unemployment_history returns the same DZS observations with an
+        automatic time-series view, without a graph request. This endpoint
+        remains callable for app workflows consuming raw monthly values.
+        Accepts 1 to 6 counties and 12 to 24 months. Null rates are missing data;
+        changes are percentage points, not percentages. Preserve sources,
+        reference months and provisional flags.
+        """
+        return await self._history(ctx, counties, months, sex)
+
+    async def show_unemployment_history(
+        self,
+        ctx: Context,
+        counties: HistoryCounties,
+        months: HistoryMonths = DEFAULT_HISTORY_MONTHS,
+        sex: HistorySex = "total",
+    ) -> UnemploymentHistoryViewDTO:
+        """Track how registered unemployment changed over the last 12 to 24 months in Croatian counties.
+
+        DEFAULT for unemployment history, trends, increases or decreases:
+        "Kako se kretala nezaposlenost u Istri zadnjih godinu dana?",
+        "Je li nezaposlenost u Varaždinskoj pala?", "Usporedi kretanje
+        nezaposlenosti u Istri i Zagrebu" or "How has unemployment changed?".
+        Call directly; the user does not need to ask for a graph, chart or format.
+        Automatically presents monthly rates over time and returns the same data.
+
+        Pass 1 to 6 distinct counties. Default months=12 and sex='total'; use
+        months=24 for two years, sex='women' or 'men' only when requested.
+        If the county cannot be identified, ask which county; do not invent one.
+        Returns monthly DZS rates, the latest rate, the same month a year earlier
+        and change_pp. Report changes in percentage points, preserve gaps and
+        provisional flags, name sources and reference months. A year-on-year
+        comparison is not seasonal adjustment. Missing observations are not zero.
+
+        For current job demand compared with unemployment in named counties use
+        show_county_comparison. For where job ads are concentrated use show_jobs_by_county.
+        """
+        return history_view.unemployment_history(await self._history(ctx, counties, months, sex))
 
     async def _history(self, ctx: Context, counties: list[str], months: int, sex: DzsSex) -> UnemploymentHistoryDTO:
         request = UnemploymentHistoryRequestDTO(counties=tuple(counties), months=months, sex=sex)
-        return await self._call(service(ctx).unemployment_history(request))
-
-    @staticmethod
-    async def _call[T](operation: Awaitable[T]) -> T:
-        """Turn errors the caller can act on into tool errors; database details stay in the server log."""
-        try:
-            return await operation
-        except (InvalidIndicatorRequestError, InvalidJobSearchError) as error:
-            raise ToolError(error.details) from error
-        except PersistenceError as error:
-            raise ToolError("County data is temporarily unavailable; try again later.") from error
-
-
-def service(ctx: Context) -> CountyIndicatorServiceInterface:
-    return ctx.lifespan_context[COUNTY_INDICATOR_SERVICE]
+        return await self._call(self._service(ctx).unemployment_history(request))

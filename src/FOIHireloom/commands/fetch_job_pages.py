@@ -5,18 +5,19 @@
 """
 
 import argparse
-import asyncio
 import json
-import sys
 
 from FOIHireloom.config.settings import Settings
-from FOIHireloom.exceptions import PersistenceError
 from FOIHireloom.services.dependency import DependencyService
 from FOIHireloom.services.interfaces.job_page import JobPageServiceInterface
 from FOIHireloom.services.interfaces.lifecycle import ServiceOpener
 
+from .command_line import CommandLine, CommandRun
+
 
 class JobPageCommand:
+    """JobPageCommand fetches due job pages, batch_size of them unless a run sets a limit."""
+
     def __init__(self, service: ServiceOpener[JobPageServiceInterface], batch_size: int) -> None:
         self._open_service = service
         self._batch_size = batch_size
@@ -26,22 +27,29 @@ class JobPageCommand:
             return (await service.fetch_due(self._batch_size if limit is None else limit)).model_dump()
 
 
-def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Fetch HZZ detail pages of listed jobs for their deadline and details.")
-    parser.add_argument("--limit", type=int, help="Fetch at most this many pages (default: HZZ_PAGE_BATCH_SIZE).")
-    args = parser.parse_args(argv)
-    if args.limit is not None and args.limit < 1:
-        parser.error("--limit must be at least 1")
-    try:
+class JobPageCommandLine(CommandLine[dict]):
+    description = "Fetch HZZ detail pages of listed jobs for their deadline and details."
+    failure = "Fetching job pages failed"
+
+    def _add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--limit", type=int, help="Fetch at most this many pages (default: HZZ_PAGE_BATCH_SIZE).")
+
+    def _check(self, parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+        if args.limit is not None and args.limit < 1:
+            parser.error("--limit must be at least 1")
+
+    def _start(self, args: argparse.Namespace) -> CommandRun[dict]:
         settings = Settings()
         command = JobPageCommand(DependencyService(settings).job_page_service, settings.HZZ_PAGE_BATCH_SIZE)
-        result = asyncio.run(command.run(args.limit))
-    except (PersistenceError, OSError):
-        print("Fetching job pages failed: check DATABASE_URL and apply Alembic migrations.", file=sys.stderr)
-        raise SystemExit(1) from None
-    print(json.dumps(result, ensure_ascii=False))
-    if result["stopped_early"]:
-        raise SystemExit(1)
+        return command.run(args.limit)
+
+    def _report(self, args: argparse.Namespace, result: dict) -> int:
+        print(json.dumps(result, ensure_ascii=False))
+        return int(result["stopped_early"])
+
+
+def main(argv: list[str] | None = None) -> None:
+    JobPageCommandLine().main(argv)
 
 
 if __name__ == "__main__":

@@ -1,15 +1,14 @@
 import { Slider } from '@/components/ui/slider'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Button } from '@/components/ui/button'
-import { ChevronDownIcon } from 'lucide-react'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableCaption } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { animate, type JSAnimation, stagger } from 'animejs'
-import { type MouseEvent, type PointerEvent, type ReactNode, useId, useLayoutEffect, useRef } from 'react'
-import { fadeIn, finish, releaseStyles, useChartEntrance, useReducedMotion } from '../../../hooks/chart-motion'
-import { useChartWidth } from '../../../hooks/use-chart-size'
-import { forecastChart, formatChange, formatPeriod, formatValue } from '../utils/forecast-chart'
+import { type ReactNode, useId, useLayoutEffect, useRef } from 'react'
+import { Area, CartesianGrid, ComposedChart, Line, ReferenceDot, ReferenceLine, XAxis, YAxis } from 'recharts'
+import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
+import { clearEntrance, countTo, EASE, enter, MOTION, roll, s, useChartEntrance, useReducedMotion }
+  from '../../../hooks/chart-motion'
+import { type ForecastRow, forecastRows, formatChange, formatPeriod, formatPeriodGenitive, formatValue, valueTicks }
+  from '../utils/forecast-chart'
 import type { useForecast } from '../hooks/use-forecast'
 import type { CountyForecast, ForecastData, ObservedPoint } from '../types'
 
@@ -20,7 +19,8 @@ function Flags({ point }: { point: ObservedPoint }) {
 
 /**
  * Readout shows the inspected period's median over the chart, as the county chart shows its county's workers: the
- * lines rise in and the median counts up from 0, then counts to each newly inspected median.
+ * lines rise in and the median counts up from 0; a newly inspected period rolls its name in and the
+ * median counts to its value.
  */
 function Readout({ context, median, format, children }: {
   context: string
@@ -37,7 +37,7 @@ function Readout({ context, median, format, children }: {
     latest.current = median
   })
   // The median on screen; while the entrance counts it up, a new period leaves the counting to the entrance.
-  const count = useRef<{ tween: JSAnimation | null; value: number; entering: boolean }>(
+  const count = useRef<{ tween: gsap.core.Tween | null; value: number; entering: boolean }>(
     { tween: null, value: median, entering: false })
   const show = (value: number) => {
     count.current.value = value
@@ -50,214 +50,241 @@ function Readout({ context, median, format, children }: {
     const countUp = () => show(latest.current * up.t)
     count.current.entering = true
     countUp()
-    timeline
-      .add(lines, { ...fadeIn(lines, 6), duration: 600, delay: stagger(80) }, 100)
-      .add(up, { t: [0, 1], duration: 1400, ease: 'outExpo', onUpdate: countUp,
-        onComplete: () => { count.current.entering = false } }, 150)
+    const { readout, headline } = MOTION
+    enter(timeline, lines, readout.at, readout)
+    timeline.fromTo(up, { t: 0 }, { t: 1, duration: s(headline.duration), ease: EASE.arrive, onUpdate: countUp,
+      onComplete: () => { count.current.entering = false } }, s(headline.at))
     return () => {
       count.current.entering = false
       show(latest.current)
-      for (const el of lines) {
-        el.style.removeProperty('opacity')
-        el.style.removeProperty('transform')
-      }
+      clearEntrance(lines)
     }
   })
 
   useLayoutEffect(() => {
     const state = count.current
     if (state.entering || state.value === median) return
-    state.tween?.cancel()
+    state.tween?.kill()
     state.tween = null
     if (reduced) {
       show(median)
       return
     }
-    const from = { value: state.value }
-    state.tween = finish(animate(from, {
-      value: median, duration: 600, ease: 'outExpo',
-      onUpdate: () => show(from.value),
-      onComplete: () => {
-        state.tween = null
-        show(median)
-      },
-    }))
+    state.tween = countTo({ value: state.value }, median, show)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [median, reduced])
-  useLayoutEffect(() => () => { count.current.tween?.cancel() }, [])
+  useLayoutEffect(() => () => { count.current.tween?.kill() }, [])
 
   const lastContext = useRef(context)
   useLayoutEffect(() => {
     if (lastContext.current === context) return
     lastContext.current = context
     if (reduced || !contextRef.current) return
-    finish(animate(contextRef.current, { opacity: [0.4, 1], duration: 300, ease: 'outQuad',
-      onComplete: releaseStyles('opacity') }))
+    roll(contextRef.current)
   }, [context, reduced])
 
   return <div className="forecast-readout flex flex-col items-start gap-2.5" ref={root} data-slot="readout">
-    <p className="soft m-0 text-[12px] font-medium leading-[1.25] text-fg-soft" ref={contextRef}
-      data-slot="forecast-period">{context}</p>
-    <p className="forecast-number m-0 text-[28px] font-semibold leading-[1] whitespace-nowrap tabular-nums"
-      ref={numberRef} data-slot="forecast-median">{format(median)}</p>
+    {/* Clips the period as it rolls in from below on a new one. */}
+    <div className="overflow-clip">
+      <p className="soft m-0 mono-label uppercase text-fg-soft" ref={contextRef} data-slot="forecast-period">{context}</p>
+    </div>
+    <p className="forecast-number m-0 mono-headline whitespace-nowrap text-fg-loud" ref={numberRef}
+      data-slot="forecast-median">{format(median)}</p>
     {children}
   </div>
 }
 
+/**
+ * ForecastView puts one message first: the inspected period's median, then one sentence with its interval and how
+ * far it is from the last observed value. The chart is the focus; the slider under it is the keyboard route to a
+ * period. Every exact value is in ForecastTables, which the screen keeps behind its details control.
+ */
 export function ForecastView(model: ReturnType<typeof useForecast>) {
-  const { data, county, active, selected, selectPeriod, hoverPeriod, point, selectedPoint, last, end, value, period,
+  const { data, county, active, selected, selectPeriod, hoverPeriod, point, selectedPoint, last, value, period,
     interval } = model
   const sliderId = useId()
   const sliderLabel = `${sliderId}-label`
+  const change = point && last?.value != null ? formatChange(point.median - last.value, data.unit) : null
   return <div className="forecast-content min-w-0 flex flex-col gap-6">
     {point && <Readout context={`${period(point.period)} · medijan prognoze`} median={point.median} format={value}>
-      <p className="forecast-interval m-0 text-[12px] font-medium leading-[1.25] text-fg-soft tabular-nums"
-        data-slot="forecast-interval">{value(point.low)} – {value(point.high)} · {interval}</p>
-      <div className="forecast-last flex flex-wrap items-center [gap:4px_8px] text-[12px] font-medium leading-[1.25]
-        text-fg-soft tabular-nums" data-slot="forecast-last">
-        <span>Posljednji podatak: {last?.value == null ? 'nema podatka' : value(last.value)}
-          {last && ` · ${period(last.period)}`}</span>
-        {last && <Flags point={last} />}
-      </div>
+      {/* One plain sentence instead of more mono label rows: the range, then the change against the last value. */}
+      <p className="forecast-summary m-0 text-[14px] leading-[1.4] text-fg-soft" data-slot="forecast-summary">
+        <span data-slot="forecast-interval">{value(point.low)} – {value(point.high)} ({interval})</span>
+        {change && last && <>{' · '}<span className="font-medium text-fg-loud">{change}</span>
+          {` u odnosu na ${period(last.period)}${last.is_provisional ? ' (privremeno)' : last.is_estimated ? ' (procijenjeno)' : ''}`}</>}
+      </p>
     </Readout>}
-    {county.history.some((p) => p.value !== null) || point ?
+    {county.history.some((p) => p.value !== null) || point ? <div className="flex flex-col gap-3">
       <ForecastChart data={data} county={county} active={active} onSelect={selectPeriod} onHover={hoverPeriod} />
-      : null}
-    {selectedPoint && <FieldGroup className="forecast-control">
-      <Field>
-        <FieldLabel id={sliderLabel}>{data.frequency === 'month' ? 'Mjesec prognoze' : 'Tjedan prognoze'}</FieldLabel>
-        <Slider min={0} max={county.forecast.length - 1} step={1} value={[selected]}
-          onValueChange={(values) => selectPeriod(Array.isArray(values) ? values[0] : values)}
-          thumbProps={{ 'aria-labelledby': sliderLabel,
-            'aria-valuetext': `${period(selectedPoint.period)}: ${value(selectedPoint.median)}, ${interval} `
-              + `${value(selectedPoint.low)} – ${value(selectedPoint.high)}` }} />
-      </Field>
-    </FieldGroup>}
-    {end && county.change_to_horizon !== null && <p className="forecast-change flex flex-wrap items-baseline [gap:6px_12px] m-0 text-[12px] font-medium leading-[1.25] text-fg-soft
-      [&_strong]:text-fg-loud [&_strong]:text-[14px] [&_strong]:font-semibold [&_strong]:tabular-nums">
-      <strong>{formatChange(county.change_to_horizon, data.unit)}</strong>
-      <span>do {period(end.period)}, u odnosu na posljednji podatak</span>
+      {selectedPoint && <FieldGroup className="forecast-control">
+        <Field>
+          {/* Named for screen readers; on screen the chart above says what the slider moves. */}
+          <FieldLabel id={sliderLabel} className="sr-only">
+            {data.frequency === 'month' ? 'Mjesec prognoze' : 'Tjedan prognoze'}</FieldLabel>
+          <Slider min={0} max={county.forecast.length - 1} step={1} value={[selected]}
+            onValueChange={(values) => selectPeriod(Array.isArray(values) ? values[0] : values)}
+            thumbProps={{ 'aria-labelledby': sliderLabel,
+              'aria-valuetext': `${period(selectedPoint.period)}: ${value(selectedPoint.median)}, ${interval} `
+                + `${value(selectedPoint.low)} – ${value(selectedPoint.high)}` }} />
+        </Field>
+      </FieldGroup>}
+    </div> : null}
+  </div>
+}
+
+const TABLE = `forecast-table w-full border-collapse text-right tabular-nums [&_caption]:text-left [&_caption]:p-3
+  [&_caption]:text-fg-soft [&_th]:[padding:9px_12px] [&_th]:[border-top:1px_solid_var(--border)]
+  [&_th]:whitespace-nowrap [&_td]:[padding:9px_12px] [&_td]:[border-top:1px_solid_var(--border)]
+  [&_td]:whitespace-nowrap [&_th]:font-medium [&_th:first-child]:text-left [&_thead_th]:sticky
+  [&_thead_th]:top-0 [&_thead_th]:text-fg-soft [&_.provisional]:m-0.5 [@media(max-width:_420px)]:[&_th]:p-2
+  [@media(max-width:_420px)]:[&_td]:p-2`
+const SCROLL = `forecast-table-scroll focus-visible:outline-none focus-visible:shadow-focus overflow-auto
+  [max-height:290px] border border-border rounded-[10px]`
+
+/** ForecastTables lists every forecast and history value exactly, with the change to the horizon. */
+export function ForecastTables({ data, county }: { data: ForecastData; county: CountyForecast }) {
+  const value = (n: number) => formatValue(n, data.unit)
+  const period = (iso: string) => formatPeriod(iso, data.frequency)
+  const end = county.forecast.at(-1)
+  return <div className="forecast-tables flex flex-col gap-4">
+    {end && county.change_to_horizon !== null && <p className="forecast-change m-0 text-[14px] text-fg-soft">
+      <span className="font-medium text-fg-loud">{formatChange(county.change_to_horizon, data.unit)}</span>
+      {` do ${formatPeriodGenitive(end.period, data.frequency)}, u odnosu na posljednji podatak`}
     </p>}
-    {county.forecast.length > 0 && <div className="forecast-table-scroll focus-visible:outline-none focus-visible:shadow-focus overflow-auto [max-height:290px]
-      border border-border rounded-[12px]" tabIndex={0} role="region" aria-label="Prognozirane vrijednosti">
-      <Table variant="numeric" containerClassName="contents" className="forecast-table w-full border-collapse text-right tabular-nums [&_caption]:text-left [&_caption]:p-3
-        [&_caption]:text-fg-soft [&_th]:[padding:9px_12px] [&_th]:[border-top:1px_solid_var(--border)]
-        [&_th]:whitespace-nowrap [&_td]:[padding:9px_12px] [&_td]:[border-top:1px_solid_var(--border)]
-        [&_td]:whitespace-nowrap [&_th]:font-medium [&_th:first-child]:text-left [&_thead_th]:sticky
-        [&_thead_th]:top-0 [&_thead_th]:text-fg-soft [&_.provisional]:m-0.5 [@media(max-width:_420px)]:[&_th]:p-2
-        [@media(max-width:_420px)]:[&_td]:p-2">
+    {county.forecast.length > 0 && <div className={SCROLL} tabIndex={0} role="region" aria-label="Prognozirane vrijednosti">
+      <Table variant="numeric" containerClassName="contents" className={TABLE}>
         <TableCaption>Sve prognozirane vrijednosti · {data.unit === 'percent' ? '%' : data.unit === 'persons' ? 'osobe' : 'oglasi'}</TableCaption>
         <TableHeader><TableRow><TableHead scope="col" sticky="header">{data.frequency === 'month' ? 'Mjesec' : 'Tjedan od'}</TableHead>
           <TableHead scope="col" sticky="header">Medijan</TableHead><TableHead scope="col" sticky="header">Donja granica</TableHead><TableHead scope="col" sticky="header">Gornja granica</TableHead></TableRow></TableHeader>
-        <TableBody>{county.forecast.map((p) => <TableRow key={p.period} data-period={p.period} data-slot="forecast-row"
-          data-state={point?.period === p.period ? 'selected' : undefined}>
+        <TableBody>{county.forecast.map((p) => <TableRow key={p.period} data-period={p.period} data-slot="forecast-row">
           <TableHead scope="row">{period(p.period).replace('tjedan od ', '')}</TableHead><TableCell>{value(p.median)}</TableCell>
           <TableCell>{value(p.low)}</TableCell><TableCell>{value(p.high)}</TableCell>
         </TableRow>)}</TableBody>
       </Table>
     </div>}
-    {county.history.length > 0 && <Collapsible className="forecast-history">
-      <CollapsibleTrigger render={<Button variant="ghost" />}>
-        Povijesni podaci ({county.history.length})<ChevronDownIcon data-icon="inline-end" aria-hidden="true" />
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-      <div className="forecast-table-scroll focus-visible:outline-none focus-visible:shadow-focus overflow-auto [max-height:290px]
-        border border-border rounded-[12px]" tabIndex={0} role="region" aria-label="Povijesne vrijednosti">
-        <Table variant="numeric" containerClassName="contents" className="forecast-table w-full border-collapse text-right tabular-nums [&_caption]:text-left [&_caption]:p-3
-        [&_caption]:text-fg-soft [&_th]:[padding:9px_12px] [&_th]:[border-top:1px_solid_var(--border)]
-        [&_th]:whitespace-nowrap [&_td]:[padding:9px_12px] [&_td]:[border-top:1px_solid_var(--border)]
-        [&_td]:whitespace-nowrap [&_th]:font-medium [&_th:first-child]:text-left [&_thead_th]:sticky
-        [&_thead_th]:top-0 [&_thead_th]:text-fg-soft [&_.provisional]:m-0.5 [@media(max-width:_420px)]:[&_th]:p-2
-        [@media(max-width:_420px)]:[&_td]:p-2"><TableCaption>Povijesne vrijednosti korištene u prikazu</TableCaption>
-          <TableHeader><TableRow><TableHead scope="col" sticky="header">Razdoblje</TableHead><TableHead scope="col" sticky="header">Vrijednost</TableHead><TableHead scope="col" sticky="header">Status</TableHead></TableRow></TableHeader>
-          <TableBody>{county.history.map((p) => <TableRow key={p.period}><TableHead scope="row">{period(p.period)}</TableHead>
-            <TableCell>{p.value === null ? 'nema podatka' : value(p.value)}</TableCell>
-            <TableCell>{p.value === null ? 'nedostaje' : p.is_estimated || p.is_provisional ? <Flags point={p} /> : 'objavljeno'}</TableCell>
-          </TableRow>)}</TableBody>
-        </Table>
-      </div>
-      </CollapsibleContent>
-    </Collapsible>}
+    {county.history.length > 0 && <div className={SCROLL} tabIndex={0} role="region" aria-label="Povijesne vrijednosti">
+      <Table variant="numeric" containerClassName="contents" className={TABLE}>
+        <TableCaption>Povijesni podaci ({county.history.length})</TableCaption>
+        <TableHeader><TableRow><TableHead scope="col" sticky="header">Razdoblje</TableHead><TableHead scope="col" sticky="header">Vrijednost</TableHead><TableHead scope="col" sticky="header">Status</TableHead></TableRow></TableHeader>
+        <TableBody>{county.history.map((p) => <TableRow key={p.period}><TableHead scope="row">{period(p.period)}</TableHead>
+          <TableCell>{p.value === null ? 'nema podatka' : value(p.value)}</TableCell>
+          <TableCell>{p.value === null ? 'nedostaje' : p.is_estimated || p.is_provisional ? <Flags point={p} /> : 'objavljeno'}</TableCell>
+        </TableRow>)}</TableBody>
+      </Table>
+    </div>}
   </div>
 }
 
-// The interval is the orange wash, edged in orange-300 so it still reads as orange on the dark card.
-const WASH = '[fill:var(--orange-wash)] [stroke:var(--orange-300)] [stroke-opacity:.6] [stroke-width:1]'
-const WASH_KEY = 'bg-orange-wash border border-orange-300/60'
+// The interval is the red wash, edged in accent-300 so it still reads as red on the dark card.
+const WASH_KEY = 'bg-accent-wash border border-accent-300/60'
+const HEIGHT = 240
+
+/** legendKey draws a legend entry's line or swatch; spans, since ChartLegendContent sizes svg icons to a square. */
+const legendKey = (className: string) => () => <span aria-hidden="true" className={`forecast-key w-4 ${className}`} />
+
+// HistoryDot marks one known history value, isolated ones included, with its period and value.
+function HistoryDot({ cx, cy, payload }: { cx?: number; cy?: number; payload?: ForecastRow }) {
+  if (cx == null || cy == null || payload?.value == null) return null
+  return <circle cx={cx} cy={cy} r={2.5} className="forecast-observed-node fill-fg-soft" data-slot="history-node"
+    data-value={payload.value} data-period={payload.period} />
+}
 
 function ForecastChart({ data, county, active, onSelect, onHover }: {
   data: ForecastData; county: CountyForecast; active: number
   onSelect: (index: number) => void; onHover: (index: number | null) => void
 }) {
-  const [ref, measured] = useChartWidth<HTMLDivElement>()
-  const width = Math.max(80, measured || 560)
-  const chart = forecastChart(county, width, data.unit)
-  const cursor = chart.forecast[active]
-  const periods = [...county.history, ...county.forecast]
-  const flags = county.history.some((p) => p.is_estimated || p.is_provisional)
-  // The forecast period nearest the pointer; null over the history.
-  const nearest = (event: PointerEvent<HTMLDivElement> | MouseEvent<HTMLDivElement>) => {
-    if (!chart.forecast.length) return null
-    const rect = event.currentTarget.getBoundingClientRect()
-    const x = (event.clientX - rect.left) / rect.width * width
-    if (x < chart.forecast[0].x) return null
-    return chart.forecast.reduce((best, p, index) =>
-      Math.abs(p.x - x) < Math.abs(chart.forecast[best].x - x) ? index : best, 0)
+  const reduced = useReducedMotion()
+  const { rows, runs } = forecastRows(county)
+  const ticks = valueTicks(county, data.unit)
+  const total = rows.length
+  const start = county.history.length // the first forecast row
+  const cursor = county.forecast[active]
+  const flags = runs.some((run) => run.flagged)
+  const interval = `${Math.round(data.interval * 100)}% interval`
+  const config = {
+    history: { label: 'Povijest', color: 'var(--fg-soft)', icon: legendKey('h-0 border-t-2 border-fg-soft') },
+    // The median and its interval read as one thing, the forecast: one key, a dashed line over the wash.
+    median: { label: `Prognoza · ${interval}`, color: 'var(--accent-500)', icon: () => <span aria-hidden="true"
+      className={`forecast-key relative w-4 h-2.5 ${WASH_KEY} after:absolute after:inset-x-0 after:top-1/2
+        after:border-t-2 after:border-dashed after:border-accent-500 after:-translate-y-1/2`} /> },
+    range: { label: interval, color: 'var(--accent-wash)' },
+    flagged: { label: 'privremeno', color: 'var(--fg-soft)',
+      icon: legendKey('h-0 border-t-2 border-dashed border-fg-soft') },
+  } satisfies ChartConfig
+  const legend = (['history', ...(county.forecast.length ? ['median'] : []), ...(flags ? ['flagged'] : [])])
+    .map((key) => ({ value: key, dataKey: key, type: 'line' as const, color: config[key as keyof typeof config].color }))
+  const motion = { isAnimationActive: !reduced, animationBegin: MOTION.marks.at, animationDuration: MOTION.marks.duration }
+  // The forecast row under the pointer; null over the history.
+  const forecastIndex = (index: unknown) => {
+    const row = Number(index)
+    return index == null || Number.isNaN(row) || row < start ? null : row - start
   }
+  const format = (value: number) => formatValue(value, data.unit)
   return <div className="forecast-chart" data-slot="forecast-chart">
-    <ul className="forecast-legend flex flex-wrap [gap:8px_16px] p-0 [margin:0_0_16px] [list-style:none] text-fg-soft
-      text-[12px] font-medium leading-[1.25] [&_li]:inline-flex [&_li]:items-center [&_li]:gap-1.5" aria-label="Legenda">
-      <li><span className="forecast-key history w-4 h-0 border-t-2 border-fg-soft" />Povijest</li>
-      <li><span className="forecast-key median w-4 h-0 border-t-2 border-dashed border-orange-500" />Prognoza (medijan)</li>
-      <li><span className={`forecast-key interval w-4 h-2.5 ${WASH_KEY}`} />
-        {Math.round(data.interval * 100)}% interval</li>
-      {flags && <li><span className="forecast-key estimated w-4 h-0 border-t-2 border-dashed border-fg-soft" />
-        Procijenjeno / privremeno</li>}
-    </ul>
-    <div className="forecast-axes flex gap-2 min-w-0">
-      <div className="forecast-y-axis relative flex-none w-16 text-[12px] font-medium tabular-nums text-fg-soft
-        [&_span]:absolute [&_span]:right-0 [&_span]:[transform:translateY(-50%)] [&_span]:whitespace-nowrap
-        [@media(max-width:_420px)]:w-14" aria-hidden="true" style={{ height: chart.height }}>
-        {chart.ticks.map((tick) => <span key={tick} style={{ top: chart.y(tick) }}>{formatValue(tick, data.unit)}</span>)}
-      </div>
-      <div className="forecast-plot-column flex-1 min-w-0">
-        {/* Hover previews a forecast period and click selects it, as on the county chart; the slider is the
-            keyboard route. A touch drag scrolls the page instead of previewing. */}
-        <div ref={ref} className={`forecast-plot [&_svg]:block [&_svg]:overflow-visible${
-          chart.forecast.length ? ' cursor-pointer' : ''}`}
-          onPointerMove={(event) => { if (event.buttons === 0) onHover(nearest(event)) }}
-          onPointerLeave={() => onHover(null)}
-          onClick={(event) => {
-            const index = nearest(event)
-            if (index !== null) onSelect(index)
-          }}>
-          <svg width="100%" height={chart.height} viewBox={`0 0 ${width} ${chart.height}`} role="img"
-            aria-label="Povijesne vrijednosti i Chronos prognoza; točne vrijednosti navedene su u tablicama.">
-            {chart.ticks.map((tick) => <line key={tick} x1={0} x2={width} y1={chart.y(tick)} y2={chart.y(tick)} className="forecast-grid [stroke:var(--border)] [stroke-dasharray:3_4]" />)}
-            {chart.forecast.length > 0 && <line x1={chart.boundary} x2={chart.boundary} y1={chart.top} y2={chart.bottom}
-              className="forecast-boundary [stroke:var(--fg-soft)] [stroke-dasharray:2_5] [opacity:.5]" />}
-            {chart.band && <path d={chart.band} className={`forecast-band ${WASH}`} data-slot="forecast-band" />}
-            {chart.history.map((p, index) => {
-              const next = chart.history[index + 1]
-              return p.y !== null && next?.y != null ? <line key={p.period} x1={p.x} y1={p.y} x2={next.x} y2={next.y}
-                className="forecast-observed [fill:none] [stroke:var(--fg-soft)] [stroke-width:2]" data-slot="history-segment" data-from={p.period} data-to={next.period}
-                strokeDasharray={p.is_estimated || p.is_provisional || next.is_estimated || next.is_provisional ? '4 4' : undefined} /> : null
-            })}
-            {chart.history.map((p) => p.y !== null && <circle key={p.period} cx={p.x} cy={p.y} r={2.5}
-              className="forecast-observed-node [fill:var(--fg-soft)]" data-slot="history-node" data-value={p.value} data-period={p.period} />)}
-            {/* Projected values are dashed, like provisional history; orange because the forecast is the focus. */}
-            {chart.forecast.length > 0 && <path d={chart.median} strokeDasharray="6 4"
-              className="forecast-predicted [fill:none] [stroke:var(--orange-500)] [stroke-width:2.5]" />}
-            {chart.forecast.map((p) => <circle key={p.period} cx={p.x} cy={p.y} r={2.5} className="forecast-predicted-node [fill:var(--orange-500)]" />)}
-            {cursor && <g data-slot="forecast-cursor" data-period={cursor.period}>
-              <line x1={cursor.x} x2={cursor.x} y1={cursor.highY} y2={cursor.lowY} className="forecast-range-line [stroke:var(--orange-500)] [stroke-width:1.5]" />
-              <circle cx={cursor.x} cy={cursor.y} r={5} className="forecast-active-node [fill:var(--orange-500)] [stroke:var(--card)] [stroke-width:2]" />
-            </g>}
-          </svg>
-        </div>
-        <div className="forecast-x-axis flex justify-between gap-3 mt-2.5 text-[12px] font-medium leading-[1.25] text-fg-soft [&_span:last-child]:text-right"><span>{formatPeriod(periods[0].period, data.frequency)}</span>
-          {periods.length > 1 && <span>{formatPeriod(periods.at(-1)!.period, data.frequency)}</span>}</div>
-      </div>
-    </div>
+    {/* Hover previews a forecast period and click selects it, as on the county chart; the slider is the
+        keyboard route. */}
+    <ChartContainer config={config} className={`forecast-plot aspect-auto w-full mono-label
+      [&_.recharts-cartesian-axis-tick_text]:fill-fg-soft${county.forecast.length ? ' cursor-pointer' : ''}`}
+      style={{ height: HEIGHT + 56 }} role="img"
+      aria-label="Povijesne vrijednosti i Chronos prognoza; točne vrijednosti navedene su u tablicama.">
+      <ComposedChart data={rows} margin={{ top: 12, right: 6, bottom: 0, left: 0 }} accessibilityLayer={false} throttledEvents={[]}
+        onMouseMove={(state) => onHover(forecastIndex(state.activeTooltipIndex))}
+        onMouseLeave={() => onHover(null)}
+        onClick={(state) => {
+          const index = forecastIndex(state.activeTooltipIndex)
+          if (index !== null) onSelect(index)
+        }}>
+        <ChartLegend verticalAlign="top" align="left"
+          content={() => <ChartLegendContent payload={legend} verticalAlign="top"
+            className="forecast-legend flex-wrap justify-start [gap:8px_16px] pb-4 uppercase text-fg-soft" />} />
+        <CartesianGrid vertical={false} strokeDasharray="3 4" className="forecast-grid [&_line]:stroke-border" />
+        <XAxis dataKey="index" type="number" domain={[0, Math.max(1, total - 1)]} ticks={total > 1 ? [0, total - 1] : [0]}
+          tickLine={false} axisLine={false} tickMargin={10} interval={0}
+          tick={({ x, y, payload }) => <text x={x} y={y} dy={8} className="uppercase fill-fg-soft stroke-none"
+            textAnchor={payload.value === 0 && total > 1 ? 'start' : 'end'}>
+            {formatPeriod(rows[payload.value]?.period ?? '', data.frequency)}</text>} />
+        <YAxis domain={[0, ticks.at(-1)!]} ticks={ticks} tickFormatter={format} tickLine={false} axisLine={false}
+          width={64} />
+        <ChartTooltip cursor={{ className: 'stroke-border' }} content={({ active, payload, label }) => {
+          const row = payload?.[0]?.payload as ForecastRow | undefined
+          if (!active || !row) return null
+          const forecast = forecastIndex(label)
+          const point = forecast === null ? undefined : county.forecast[forecast]
+          const items = point
+            ? [{ name: 'Medijan', value: format(point.median) }, { name: interval,
+              value: `${format(point.low)} – ${format(point.high)}` }]
+            : [{ name: 'Povijest', value: row.value === null ? 'nema podatka' : format(row.value) }]
+          return <ChartTooltipContent active hideIndicator label={formatPeriod(row.period, data.frequency)}
+            labelClassName="uppercase text-fg-loud"
+            payload={items.map((item) => ({ ...item, dataKey: item.name, graphicalItemId: item.name }))}
+            formatter={(value, name) => <span className="flex w-full justify-between gap-4">
+              <span>{name}</span><span className="text-fg-loud">{String(value)}</span></span>} />
+        }} />
+        {county.forecast.length > 0 && <ReferenceLine x={start - 1 < 0 ? 0 : start - 1} strokeDasharray="2 5"
+          className="forecast-boundary [&_line]:stroke-fg-soft [&_line]:[opacity:.5]" />}
+        {county.forecast.length > 0 && <Area dataKey="range" type="linear" connectNulls={false} {...motion}
+          className="forecast-band" fill="var(--color-range)" fillOpacity={1}
+          stroke="var(--accent-300)" strokeOpacity={0.6} strokeWidth={1} activeDot={false} legendType="none" />}
+        {runs.map((run) => <Line key={run.key} dataKey={run.key} type="linear" connectNulls={false} dot={false}
+          activeDot={false} legendType="none" stroke="var(--color-history)" strokeWidth={2} {...motion}
+          strokeDasharray={run.flagged ? '4 4' : undefined} className="forecast-observed"
+          data-slot="history-run" data-from={run.from} data-to={run.to} data-flagged={run.flagged} />)}
+        {/* The history's dots, isolated values included; the line itself is drawn per run above. */}
+        <Line dataKey="value" stroke="none" connectNulls={false} dot={<HistoryDot />} activeDot={false}
+          legendType="none" isAnimationActive={false} />
+        {/* Projected values are dashed, like provisional history; red because the forecast is the focus. */}
+        {county.forecast.length > 0 && <Line dataKey="median" type="linear" connectNulls={false}
+          stroke="var(--color-median)" strokeWidth={2.5} strokeDasharray="6 4" className="forecast-predicted"
+          dot={({ cx, cy, index }) => index < start ? <g key={index} /> :
+            <circle key={index} cx={cx} cy={cy} r={2.5} className="forecast-predicted-node fill-accent-500" />}
+          activeDot={false} legendType="none" {...motion} />}
+        {cursor && <ReferenceLine segment={[{ x: start + active, y: cursor.low }, { x: start + active, y: cursor.high }]}
+          className="forecast-range-line [&_line]:stroke-accent-500 [&_line]:[stroke-width:1.5]" />}
+        {cursor && <ReferenceDot x={start + active} y={cursor.median} shape={({ cx, cy }: { cx?: number; cy?: number }) =>
+          <g data-slot="forecast-cursor" data-period={cursor.period}>
+            <circle cx={cx} cy={cy} r={5} className="forecast-active-node fill-accent-500 stroke-card [stroke-width:2]" />
+          </g>} />}
+      </ComposedChart>
+    </ChartContainer>
   </div>
 }

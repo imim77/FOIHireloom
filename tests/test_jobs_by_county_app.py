@@ -79,7 +79,7 @@ class JobsByCountyAppTests(unittest.TestCase):
         chart = jobs_by_county(stats(jobs=0).model_copy(update={"counties": ()}), 8, JobMarketFiltersDTO(query="pilot"))
         self.assertEqual((chart.total_jobs, chart.counties), (0, ()))
 
-    def test_built_page_inlines_the_sdk_and_draws_3d_columns(self) -> None:
+    def test_built_page_inlines_the_sdk_and_draws_shadcn_bar_chart(self) -> None:
         html = JOBS_BY_COUNTY.page()
         self.assertTrue(html.startswith("<!doctype html>"))
         # Built by frontend/ into one file: nothing loads from the web.
@@ -87,7 +87,7 @@ class JobsByCountyAppTests(unittest.TestCase):
             with self.subTest(absent=absent):
                 self.assertNotIn(absent, html)
         for expected in ("ui/initialize", "ui/notifications/tool-result", "ui/request-display-mode",
-                         "data-theme=dark", "prefers-reduced-motion", "M23.9672 0.0161L47.7527 8.05164", "hr-HR",
+                         "data-theme=dark", "prefers-reduced-motion", "recharts-bar-rectangle", "data-chart", "hr-HR",
                          "traženih radnika", "Nema aktivnih oglasa za zadane filtre.", "Graf se nije mogao prikazati"):
             with self.subTest(expected=expected):
                 self.assertIn(expected, html)

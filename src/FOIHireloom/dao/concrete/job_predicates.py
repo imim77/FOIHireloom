@@ -1,7 +1,9 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import date, datetime
+from typing import Any
 
-from sqlalchemy import ColumnElement, Text, and_, func, not_, or_, select
+from sqlalchemy import ColumnElement, Subquery, Text, and_, func, not_, or_, select
 
 from FOIHireloom.db.models import Job, JobFeedMembership, SourceFeed
 from FOIHireloom.domain.search_text import SEARCH_FOLD_FROM, SEARCH_FOLD_TO
@@ -22,6 +24,20 @@ def listed_condition(county_id: int | None = None) -> ColumnElement[bool]:
     if county_id is not None:
         listed = listed.where(SourceFeed.county_id == county_id)
     return listed.exists()
+
+
+def county_placements(*conditions: ColumnElement[bool]) -> Subquery:
+    """Pairs of job_id and county_id for the county feeds matching conditions.
+
+    A job listed by two feeds of one county appears once for that county.
+    """
+    return (
+        select(JobFeedMembership.job_id, SourceFeed.county_id)
+        .join(SourceFeed)
+        .where(SourceFeed.scope == "county", *conditions)
+        .distinct()
+        .subquery()
+    )
 
 
 def terms_condition(terms: Sequence[str], weight: str = "") -> ColumnElement[bool]:
@@ -56,32 +72,53 @@ def after_descending(keys: Sequence[tuple[ColumnElement, object]]) -> ColumnElem
     return or_(*later)
 
 
-def condition_filters(criteria: JobConditionFiltersDTO) -> dict[str, ColumnElement[bool]]:
-    """Conditions for the condition filters that criteria sets, by filter name.
+@dataclass(frozen=True)
+class ConditionFilter:
+    """ConditionFilter matches jobs on one normalised condition and tells when a job's value is unknown.
 
     An unknown value is NULL and a comparison with NULL is never true, so a
-    job whose value is unknown matches none of them.
+    job for which unknown holds matches no value.
     """
-    conditions: dict[str, ColumnElement[bool]] = {}
-    if criteria.max_experience_months is not None:
-        conditions["max_experience_months"] = Job.experience_months <= criteria.max_experience_months
-    if criteria.contract is not None:
-        conditions["contract"] = Job.contract == criteria.contract
-    if criteria.full_time is not None:
-        conditions["full_time"] = Job.full_time == criteria.full_time
-    if criteria.education is not None:
-        conditions["education"] = Job.education_levels.contains([criteria.education])
-    if criteria.accommodation is not None:
-        offered = Job.accommodation != "none"
-        conditions["accommodation"] = offered if criteria.accommodation else not_(offered)
-    if criteria.employment_tags is not None:
-        conditions["employment_tags"] = Job.employment_tags.contains(list(criteria.employment_tags))
-    if criteria.place is not None:
-        pattern = f"% {criteria.place} %"
-        # The page names the county after a comma: "VARAŽDIN, VARAŽDINSKA ŽUPANIJA".
-        conditions["place"] = or_(place_words(func.split_part(Job.page_work_place, ",", 1)).like(pattern),
-                                  place_words(Job.municipality).like(pattern))
-    return conditions
+
+    match: Callable[[Any], ColumnElement[bool]]
+    unknown: ColumnElement[bool]
+
+
+def _offers_accommodation(offered: bool) -> ColumnElement[bool]:
+    offers = Job.accommodation != "none"
+    return offers if offered else not_(offers)
+
+
+def _works_in(place: str) -> ColumnElement[bool]:
+    pattern = f"% {place} %"
+    # The page names the county after a comma: "VARAŽDIN, VARAŽDINSKA ŽUPANIJA".
+    return or_(place_words(func.split_part(Job.page_work_place, ",", 1)).like(pattern),
+               place_words(Job.municipality).like(pattern))
+
+
+# Condition filters by JobConditionFiltersDTO field; a new filter needs only
+# an entry here for search, statistics and unknown-value counts to apply it.
+CONDITION_FILTERS: dict[str, ConditionFilter] = {
+    "max_experience_months": ConditionFilter(
+        lambda months: Job.experience_months <= months, Job.experience_months.is_(None)),
+    "contract": ConditionFilter(lambda contract: Job.contract == contract, Job.contract.is_(None)),
+    "full_time": ConditionFilter(lambda full_time: Job.full_time == full_time, Job.full_time.is_(None)),
+    "education": ConditionFilter(
+        lambda education: Job.education_levels.contains([education]), Job.education_levels.is_(None)),
+    "accommodation": ConditionFilter(_offers_accommodation, Job.accommodation.is_(None)),
+    "employment_tags": ConditionFilter(
+        lambda tags: Job.employment_tags.contains(list(tags)), Job.employment_tags.is_(None)),
+    "place": ConditionFilter(_works_in, and_(Job.page_work_place.is_(None), Job.municipality.is_(None))),
+}
+
+
+def condition_filters(criteria: JobConditionFiltersDTO) -> dict[str, ColumnElement[bool]]:
+    """Conditions for the condition filters that criteria sets, by filter name."""
+    return {
+        name: condition.match(value)
+        for name, condition in CONDITION_FILTERS.items()
+        if (value := getattr(criteria, name)) is not None
+    }
 
 
 def place_words(place: ColumnElement[str | None]) -> ColumnElement[str | None]:

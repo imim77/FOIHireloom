@@ -36,11 +36,11 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   )
 }
 
-function TableBody({ className, tone = "default", ...props }: React.ComponentProps<"tbody"> & { tone?: "default" | "muted" }) {
+function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
   return (
     <tbody
       data-slot="table-body"
-      className={cn("[&_tr:last-child]:border-0", tone === "muted" && "[&_td]:bg-muted [&_th]:bg-muted", className)}
+      className={cn("[&_tr:last-child]:border-0", className)}
       {...props}
     />
   )

@@ -9,8 +9,8 @@ const day = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +i
 /** Whole days from one ISO date to another. */
 export const daysBetween = (from: string, to: string) => Math.round((day(to) - day(from)) / 86_400_000)
 
-/** "15. 11." */
-export const shortDate = (iso: string) => `${+iso.slice(8, 10)}. ${+iso.slice(5, 7)}.`
+/** "15. 11.", with a no-break space so a wrapping detail never splits the date. */
+export const shortDate = (iso: string) => `${+iso.slice(8, 10)}.\u00a0${+iso.slice(5, 7)}.`
 
 /** How long ago the job was published, for the card's first label: "Danas", "Jučer", "Prije 5 dana". */
 export function age(job: JobCard, today: string): string | null {

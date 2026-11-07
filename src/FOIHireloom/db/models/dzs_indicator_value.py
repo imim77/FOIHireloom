@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -6,14 +6,12 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Date,
-    DateTime,
     ForeignKey,
     Identity,
     Numeric,
     SmallInteger,
     Text,
     UniqueConstraint,
-    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,49 +24,48 @@ class DzsIndicatorValue(Base):
     value is NULL exactly when the source cell held a marker or nothing:
     missing_reason then says which, so a missing value is never a zero.
     is_provisional follows the source's footnotes, not the cell. import_id is
-    the import that last wrote the row; revised_at is set when a later import
-    changed its value.
+    the import that last wrote the row.
     """
 
-    __tablename__ = "dzs_indicator_values"
+    __tablename__ = "vrijednosti_pokazatelja_dzs"
     __table_args__ = (
-        UniqueConstraint("county_id", "indicator", "period", "sex"),
+        UniqueConstraint("county_id", "indicator", "period", "sex", name="uq_vrijednosti_pokazatelja_dzs_prirodni_kljuc"),
         CheckConstraint(
-            "indicator IN ('active_population', 'employed', 'unemployed', 'unemployment_rate')",
-            name="indicator_valid",
+            "pokazatelj IN ('active_population', 'employed', 'unemployed', 'unemployment_rate')",
+            name="pokazatelj_ispravan",
         ),
-        CheckConstraint("sex IN ('total', 'women', 'men')", name="sex_valid"),
-        CheckConstraint("period = date_trunc('month', period)::date", name="period_is_month_start"),
+        CheckConstraint("spol IN ('total', 'women', 'men')", name="spol_ispravan"),
+        CheckConstraint("razdoblje = date_trunc('month', razdoblje)::date", name="razdoblje_pocinje_mjesecom"),
         CheckConstraint(
-            "missing_reason IN ('no_occurrence', 'not_available', 'empty')", name="missing_reason_valid"
+            "razlog_nedostupnosti IN ('no_occurrence', 'not_available', 'empty')", name="razlog_nedostupnosti_ispravan"
         ),
-        CheckConstraint("(value IS NULL) = (missing_reason IS NOT NULL)", name="value_or_missing_reason"),
+        CheckConstraint("(vrijednost IS NULL) = (razlog_nedostupnosti IS NOT NULL)", name="vrijednost_ili_razlog"),
         CheckConstraint(
-            "value >= 0 AND CASE WHEN indicator = 'unemployment_rate' THEN value <= 100 AND value = round(value, 1) "
-            "ELSE value = trunc(value) END",
-            name="value_in_unit",
+            "vrijednost >= 0 AND CASE WHEN pokazatelj = 'unemployment_rate' THEN vrijednost <= 100 AND vrijednost = round(vrijednost, 1) "
+            "ELSE vrijednost = trunc(vrijednost) END",
+            name="vrijednost_u_jedinici",
         ),
         CheckConstraint(
-            "source = 't1' OR (source = 'workbook_9_4_13' AND indicator = 'active_population') "
-            "OR (source = 'workbook_9_4_14' AND indicator = 'unemployment_rate')",
-            name="source_has_indicator",
+            "izvor = 't1' OR (izvor = 'workbook_9_4_13' AND pokazatelj = 'active_population') "
+            "OR (izvor = 'workbook_9_4_14' AND pokazatelj = 'unemployment_rate')",
+            name="izvor_ima_pokazatelj",
         ),
-        CheckConstraint("created_at <= updated_at", name="timestamps_ordered"),
-        CheckConstraint("revised_at IS NULL OR revised_at BETWEEN created_at AND updated_at", name="revised_in_lifetime"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    county_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("counties.id", ondelete="RESTRICT"))
-    indicator: Mapped[str] = mapped_column(Text)
+    id: Mapped[int] = mapped_column("id", BigInteger, Identity(), primary_key=True, key="id")
+    county_id: Mapped[int] = mapped_column(
+        "id_zupanije", SmallInteger, ForeignKey("zupanije.id", ondelete="RESTRICT"), key="county_id",
+    )
+    indicator: Mapped[str] = mapped_column("pokazatelj", Text, key="indicator")
     # First day of the reference month.
-    period: Mapped[date] = mapped_column(Date)
-    sex: Mapped[str] = mapped_column(Text)
+    period: Mapped[date] = mapped_column("razdoblje", Date, key="period")
+    sex: Mapped[str] = mapped_column("spol", Text, key="sex")
     # Persons as whole numbers; the rate in percent with one decimal.
-    value: Mapped[Decimal | None] = mapped_column(Numeric)
-    missing_reason: Mapped[str | None] = mapped_column(Text)
-    is_provisional: Mapped[bool] = mapped_column(Boolean)
-    source: Mapped[str] = mapped_column(Text)
-    import_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("dzs_imports.id", ondelete="RESTRICT"), index=True)
-    revised_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    value: Mapped[Decimal | None] = mapped_column("vrijednost", Numeric, key="value")
+    missing_reason: Mapped[str | None] = mapped_column("razlog_nedostupnosti", Text, key="missing_reason")
+    is_provisional: Mapped[bool] = mapped_column("privremeni_podatak", Boolean, key="is_provisional")
+    source: Mapped[str] = mapped_column("izvor", Text, key="source")
+    import_id: Mapped[int] = mapped_column(
+        "id_uvoza", BigInteger, ForeignKey("uvozi_dzs.id", ondelete="RESTRICT"), index=True,
+        key="import_id",
+    )

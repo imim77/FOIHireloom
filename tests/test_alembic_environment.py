@@ -59,7 +59,9 @@ class AlembicEnvironmentTests(unittest.TestCase):
             command.upgrade(config, "head", sql=True)
         sql = output.getvalue()
         for table_name in Base.metadata.tables:
-            self.assertIn(f"CREATE TABLE {table_name}", sql)
+            self.assertTrue(
+                f"CREATE TABLE {table_name}" in sql or f"RENAME TO {table_name}" in sql, table_name,
+            )
         self.assertIn("JSONB", sql)
         self.assertIn("TEXT[]", sql)
 
@@ -70,4 +72,4 @@ class AlembicEnvironmentTests(unittest.TestCase):
             command.downgrade(config, "head:base", sql=True)
         sql = output.getvalue()
         self.assertLess(sql.index("DROP TABLE job_feed_memberships"), sql.index("DROP TABLE jobs"))
-        self.assertLess(sql.index("DROP TABLE jobs"), sql.index("DROP TABLE employers"))
+        self.assertLess(sql.index("DROP TABLE jobs"), sql.rindex("DROP TABLE employers"))

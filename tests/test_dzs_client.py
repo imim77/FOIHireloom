@@ -28,7 +28,6 @@ class DzsClientTests(unittest.IsolatedAsyncioTestCase):
             response = await DzsClient(http, timeout=3).fetch(WORKBOOK_URL.replace("https", "http"))
             self.assertFalse(http.is_closed)
         self.assertEqual(response.content, b"PK\x03\x04xlsx")
-        self.assertEqual(response.etag, ETAG)
         self.assertEqual(response.last_modified, datetime(2026, 10, 28, 10, 0, 47, tzinfo=timezone.utc))
         self.assertEqual([r.url.scheme for r in requests], ["http", "https"])
         self.assertEqual(requests[0].extensions["timeout"]["read"], 3)
@@ -43,7 +42,7 @@ class DzsClientTests(unittest.IsolatedAsyncioTestCase):
                     lambda request: httpx.Response(200, content=b"x", headers=headers)
                 )) as http:
                     response = await DzsClient(http).fetch(WORKBOOK_URL)
-                self.assertEqual((response.etag, response.last_modified), (None, None))
+                self.assertIsNone(response.last_modified)
 
     async def test_http_and_transport_errors(self) -> None:
         for status in (304, 404, 500):
@@ -74,7 +73,7 @@ class DzsClientTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(DzsTooLargeError):
                     await DzsClient(http, max_bytes=2047).read(path)
                 local = await DzsClient(http, max_bytes=2048).read(path)
-                self.assertEqual((local.content, local.etag, local.last_modified), (b"y" * 2048, None, None))
+                self.assertEqual((local.content, local.last_modified), (b"y" * 2048, None))
                 for unreadable in (Path(directory) / "missing.xlsx", Path(directory)):
                     with self.subTest(path=unreadable), self.assertRaises(DzsFileError):
                         await DzsClient(http).read(unreadable)

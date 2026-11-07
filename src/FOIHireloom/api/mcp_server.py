@@ -17,41 +17,60 @@ from FOIHireloom.services.interfaces.lifecycle import ServiceOpener
 
 from .app_views import AppViews
 from .apps.views import BUILD_HINT, stale_sources
-from .county_tools import COUNTY_INDICATOR_SERVICE, CountyIndicatorTools
+from .county_tools import COUNTY_INDICATOR_SERVICE, CountyComparisonTools, UnemploymentHistoryTools
 from .forecast_tools import LABOUR_FORECAST_SERVICE, ForecastTools
-from .job_tools import JOB_SEARCH_SERVICE, JobTools
+from .job_comparison_tools import JobComparisonTools
+from .job_market_tools import JobMarketTools
+from .job_tools import JOB_SEARCH_SERVICE, JobDetailTools, JobReferenceTools, JobSearchTools
+from .tool_provider import ToolGroup
 
-INSTRUCTIONS = (
-    "Search job advertisements from the Croatian Employment Service (HZZ). "
-    "Jobs come from HZZ county RSS feeds and the jobs' HZZ pages, which this server imports regularly; "
-    "the tools read the stored copy and never contact HZZ. Use list_regions and "
-    "list_categories for valid filter values, search_jobs to list jobs and "
-    "job_market_stats for counts and breakdowns. To show the user jobs as "
-    "cards use show_jobs, and show_jobs_by_county for a chart of where the "
-    "jobs are. For accommodation counts, shares or charts ('usporedba smještaja', 'sa smještajem i bez smještaja'), "
-    "call show_accommodation_comparison directly, optionally with a county, query or category. "
-    "Choose this view automatically from the user's question, even if they never say 'chart', 'show', "
-    "'compare' or a tool name; do not ask them to choose a chart type. For example, "
-    "'Koliko oglasa za kuhare u Varaždinskoj županiji nudi smještaj, a koliko ne?' means "
-    "show_accommodation_comparison(query='kuhar', county='varazdinska'). "
-    "It compares all matching ads in three groups: offered, explicitly not offered and unknown. "
-    "A request to find or browse jobs with accommodation still uses search_jobs or show_jobs "
-    "with accommodation=True; infer the chart for aggregate questions about counts, shares or distribution. "
-    "For example, 'Prikaži usporedbu oglasa koji nude smještaj, ne nude smještaj i nemaju podatak o smještaju "
-    "za kuhare u Varaždinskoj županiji' means show_accommodation_comparison(query='kuhar', county='varazdinska'). "
-    "Do not search for and pick a few example ads for this aggregate question. "
-    "Only when the user explicitly picked 2 or 3 particular jobs, pass their ids to "
-    "show_job_comparison to show the user a comparison table, or to compare_jobs "
-    "when only the data is needed; pass only the conditions the user stated. "
-    "When the user asks to compare counties by job ads and DZS registered unemployment, call "
-    "show_county_comparison; when the user asks how unemployment changed over the last 12 to 24 months, call "
-    "show_unemployment_history. Both return the data and show it; compare_counties and unemployment_history "
-    "return the same data without a view, only for when you need the numbers without showing them. Their indicators describe each county as a whole, and HZZ and DZS data refer to different dates, "
-    "so name both. "
-    "When the user asks about the future, e.g. how unemployment will develop or how many jobs will be needed, "
-    "call forecast_labour_market; it returns an Amazon Chronos model forecast with an 80% interval. "
-    "When a result carries a coverage warning, pass it on to the "
-    "user. Send users to canonical_url to read the full advertisement or apply."
+INSTRUCTIONS = """Help users find Croatian HZZ job ads and understand HZZ/DZS labour-market data.
+Choose tools by the user's task, not by whether they ask for a visual format.
+The show_ tools are the default user-facing workflows: they return structured data
+AND automatically present the appropriate cards, ranking, comparison or history
+on MCP Apps hosts. Use them even for ordinary questions. Never ask the user to
+say "kao graf", "kao kartice", "chart", "table" or choose a display format first.
+
+Route by intent:
+- Find or browse individual vacancies, including jobs with accommodation or no
+  experience -> show_jobs. Example: "Tražim posao kuhara sa smještajem" means
+  query='kuhar', accommodation=true. Use get_job for details of one known ad.
+- Where jobs are concentrated or which counties seek the most workers ->
+  show_jobs_by_county. Use metric='jobs' for ads, 'workers_needed' for workers.
+- Compare accommodation counts, shares or offered/not-offered/unknown groups ->
+  show_accommodation_comparison, directly over all matching ads. Never count a
+  search page or choose a few example jobs to answer an aggregate question.
+- Compare 2 to 6 named counties by demand and registered unemployment ->
+  show_county_comparison. A question about changes over time instead goes to
+  show_unemployment_history (1 to 6 counties, 12 to 24 months).
+- Forecast future county unemployment, employment or job ads ->
+  show_labour_market_forecast for the named county. Return the Amazon Chronos model estimate with its
+  80% interval; use show_unemployment_history for past values.
+- Compare 2 or 3 particular ads selected by the user -> show_job_comparison with
+  those known IDs in the user's order. Ask which ads only if selection is unclear.
+- Other totals and employer/contract/education breakdowns -> job_market_stats.
+  County rankings and accommodation distributions use the dedicated workflows above.
+
+search_jobs, compare_jobs, compare_counties, unemployment_history and forecast_labour_market are app-only
+raw-data counterparts, not alternative user-facing workflows. Their presence in
+an older client's catalog is not a reason to choose them over the show_ tools.
+list_regions and list_categories resolve unknown filter values; they are reference
+lookups, not substitutes for a job search or a geographic comparison.
+
+Extract only stated conditions into dedicated filters; do not guess preferences
+or insert filter words into query. Omit expired ads unless requested. For missing
+required counties or selected job IDs ask for that information, not for a format.
+The server reads stored data, never live HZZ/DZS. Preserve freshness warnings,
+unknown values, sources, provisional flags and distinct HZZ/DZS reference dates.
+Unknown accommodation is not "no accommodation"; missing values are not zero.
+County-wide ratios never use only one occupation's ads. Use canonical_url to
+read the original advertisement or apply; do not invent facts or promise employment.
+"""
+
+# Every group the server registers, in the order clients list their tools and pages.
+TOOL_GROUPS: tuple[ToolGroup, ...] = (
+    JobSearchTools(), JobMarketTools(), JobDetailTools(), JobComparisonTools(), JobReferenceTools(),
+    CountyComparisonTools(), UnemploymentHistoryTools(), ForecastTools(), AppViews(),
 )
 
 
@@ -79,11 +98,15 @@ class McpServer:
         self._county_indicator_service = county_indicator_service
         self._labour_forecast_service = labour_forecast_service
         # Unexpected errors reach the client without details; tools raise ToolError for the rest.
-        self.server = FastMCP("FOIHireloom", instructions=INSTRUCTIONS, lifespan=self._lifespan,
-                              mask_error_details=True)
-        for group in (JobTools(), CountyIndicatorTools(), ForecastTools(), AppViews()):
-            group.register(self.server)
-        self.server.custom_route("/health", methods=["GET"], include_in_schema=False)(self._health)
+        self._server = FastMCP("FOIHireloom", instructions=INSTRUCTIONS, lifespan=self._lifespan,
+                               mask_error_details=True)
+        for group in TOOL_GROUPS:
+            group.register(self._server)
+        self._server.custom_route("/health", methods=["GET"], include_in_schema=False)(self._health)
+
+    @property
+    def server(self) -> FastMCP:
+        return self._server
 
     @asynccontextmanager
     async def _lifespan(self, server: FastMCP) -> AsyncIterator[dict[str, Any]]:
@@ -103,14 +126,14 @@ class McpServer:
             print(f"Warning: the MCP App pages are older than {', '.join(stale)}; {BUILD_HINT}.", file=sys.stderr)
         if self._settings.MCP_TRANSPORT == "stdio":
             print("Starting MCP server", file=sys.stderr)
-            self.server.run("stdio")
+            self._server.run("stdio")
         else:
-            self.server.run("http", host=self._settings.MCP_HOST, port=self._settings.MCP_PORT,
+            self._server.run("http", host=self._settings.MCP_HOST, port=self._settings.MCP_PORT,
                             **self._http_options())
 
     async def run_http_async(self, sockets: list[socket.socket] | None = None) -> None:
         """Serve Streamable HTTP until cancelled; sockets replace host and port when given."""
-        await self.server.run_http_async(host=self._settings.MCP_HOST, port=self._settings.MCP_PORT,
+        await self._server.run_http_async(host=self._settings.MCP_HOST, port=self._settings.MCP_PORT,
                                          sockets=sockets, **self._http_options())
 
     def _http_options(self) -> dict[str, Any]:

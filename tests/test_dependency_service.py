@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, patch
 from FOIHireloom.config.settings import Settings
 from FOIHireloom.dto.county import CountyDTO
 from FOIHireloom.dto.county_indicators import UnemploymentHistoryRequestDTO
+from FOIHireloom.dto.forecast_accuracy import ForecastAccuracyRequestDTO
 from FOIHireloom.dto.job_search import CategoryDTO
 from FOIHireloom.services.dependency import DependencyService
 
@@ -88,6 +89,13 @@ class DependencyServiceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(services, ("search", "indicators", "forecast"))
         self.assertEqual(self.events, ["search-opened", "indicators-opened", "forecast-opened", "forecast-closed",
                                        "indicators-closed", "search-closed"])
+
+    async def test_accuracy_opener_uses_injected_pool_and_closes_without_loading_a_model_for_missing_data(self):
+        async with self.dependencies.forecast_accuracy_service() as evaluator:
+            report = await evaluator.evaluate(ForecastAccuracyRequestDTO(counties=(COUNTY.code,)))
+            self.assertEqual(report.status, "unavailable")
+            self.assertNotIn("database-closed", self.events)
+        self.assertEqual(self.events, ["database-opened", "transaction-closed", "database-closed"])
 
     async def test_partial_override_closes_before_the_default_pool(self) -> None:
         @asynccontextmanager

@@ -26,6 +26,8 @@
   {"id":"total_ads","intent":"statistics","prompt":"Koliko ukupno ima oglasa za kuhare u Istarskoj?","tool":"job_market_stats","arguments":{"query":"kuhar","county":"istarska"}},
   {"id":"employers","intent":"statistics","prompt":"Koji poslodavci u Istarskoj imaju najviše oglasa?","tool":"job_market_stats","arguments":{"county":"istarska"}},
   {"id":"contracts","intent":"statistics","prompt":"Koliki dio oglasa nudi ugovor na neodređeno?","tool":"job_market_stats","arguments":{}},
+  {"id":"county_forecast","intent":"forecast","prompt":"Kolika će biti nezaposlenost u Varaždinskoj županiji idućih 6 mjeseci?","tool":"show_labour_market_forecast","arguments":{"county":"varazdinska","target":"unemployment_rate","horizon":6}},
+  {"id":"weekly_ads_forecast","intent":"forecast","prompt":"Prognoziraj broj novih oglasa u Istarskoj za sljedećih 8 tjedana.","tool":"show_labour_market_forecast","arguments":{"county":"istarska","target":"job_ads","horizon":8}},
   {"id":"jobs_skills_csharp_python","intent":"jobs","prompt":"Znam C# i Python, koji poslovi su dostupni za te vještine?","tool":"show_jobs","arguments":{"skills":["csharp","python"]}},
   {"id":"jobs_skills_excel_autocad","intent":"jobs","prompt":"I know Excel and AutoCAD, any jobs in Split?","tool":"show_jobs","arguments":{"skills":["excel","autocad"],"place":"Split"}}
 ]

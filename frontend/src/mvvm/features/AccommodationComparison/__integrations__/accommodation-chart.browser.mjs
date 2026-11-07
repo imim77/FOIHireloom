@@ -5,7 +5,6 @@ import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
 import { sample } from '../utils/sample.ts'
-import { INNER, layoutRing } from '../utils/ring-geometry.ts'
 
 // A minimal MCP Apps host sends actual protocol messages into the built page; no app-state injection.
 const host = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0">
@@ -62,13 +61,27 @@ async function checkLayout(frame) {
   assert.equal(await frame.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
   assert.ok(await frame.locator('svg path').evaluateAll((paths) => paths.every((p) => !/NaN|Infinity/.test(p.getAttribute('d') ?? ''))))
 }
-async function pointOn(frame, index, values = [2, 7, 1]) {
-  const box = await frame.locator('.allocation-ring').boundingBox()
-  const g = layoutRing(values)[index]
-  const angle = (g.start + g.span / 2) * Math.PI / 180
-  const radius = (INNER + g.outer) / 2
-  return { x: box.x + (200 + radius * Math.sin(angle)) / 400 * box.width,
-    y: box.y + (200 - radius * Math.cos(angle)) / 400 * box.height }
+// A point inside segment index's painted shape, in page coordinates: the segments are Recharts sectors, so ask the
+// browser which points of the ring fall in the segment's fill.
+async function pointOn(frame, index) {
+  const frameBox = await frame.page().locator('iframe').boundingBox()
+  const point = await frame.evaluate((index) => {
+    const path = document.querySelector(`[data-slot="allocation-slice-button"][data-index="${index}"] path`)
+    const box = path.getBBox()
+    const matrix = path.getScreenCTM()
+    for (let y = 0.1; y < 1; y += 0.1) {
+      for (let x = 0.1; x < 1; x += 0.1) {
+        const local = new DOMPoint(box.x + box.width * x, box.y + box.height * y)
+        if (!path.isPointInFill(local)) continue
+        const screen = local.matrixTransform(matrix)
+        if (document.elementFromPoint(screen.x, screen.y)?.closest('[data-slot="allocation-slice-button"]') !==
+          path.parentElement.closest('[data-slot="allocation-slice-button"]')) continue
+        return { x: screen.x, y: screen.y }
+      }
+    }
+    throw new Error(`no point on segment ${index}`)
+  }, index)
+  return { x: frameBox.x + point.x, y: frameBox.y + point.y }
 }
 const segment = (frame, name) => frame.getByRole('group', { name: 'Udjeli skupina smještaja' })
   .getByRole('button', { name: new RegExp(`^${name}:`) })
@@ -76,11 +89,12 @@ const context = (frame) => frame.locator('.allocation-context').textContent()
 async function amountIs(frame, text) {
   await frame.waitForFunction((text) => document.querySelector('.allocation-amount')?.textContent === text, text)
 }
-// Each group's fill (the gradient's lower stop) and the ink of its share, as the theme resolves the tokens.
+// Each group's fill and the ink of its share, as the theme resolves the tokens.
 async function ramp(frame) {
+  await frame.locator('[data-slot="allocation-share"]').nth(2).waitFor()
   return frame.evaluate(() => ['offered', 'not_offered', 'unknown'].map((key) => [
-    getComputedStyle(document.querySelector(`linearGradient.allocation-${key} stop[offset="1"]`)).stopColor,
-    getComputedStyle(document.querySelector(`.allocation-pill.allocation-${key} .allocation-glass`)).color]))
+    getComputedStyle(document.querySelector(`.allocation-shape.allocation-${key}`)).fill,
+    getComputedStyle(document.querySelector(`.allocation-pill.allocation-${key} text`)).fill]))
 }
 async function artifact(frame, name) {
   if (!process.env.CHART_ARTIFACT_DIR) return
@@ -117,7 +131,7 @@ test('legend keyboard toggles retain at least one positive group and restore ori
   } finally { await page.close() }
 })
 
-test('real sample renders counts, percentages, source, filters and freshness with reference ring and glass pills', async () => {
+test('real sample renders counts, percentages, source, filters and freshness with a flat ring and share labels', async () => {
   const { page, frame } = await open()
   try {
     await deliver(page, frame, sample())
@@ -125,13 +139,17 @@ test('real sample renders counts, percentages, source, filters and freshness wit
     assert.deepEqual(await frame.locator('.allocation-legend-count').allTextContents(), ['2', '7', '1'])
     assert.deepEqual(await frame.locator('[data-slot="allocation-share"]').allTextContents(), ['20 %', '70 %', '10 %'])
     assert.equal(await frame.locator('[data-slot="allocation-slice-button"]').count(), 3)
-    // orange-300 / surface-disable / surface-subdued, with fg-loud ink on all three.
-    assert.deepEqual(await ramp(frame), [['rgb(255, 154, 92)', 'rgb(24, 24, 27)'],
-      ['rgb(196, 200, 208)', 'rgb(24, 24, 27)'], ['rgb(236, 238, 242)', 'rgb(24, 24, 27)']])
+    // accent-500 / surface-disable / surface-subdued; shares in fg-soft on card-coloured discs.
+    assert.deepEqual(await ramp(frame), [['rgb(251, 41, 14)', 'rgb(110, 110, 110)'],
+      ['rgb(205, 205, 205)', 'rgb(110, 110, 110)'], ['rgb(238, 238, 238)', 'rgb(110, 110, 110)']])
+    // Flat: no filters, gradients or shadows on the ring or its share discs.
+    assert.equal(await frame.locator('.allocation-ring filter, .allocation-ring [filter], .allocation-ring linearGradient').count(), 0)
+    assert.ok(await frame.locator('.allocation-ring path, .allocation-disc').evaluateAll((nodes) =>
+      nodes.every((node) => getComputedStyle(node).filter === 'none')))
     assert.match(await frame.locator('.header .soft').textContent(), /kuhar.*Varaždinska/)
     assert.match(await frame.locator('.sources').textContent(), /HZZ/)
     assert.match(await frame.locator('.warning').textContent(), /stariji od 6 sati/)
-    assert.equal(await frame.locator('[data-layer="shape"]').count(), 3)
+    assert.equal(await frame.locator('.allocation-shape').count(), 3)
     await checkLayout(frame)
     await artifact(frame, 'accommodation_comparison.png')
 
@@ -143,11 +161,11 @@ test('real sample renders counts, percentages, source, filters and freshness wit
     await page.mouse.move(point.x, point.y)
     assert.equal(await context(frame), 'Nudi smještaj · 20,0\u00a0% svih oglasa')
     await amountIs(frame, '2 oglasa')
-    assert.equal(await frame.locator('[data-key="offered"] .allocation-veil').getAttribute('class'), 'allocation-veil')
-    assert.match(await frame.locator('[data-key="not_offered"] .allocation-veil').getAttribute('class'), /is-visible/)
+    const shape = (key) => frame.locator(`[data-key="${key}"] .allocation-shape`)
+    assert.equal(await shape('offered').getAttribute('fill-opacity'), '1')
+    assert.equal(await shape('not_offered').getAttribute('fill-opacity'), '0.32')
     // A dimmed slice keeps a surface-disable edge, so the lightest one does not fade into the card.
-    assert.equal(await frame.locator('[data-key="unknown"] .allocation-veil').evaluate((el) => getComputedStyle(el).stroke),
-      'rgb(196, 200, 208)')
+    assert.equal(await shape('unknown').evaluate((el) => getComputedStyle(el).stroke), 'rgb(205, 205, 205)')
     // Click selects; leaving the ring keeps the selection.
     await page.mouse.click(point.x, point.y)
     await page.mouse.move(0, 0)
@@ -162,19 +180,27 @@ test('real sample renders counts, percentages, source, filters and freshness wit
     assert.match(await context(frame), /^Podatak nije poznat · /)
     await amountIs(frame, '1 oglas')
     assert.equal(await segment(frame, 'Podatak nije poznat').getAttribute('aria-pressed'), 'true')
-    assert.equal(await segment(frame, 'Podatak nije poznat').evaluate((node) => node === document.activeElement), true)
-    assert.notEqual(await segment(frame, 'Podatak nije poznat').evaluate((node) => getComputedStyle(node).stroke), 'none')
+    // Focus follows the selection once Recharts has redrawn the segments.
+    await frame.waitForFunction(() => document.activeElement?.dataset?.key === 'unknown')
+    assert.equal(await segment(frame, 'Podatak nije poznat').evaluate((node) => getComputedStyle(node.querySelector('path')).stroke),
+      'rgb(251, 41, 14)', 'the focused segment is ringed in red')
+    const focused = (key) => frame.waitForFunction((key) => document.activeElement?.dataset?.key === key, key)
     await page.keyboard.press('ArrowRight')
     assert.match(await context(frame), /^Nudi smještaj · /)
+    await focused('offered')
     await page.keyboard.press('ArrowLeft')
+    await focused('unknown')
     await page.keyboard.press('Home')
     assert.match(await context(frame), /^Nudi smještaj · /)
+    await focused('offered')
     assert.deepEqual(await frame.locator('[data-slot="allocation-slice-button"]').evaluateAll((nodes) =>
       nodes.map((node) => [node.getAttribute('tabindex'), node.getAttribute('aria-pressed')])),
     [['0', 'true'], ['-1', 'false'], ['-1', 'false']])
     await page.keyboard.press('Space')
     assert.equal(await segment(frame, 'Nudi smještaj').getAttribute('aria-pressed'), 'false')
+    await focused('offered')
     await page.keyboard.press('Enter')
+    await focused('offered')
     assert.equal(await segment(frame, 'Nudi smještaj').getAttribute('aria-pressed'), 'true')
     await page.keyboard.press('Escape')
     assert.equal(await context(frame), 'Ukupno oglasa · u odabranom skupu')
@@ -194,14 +220,15 @@ test('legend hiding morphs the ring, identifies its changed denominator and pres
     assert.match(await buttons.nth(1).getAttribute('aria-label'), /70,0.*svih oglasa/)
     assert.deepEqual(await frame.locator('.allocation-legend-count').allTextContents(), ['2', '7', '1'])
     await page.waitForTimeout(950)
-    assert.equal(await frame.locator('[data-key="not_offered"] [data-layer="shape"]').getAttribute('d'), '')
+    assert.equal(await frame.locator('[data-key="not_offered"]').count(), 0, 'a hidden group has no segment')
     assert.equal(await frame.locator('[data-slot="allocation-share"]').first().getAttribute('data-share'), String(2 / 3 * 100))
     await buttons.first().click()
     await page.waitForTimeout(950)
     assert.equal(await buttons.nth(2).getAttribute('aria-disabled'), 'true')
     await buttons.nth(2).click({ force: true })
     assert.equal(await buttons.nth(2).getAttribute('aria-pressed'), 'true')
-    assert.equal((await frame.locator('[data-key="unknown"] [data-layer="shape"]').getAttribute('d')).match(/ A /g).length, 4)
+    assert.deepEqual(await frame.locator('[data-slot="allocation-slice-button"]').evaluateAll((nodes) =>
+      nodes.map((node) => node.dataset.key)), ['unknown'], 'the last visible group fills the ring alone')
     await frame.getByRole('button', { name: 'Prikaži sve skupine' }).click()
     assert.deepEqual(await buttons.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-pressed'))), ['true', 'true', 'true'])
     await checkLayout(frame)
@@ -214,9 +241,9 @@ test('320px dark mobile supports touch selection, second-tap clearing and reduce
     await deliver(page, frame, sample())
     await page.evaluate(() => window.setTheme('dark'))
     await frame.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
-    // The same ramp in dark tokens; near-black ink on the darker orange, where fg-loud would be too faint.
-    assert.deepEqual(await ramp(frame), [['rgb(232, 116, 47)', 'rgb(24, 24, 27)'],
-      ['rgb(113, 113, 122)', 'rgb(250, 250, 250)'], ['rgb(63, 63, 70)', 'rgb(250, 250, 250)']])
+    // The same ramp in dark tokens (accent-500 is one red in both), with dark fg-soft shares.
+    assert.deepEqual(await ramp(frame), [['rgb(251, 41, 14)', 'rgb(154, 154, 154)'],
+      ['rgb(110, 110, 110)', 'rgb(154, 154, 154)'], ['rgb(58, 58, 58)', 'rgb(154, 154, 154)']])
     await frame.locator('.allocation-ring').scrollIntoViewIfNeeded()
     const point = await pointOn(frame, 2)
     await page.touchscreen.tap(point.x, point.y)
@@ -241,12 +268,11 @@ test('all-unknown and single-known groups render complete rings; an empty result
       await deliver(page, frame, withCounts(counts))
       const index = counts.findIndex((n) => n > 0)
       assert.equal(await frame.locator('.allocation-legend-item:disabled').count(), 2)
-      const path = await frame.locator('[data-layer="shape"]').nth(index).getAttribute('d')
-      // Select by key instead of paint order: the thin, empty bands are painted first.
+      // Empty groups have no segment; the one positive group is the whole ring.
       const key = ['offered', 'not_offered', 'unknown'][index]
-      const correctPath = await frame.locator(`[data-key="${key}"] [data-layer="shape"]`).getAttribute('d')
-      assert.equal((correctPath.match(/ A /g) ?? []).length, 4)
-      assert.doesNotMatch(path, /NaN|Infinity/)
+      assert.deepEqual(await frame.locator('[data-slot="allocation-slice-button"]').evaluateAll((nodes) =>
+        nodes.map((node) => node.dataset.key)), [key])
+      assert.doesNotMatch(await frame.locator('.allocation-shape').getAttribute('d'), /NaN|Infinity/)
       await checkLayout(frame)
     }
     await deliver(page, frame, withCounts([0, 0, 0]))
@@ -277,9 +303,11 @@ test('hidden iframe animations finish by deadline and keep final percentages whe
     await page.waitForTimeout(3100)
     await page.evaluate(() => { document.querySelector('iframe').style.display = 'block' })
     await frame.locator('.allocation-ring').waitFor()
+    // Recharts sweeps the ring in once the frame paints and adds the share labels when it ends.
+    await frame.locator('[data-slot="allocation-share"]').nth(2).waitFor()
     assert.deepEqual(await frame.locator('[data-slot="allocation-share"]').allTextContents(), ['20 %', '70 %', '10 %'])
     assert.equal(await frame.locator('.allocation-amount').textContent(), '10 oglasa')
-    assert.ok((await frame.locator('[data-layer="shape"]').evaluateAll((paths) => paths.map((p) => p.getAttribute('d')))).every(Boolean))
+    assert.ok((await frame.locator('.allocation-shape').evaluateAll((paths) => paths.map((p) => p.getAttribute('d')))).every(Boolean))
     await checkLayout(frame)
   } finally { await page.close() }
 })

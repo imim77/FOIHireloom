@@ -13,7 +13,6 @@ class ParsedJobDTO(ModelConfigBaseModel):
     source_job_id: str
     canonical_url: str
     title: str | None
-    description_raw: str
     description_text: str | None
     published_on: date
     deadline_on: date | None

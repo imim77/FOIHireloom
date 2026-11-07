@@ -1,10 +1,11 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
+from typing import Literal
 
 from FOIHireloom.db.uow.base import UnitOfWorkFactory
 from FOIHireloom.dto.job_conditions import RawJobConditionsDTO
-from FOIHireloom.dto.job_page import JobPageFetchResultDTO
+from FOIHireloom.dto.job_page import JobPageFetchResultDTO, JobPageTargetDTO
 from FOIHireloom.exceptions import HzzJobPageError, HzzJobPageUnavailableError
 from FOIHireloom.integrations.interfaces.hzz_job_page import HzzJobPageClientInterface
 from FOIHireloom.services.interfaces.job_page import JobPageServiceInterface
@@ -13,6 +14,8 @@ from .hzz_job_page_parser import HzzJobPageParser
 from .job_conditions import JobConditionsNormalizer
 
 ERROR_SUMMARY_LIMIT = 500
+
+type PageStatus = Literal["fetched", "unavailable", "failed"]
 
 
 class JobPageService(JobPageServiceInterface):
@@ -57,22 +60,7 @@ class JobPageService(JobPageServiceInterface):
         for index, target in enumerate(targets):
             if index:
                 await self._sleep(self._delay_seconds)
-            page, status, error = None, "fetched", None
-            try:
-                page = self._parser.parse(await self._client.fetch(target.canonical_url))
-            except HzzJobPageUnavailableError as problem:
-                status, error = "unavailable", problem
-            except (HzzJobPageError, ValueError) as problem:
-                status, error = "failed", problem
-            async with self._uow_factory() as work:
-                checked_at = await work.transaction_time()
-                if page is not None:
-                    conditions = self._normalizer.normalize(RawJobConditionsDTO.model_validate(page))
-                    await work.jobs.record_page(target.id, page, conditions, target.content_hash, checked_at)
-                else:
-                    summary = (str(error) or type(error).__name__)[:ERROR_SUMMARY_LIMIT]
-                    await work.jobs.record_page_problem(target.id, status, summary, checked_at)
-                await work.commit()
+            status = await self._fetch_and_record(target)
             counts[status] += 1
             consecutive_failures = consecutive_failures + 1 if status == "failed" else 0
             if consecutive_failures >= self._max_consecutive_failures:
@@ -84,3 +72,23 @@ class JobPageService(JobPageServiceInterface):
         return JobPageFetchResultDTO(
             attempted=sum(counts.values()), remaining=remaining, stopped_early=stopped_early, **counts,
         )
+
+    async def _fetch_and_record(self, target: JobPageTargetDTO) -> PageStatus:
+        """Fetch one job page and store it, or the problem, in its own transaction; return the check's status."""
+        page, status, error = None, "fetched", None
+        try:
+            page = self._parser.parse(await self._client.fetch(target.canonical_url))
+        except HzzJobPageUnavailableError as problem:
+            status, error = "unavailable", problem
+        except (HzzJobPageError, ValueError) as problem:
+            status, error = "failed", problem
+        async with self._uow_factory() as work:
+            checked_at = await work.transaction_time()
+            if page is not None:
+                conditions = self._normalizer.normalize(RawJobConditionsDTO.model_validate(page))
+                await work.jobs.record_page(target.id, page, conditions, target.content_hash, checked_at)
+            else:
+                summary = (str(error) or type(error).__name__)[:ERROR_SUMMARY_LIMIT]
+                await work.jobs.record_page_problem(target.id, status, summary, checked_at)
+            await work.commit()
+        return status

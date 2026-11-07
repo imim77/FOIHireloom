@@ -1,4 +1,7 @@
 import math
+from abc import ABC, abstractmethod
+from collections.abc import Collection
+from dataclasses import dataclass
 from datetime import datetime
 
 from FOIHireloom.db.uow.base import UnitOfWork, UnitOfWorkFactory
@@ -11,7 +14,7 @@ from FOIHireloom.dto.job_sync import (
     JobSyncResultDTO,
     SyncRunOutcomeDTO,
 )
-from FOIHireloom.dto.source_feed import SourceFeedDTO
+from FOIHireloom.dto.source_feed import FeedCategoryMappingDTO, SourceFeedDTO
 from FOIHireloom.exceptions import HzzFeedError, HzzFeedHttpError, NotFoundError, PersistenceError
 from FOIHireloom.integrations.interfaces.hzz_feed import HzzFeedClientInterface
 from FOIHireloom.services.interfaces.job_sync import JobSyncServiceInterface
@@ -19,8 +22,145 @@ from FOIHireloom.services.interfaces.job_sync import JobSyncServiceInterface
 from .feed_category import FeedCategoryVerifier, resolve_category
 from .hzz_feed_parser import HzzFeedParser
 
-PROVIDER = "hzz"
 ERROR_SUMMARY_LIMIT = 500
+
+
+@dataclass(frozen=True)
+class LinkedJobs:
+    """LinkedJobs holds the stored jobs a feed response lists and how linking them changed the jobs."""
+
+    job_ids: dict[str, int]  # Database ID by HZZ source job ID.
+    added: int = 0
+    changed: int = 0
+    unchanged: int = 0
+    unlinked: int = 0  # Listed jobs no county feed has imported.
+    mapping: FeedCategoryMappingDTO | None = None
+
+
+@dataclass(frozen=True)
+class CategoryRefresh:
+    """CategoryRefresh counts the filled-in categories one recheck set, cleared and found contradicted."""
+
+    filled: int = 0
+    cleared: int = 0
+    conflicting: int = 0
+
+
+@dataclass(frozen=True)
+class MembershipChanges:
+    """MembershipChanges counts how a feed's listed jobs differ from the jobs it listed before."""
+
+    joined: int
+    missing: int
+    returned: int  # Jobs listed again after being missing.
+
+
+class FeedScopeSync(ABC):
+    """FeedScopeSync applies the part of a feed sync that depends on the feed's scope.
+
+    A new scope is a new subclass registered in JobSyncService; the shared
+    steps (download, rejection, memberships, run records) stay unchanged.
+    """
+
+    def validators(self, feed: SourceFeedDTO) -> tuple[str | None, datetime | None]:
+        """Return the HTTP validators to send, as (ETag, Last-Modified)."""
+        return feed.etag, feed.source_last_modified_at
+
+    @abstractmethod
+    async def link_jobs(
+        self, work: UnitOfWork, feed: SourceFeedDTO, jobs: tuple[ParsedJobDTO, ...], now: datetime,
+    ) -> LinkedJobs:
+        """Store or find the listed jobs within the caller's transaction."""
+
+    @abstractmethod
+    async def confirm_listed(self, work: UnitOfWork, feed: SourceFeedDTO, job_ids: Collection[int],
+                             now: datetime) -> CategoryRefresh:
+        """Confirm the jobs an unchanged response still lists."""
+
+    async def refresh_categories(self, work: UnitOfWork, feed: SourceFeedDTO) -> CategoryRefresh:
+        """Recheck the filled-in categories that depend on this feed, after its memberships are updated."""
+        return CategoryRefresh()
+
+
+class CountyFeedSync(FeedScopeSync):
+    """CountyFeedSync imports the jobs a county feed lists and keeps their content current."""
+
+    async def link_jobs(
+        self, work: UnitOfWork, feed: SourceFeedDTO, jobs: tuple[ParsedJobDTO, ...], now: datetime,
+    ) -> LinkedJobs:
+        return await self.upsert_jobs(work, jobs, now)
+
+    async def confirm_listed(self, work: UnitOfWork, feed: SourceFeedDTO, job_ids: Collection[int],
+                             now: datetime) -> CategoryRefresh:
+        await work.jobs.mark_seen(job_ids, now)
+        return CategoryRefresh()
+
+    @staticmethod
+    async def upsert_jobs(work: UnitOfWork, jobs: tuple[ParsedJobDTO, ...], now: datetime) -> LinkedJobs:
+        """Insert new jobs, rewrite changed content and confirm the rest by hash."""
+        snapshots = await work.jobs.list_snapshots([job.source_job_id for job in jobs])
+        existing = {snapshot.source_job_id: snapshot for snapshot in snapshots}
+        new = [job for job in jobs if job.source_job_id not in existing]
+        changed = {
+            existing[job.source_job_id].id: job for job in jobs
+            if job.source_job_id in existing and existing[job.source_job_id].content_hash != job.content_hash
+        }
+        unchanged = [
+            existing[job.source_job_id].id for job in jobs
+            if job.source_job_id in existing and existing[job.source_job_id].id not in changed
+        ]
+        job_ids = {source_job_id: snapshot.id for source_job_id, snapshot in existing.items()}
+        job_ids |= await work.jobs.create_many(new, now)
+        await work.jobs.update_content(changed, now)
+        await work.jobs.mark_seen(unchanged, now)
+        return LinkedJobs(job_ids=job_ids, added=len(new), changed=len(changed), unchanged=len(unchanged))
+
+
+class OccupationFeedSync(FeedScopeSync):
+    """OccupationFeedSync links the stored jobs an occupation feed lists and fills in their categories.
+
+    Its jobs are never created or changed here; each full download verifies
+    the feed's category mapping on the explicit categories of the jobs it
+    lists.
+    """
+
+    def __init__(self, verifier: FeedCategoryVerifier) -> None:
+        self._verifier = verifier
+
+    def validators(self, feed: SourceFeedDTO) -> tuple[str | None, datetime | None]:
+        # An unchanged response carries no jobs to verify a mapping on.
+        if feed.mapping_verified_at is None:
+            return None, None
+        return super().validators(feed)
+
+    async def link_jobs(
+        self, work: UnitOfWork, feed: SourceFeedDTO, jobs: tuple[ParsedJobDTO, ...], now: datetime,
+    ) -> LinkedJobs:
+        snapshots = await work.jobs.list_snapshots([job.source_job_id for job in jobs])
+        job_ids = {snapshot.source_job_id: snapshot.id for snapshot in snapshots}
+        mapping = self._verifier.verify(jobs)
+        await work.source_feeds.record_category_mapping(feed.id, mapping, now)
+        return LinkedJobs(job_ids=job_ids, unchanged=len(job_ids), unlinked=len(jobs) - len(job_ids),
+                          mapping=mapping)
+
+    async def confirm_listed(self, work: UnitOfWork, feed: SourceFeedDTO, job_ids: Collection[int],
+                             now: datetime) -> CategoryRefresh:
+        return await self.refresh_categories(work, feed)
+
+    async def refresh_categories(self, work: UnitOfWork, feed: SourceFeedDTO) -> CategoryRefresh:
+        changes: dict[int, FilledCategoryDTO | None] = {}
+        conflicting = 0
+        for evidence in await work.jobs.list_category_evidence(feed.id):
+            target, conflict = resolve_category(evidence.mappings)
+            conflicting += conflict
+            current = evidence.category and FilledCategoryDTO(
+                category=evidence.category, feed_id=evidence.category_feed_id,
+            )
+            if target != current:
+                changes[evidence.job_id] = target
+        await work.jobs.set_feed_categories(changes)
+        filled = sum(target is not None for target in changes.values())
+        return CategoryRefresh(filled=filled, cleared=len(changes) - filled, conflicting=conflicting)
 
 
 class JobSyncService(JobSyncServiceInterface):
@@ -58,7 +198,10 @@ class JobSyncService(JobSyncServiceInterface):
         self._parser = parser
         self._uow_factory = uow_factory
         self._min_retained_ratio = min_retained_ratio
-        self._category_verifier = category_verifier or FeedCategoryVerifier()
+        self._scopes: dict[str, FeedScopeSync] = {
+            "county": CountyFeedSync(),
+            "occupation": OccupationFeedSync(category_verifier or FeedCategoryVerifier()),
+        }
 
     async def sync_all(self) -> JobSyncResultDTO:
         async with self._uow_factory() as work:
@@ -87,15 +230,13 @@ class JobSyncService(JobSyncServiceInterface):
             await work.commit()
         http_status = None
         try:
+            scope = self._scopes[feed.scope]
             # No transaction is open while the feed downloads.
-            if feed.scope == "occupation" and feed.mapping_verified_at is None:
-                response = await self._client.fetch(feed.feed_url, None, None)
-            else:
-                response = await self._client.fetch(feed.feed_url, feed.etag, feed.source_last_modified_at)
+            response = await self._client.fetch(feed.feed_url, *scope.validators(feed))
             if response.not_modified:
-                return await self._confirm_unchanged(feed, run_id, response)
+                return await self._confirm_unchanged(scope, feed, run_id, response)
             http_status = 200
-            return await self._import(feed, run_id, response, self._parser.parse(response.content))
+            return await self._import(scope, feed, run_id, response, self._parser.parse(response.content))
         except (HzzFeedError, PersistenceError) as error:
             if isinstance(error, HzzFeedHttpError):
                 http_status = error.status_code
@@ -105,16 +246,12 @@ class JobSyncService(JobSyncServiceInterface):
             raise
 
     async def _confirm_unchanged(
-        self, feed: SourceFeedDTO, run_id: int, response: FeedResponseDTO
+        self, scope: FeedScopeSync, feed: SourceFeedDTO, run_id: int, response: FeedResponseDTO
     ) -> FeedSyncResultDTO:
         async with self._uow_factory() as work:
             now = await work.transaction_time()
             job_ids = await work.job_feed_memberships.touch_present(feed.id, now)
-            filled = cleared = conflicting = 0
-            if feed.scope == "county":
-                await work.jobs.mark_seen(job_ids, now)
-            else:
-                filled, cleared, conflicting = await self._refresh_categories(work, feed.id)
+            categories = await scope.confirm_listed(work, feed, job_ids, now)
             await work.source_feeds.record_check(feed.id, FeedCheckDTO(
                 succeeded=True, etag=response.etag, source_last_modified_at=response.last_modified,
             ), now)
@@ -123,115 +260,78 @@ class JobSyncService(JobSyncServiceInterface):
         return FeedSyncResultDTO(
             feed_id=feed.id, label=feed.label, status="not_modified", http_status=304,
             items_seen=len(job_ids), items_unchanged=len(job_ids),
-            categories_filled=filled, categories_cleared=cleared, categories_conflicting=conflicting,
+            categories_filled=categories.filled, categories_cleared=categories.cleared,
+            categories_conflicting=categories.conflicting,
         )
 
     async def _import(
-        self, feed: SourceFeedDTO, run_id: int, response: FeedResponseDTO, parsed: ParsedFeedDTO
+        self, scope: FeedScopeSync, feed: SourceFeedDTO, run_id: int, response: FeedResponseDTO,
+        parsed: ParsedFeedDTO,
     ) -> FeedSyncResultDTO:
         async with self._uow_factory() as work:
             now = await work.transaction_time()
-            seen, invalid = len(parsed.jobs), parsed.invalid_items
             previous = await work.sync_runs.get_latest_items_seen(feed.id)
-            if previous and seen < previous * self._min_retained_ratio:
-                error = f"Feed returned {seen} valid items after {previous}; kept previous data."
-                await work.source_feeds.record_check(feed.id, FeedCheckDTO(succeeded=False), now)
-                await work.sync_runs.finish(run_id, SyncRunOutcomeDTO(
-                    status="rejected", http_status=200, items_seen=seen, items_invalid=invalid, error_summary=error,
-                ), now)
-                await work.commit()
-                return FeedSyncResultDTO(
-                    feed_id=feed.id, label=feed.label, status="rejected", http_status=200,
-                    items_seen=seen, items_invalid=invalid, error=error,
-                )
-
-            unlinked, mapping, filled, cleared, conflicting = 0, None, 0, 0, 0
-            if feed.scope == "county":
-                job_ids, added, changed, unchanged = await self._upsert_jobs(work, parsed.jobs, now)
-            else:
-                job_ids = await self._known_jobs(work, parsed.jobs)
-                added = changed = 0
-                unchanged = len(job_ids)
-                unlinked = seen - unchanged
-                mapping = self._category_verifier.verify(parsed.jobs)
-                await work.source_feeds.record_category_mapping(feed.id, mapping, now)
-            memberships = {
-                m.job_id: m.presence_status
-                for m in await work.job_feed_memberships.list_snapshots_for_feed(feed.id)
-            }
-            present_ids = set(job_ids.values())
-            missing = [
-                job_id for job_id, status in memberships.items() if status == "present" and job_id not in present_ids
-            ]
-            returned = sum(memberships.get(job_id) == "missing" for job_id in present_ids)
-            joined = [job_id for job_id in present_ids if job_id not in memberships]
-            await work.job_feed_memberships.create_many(feed.id, joined, now)
-            await work.job_feed_memberships.mark_present(
-                feed.id, [job_id for job_id in present_ids if job_id in memberships], now
-            )
-            await work.job_feed_memberships.mark_missing(feed.id, missing, now)
-            if feed.scope == "occupation":
-                filled, cleared, conflicting = await self._refresh_categories(work, feed.id)
+            if previous and len(parsed.jobs) < previous * self._min_retained_ratio:
+                return await self._reject_shrunken(work, feed, run_id, parsed, previous, now)
+            linked = await scope.link_jobs(work, feed, parsed.jobs, now)
+            memberships = await self._update_memberships(work, feed.id, set(linked.job_ids.values()), now)
+            categories = await scope.refresh_categories(work, feed)
             await work.source_feeds.record_check(feed.id, FeedCheckDTO(
                 succeeded=True, etag=response.etag, source_last_modified_at=response.last_modified,
-                content_changed=bool(added or changed or joined or missing or returned),
+                content_changed=bool(linked.added or linked.changed or memberships.joined or memberships.missing
+                                     or memberships.returned),
             ), now)
             await work.sync_runs.finish(run_id, SyncRunOutcomeDTO(
-                status="succeeded", http_status=200, items_seen=seen, items_added=added,
-                items_updated=changed, items_invalid=invalid,
+                status="succeeded", http_status=200, items_seen=len(parsed.jobs), items_added=linked.added,
+                items_updated=linked.changed, items_invalid=parsed.invalid_items,
             ), now)
             await work.commit()
         return FeedSyncResultDTO(
-            feed_id=feed.id, label=feed.label, status="succeeded", http_status=200, items_seen=seen,
-            items_added=added, items_updated=changed, items_unchanged=unchanged, items_missing=len(missing),
-            items_returned=returned, items_invalid=invalid, items_unlinked=unlinked, category_mapping=mapping,
-            categories_filled=filled, categories_cleared=cleared, categories_conflicting=conflicting,
+            feed_id=feed.id, label=feed.label, status="succeeded", http_status=200, items_seen=len(parsed.jobs),
+            items_added=linked.added, items_updated=linked.changed, items_unchanged=linked.unchanged,
+            items_missing=memberships.missing, items_returned=memberships.returned,
+            items_invalid=parsed.invalid_items, items_unlinked=linked.unlinked, category_mapping=linked.mapping,
+            categories_filled=categories.filled, categories_cleared=categories.cleared,
+            categories_conflicting=categories.conflicting,
         )
 
     @staticmethod
-    async def _upsert_jobs(
-        work: UnitOfWork, jobs: tuple[ParsedJobDTO, ...], now: datetime
-    ) -> tuple[dict[str, int], int, int, int]:
-        """Insert new jobs, rewrite changed content and confirm the rest by hash."""
-        snapshots = await work.jobs.list_snapshots(PROVIDER, [job.source_job_id for job in jobs])
-        existing = {snapshot.source_job_id: snapshot for snapshot in snapshots}
-        new = [job for job in jobs if job.source_job_id not in existing]
-        changed = {
-            existing[job.source_job_id].id: job for job in jobs
-            if job.source_job_id in existing and existing[job.source_job_id].content_hash != job.content_hash
+    async def _reject_shrunken(
+        work: UnitOfWork, feed: SourceFeedDTO, run_id: int, parsed: ParsedFeedDTO, previous: int, now: datetime,
+    ) -> FeedSyncResultDTO:
+        """Record a response that lost too many items as rejected, keeping the stored jobs as they are."""
+        seen, invalid = len(parsed.jobs), parsed.invalid_items
+        error = f"Feed returned {seen} valid items after {previous}; kept previous data."
+        await work.source_feeds.record_check(feed.id, FeedCheckDTO(succeeded=False), now)
+        await work.sync_runs.finish(run_id, SyncRunOutcomeDTO(
+            status="rejected", http_status=200, items_seen=seen, items_invalid=invalid, error_summary=error,
+        ), now)
+        await work.commit()
+        return FeedSyncResultDTO(
+            feed_id=feed.id, label=feed.label, status="rejected", http_status=200,
+            items_seen=seen, items_invalid=invalid, error=error,
+        )
+
+    @staticmethod
+    async def _update_memberships(
+        work: UnitOfWork, feed_id: int, present_ids: set[int], now: datetime,
+    ) -> MembershipChanges:
+        """Mark the listed jobs present and the jobs no longer listed missing."""
+        memberships = {
+            m.job_id: m.presence_status
+            for m in await work.job_feed_memberships.list_snapshots_for_feed(feed_id)
         }
-        unchanged = [
-            existing[job.source_job_id].id for job in jobs
-            if job.source_job_id in existing and existing[job.source_job_id].id not in changed
+        missing = [
+            job_id for job_id, status in memberships.items() if status == "present" and job_id not in present_ids
         ]
-        job_ids = {source_job_id: snapshot.id for source_job_id, snapshot in existing.items()}
-        job_ids |= await work.jobs.create_many(PROVIDER, new, now)
-        await work.jobs.update_content(changed, now)
-        await work.jobs.mark_seen(unchanged, now)
-        return job_ids, len(new), len(changed), len(unchanged)
-
-    @staticmethod
-    async def _known_jobs(work: UnitOfWork, jobs: tuple[ParsedJobDTO, ...]) -> dict[str, int]:
-        """Return the database IDs of the listed jobs that are already stored."""
-        snapshots = await work.jobs.list_snapshots(PROVIDER, [job.source_job_id for job in jobs])
-        return {snapshot.source_job_id: snapshot.id for snapshot in snapshots}
-
-    @staticmethod
-    async def _refresh_categories(work: UnitOfWork, feed_id: int) -> tuple[int, int, int]:
-        """Recheck the filled-in categories of this feed's jobs; return filled, cleared and conflicting counts."""
-        changes: dict[int, FilledCategoryDTO | None] = {}
-        conflicting = 0
-        for evidence in await work.jobs.list_category_evidence(feed_id):
-            target, conflict = resolve_category(evidence.mappings)
-            conflicting += conflict
-            current = evidence.category and FilledCategoryDTO(
-                category=evidence.category, feed_id=evidence.category_feed_id,
-            )
-            if target != current:
-                changes[evidence.job_id] = target
-        await work.jobs.set_feed_categories(changes)
-        filled = sum(target is not None for target in changes.values())
-        return filled, len(changes) - filled, conflicting
+        returned = sum(memberships.get(job_id) == "missing" for job_id in present_ids)
+        joined = [job_id for job_id in present_ids if job_id not in memberships]
+        await work.job_feed_memberships.create_many(feed_id, joined, now)
+        await work.job_feed_memberships.mark_present(
+            feed_id, [job_id for job_id in present_ids if job_id in memberships], now
+        )
+        await work.job_feed_memberships.mark_missing(feed_id, missing, now)
+        return MembershipChanges(joined=len(joined), missing=len(missing), returned=returned)
 
     async def _record_failure(
         self, feed: SourceFeedDTO, run_id: int, http_status: int | None, error: Exception

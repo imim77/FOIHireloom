@@ -53,6 +53,13 @@ test('comparison keeps selection order, enforces three ads and sends a host mess
     const picks = frame.getByRole('checkbox')
     for (const index of [2, 0, 1]) await picks.nth(index).check()
     assert.equal(await picks.nth(3).isDisabled(), true)
+    // Picked cards are the view's only red: accent-500, #fb290e.
+    assert.equal(await frame.locator('.job.compared').count(), 3)
+    // After the checkbox's colour transition, which reduced motion does not skip.
+    assert.equal(await picks.first().evaluate(async (box) => {
+      await Promise.all(box.getAnimations().map((animation) => animation.finished))
+      return getComputedStyle(box).backgroundColor
+    }), 'rgb(251, 41, 14)')
     await frame.getByRole('button', { name: 'Usporedi odabrane (3)' }).click()
     await page.waitForFunction(() => window.messages.length === 1)
     const message = await page.evaluate(() => window.messages[0])

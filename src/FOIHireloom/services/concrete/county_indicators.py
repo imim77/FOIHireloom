@@ -1,7 +1,10 @@
 from collections.abc import Sequence
-from datetime import date
+from dataclasses import dataclass
+from datetime import date, datetime
 
 from FOIHireloom.db.uow.base import UnitOfWork, UnitOfWorkFactory
+from FOIHireloom.domain.job_search import condition_criteria, local_date, search_terms
+from FOIHireloom.dto.county import CountyDTO
 from FOIHireloom.dto.county_indicators import (
     MAX_COMPARED_COUNTIES,
     MAX_HISTORY_COUNTIES,
@@ -16,15 +19,14 @@ from FOIHireloom.dto.county_indicators import (
     UnemploymentHistoryRequestDTO,
 )
 from FOIHireloom.dto.dzs import DzsImportProvenanceDTO, DzsIndicator, DzsStoredValueDTO
-from FOIHireloom.dto.job_market import CountyJobCriteriaDTO
+from FOIHireloom.dto.job_market import CountyJobCountsRowDTO, CountyJobCriteriaDTO
+from FOIHireloom.dto.job_search import CountyFeedCheckDTO
 from FOIHireloom.services.interfaces.county_indicators import CountyIndicatorServiceInterface
 
+from .county_indicator_calculation import COMPARED_INDICATORS, CountyIndicatorCalculator
 from .county_resolver import CountyResolver
 from .croatian_counties import CroatianCountyCatalog
 from .feed_coverage import FeedCoverage
-from FOIHireloom.domain.job_search import condition_criteria, local_date, search_terms
-
-from .county_indicator_calculation import COMPARED_INDICATORS, CountyIndicatorCalculator
 
 HZZ_SOURCE = SourceDTO(
     name="HZZ", url="https://burzarada.hzz.hr",
@@ -52,6 +54,23 @@ NOTE_RATE = ("The rate is the registered unemployment rate: registered unemploye
 NOTE_SEASONALITY = ("Comparing with the same month a year earlier reduces the effect of seasonality, which is strong "
                     "in coastal counties, but it is not a seasonal adjustment of the data.")
 
+HISTORY_NOTES = (NOTE_RATE, NOTE_SEASONALITY, NOTE_PROVISIONAL)
+
+
+@dataclass(frozen=True)
+class ComparisonSnapshot:
+    """ComparisonSnapshot holds what one county comparison reads in its single transaction."""
+
+    now: datetime
+    today: date
+    counties: list[CountyDTO]
+    filtered: Sequence[CountyJobCountsRowDTO]  # Ad counts for the job filters.
+    everything: Sequence[CountyJobCountsRowDTO]  # Every active ad.
+    checks: Sequence[CountyFeedCheckDTO]
+    provenance: DzsImportProvenanceDTO | None
+    periods: dict[DzsIndicator, DzsReferencePeriodDTO]
+    stored: Sequence[DzsStoredValueDTO]
+
 
 class CountyIndicatorService(CountyIndicatorServiceInterface):
     """County indicators from stored HZZ ads and DZS values, each with the period and coverage it rests on.
@@ -75,6 +94,33 @@ class CountyIndicatorService(CountyIndicatorServiceInterface):
 
     async def compare_counties(self, request: CountyComparisonRequestDTO) -> CountyComparisonDTO:
         self._resolver.check_count(request.counties, MIN_COMPARED_COUNTIES, MAX_COMPARED_COUNTIES)
+        snapshot = await self._read_comparison(request)
+        codes = {county.code for county in snapshot.counties}
+        regions = {region.code: region for region in self._feed_coverage.freshness(snapshot.checks, snapshot.now)
+                   if region.code in codes}
+        compared_regions = [regions[county.code] for county in snapshot.counties if county.code in regions]
+        periods = snapshot.periods
+        values = {(value.county_id, value.indicator): value for value in snapshot.stored
+                  if value.period == periods[value.indicator].period}
+        filtered_by_county = {row.county_id: row for row in snapshot.filtered}
+        everything_by_county = {row.county_id: row for row in snapshot.everything}
+        return CountyComparisonDTO(
+            counties=tuple(
+                self._calculator.compare(county, regions.get(county.code), filtered_by_county.get(county.id),
+                                         everything_by_county.get(county.id), periods, values)
+                for county in snapshot.counties
+            ),
+            today=snapshot.today,
+            filters=request.filters,
+            requested_period=request.period,
+            dzs_periods=tuple(periods.values()),
+            hzz_coverage=self._feed_coverage.coverage(compared_regions),
+            dzs=snapshot.provenance,
+            sources=sources(snapshot.provenance),
+            notes=(NOTE_SCOPE, NOTE_COUNTY_WIDE, NOTE_WORKERS, NOTE_MOMENTS, NOTE_PROVISIONAL),
+        )
+
+    async def _read_comparison(self, request: CountyComparisonRequestDTO) -> ComparisonSnapshot:
         filters = request.filters
         terms = search_terms(filters.query)
         conditions = condition_criteria(filters)
@@ -95,28 +141,8 @@ class CountyIndicatorService(CountyIndicatorServiceInterface):
             periods = await self._reference_periods(work, provenance, request.period, ids)
             months = {reference.period for reference in periods.values() if reference.period is not None}
             stored = await work.dzs_indicator_values.list_values(ids, COMPARED_INDICATORS, "total", months)
-        codes = {county.code for county in counties}
-        regions = {region.code: region for region in self._feed_coverage.freshness(checks, now) if region.code in codes}
-        compared_regions = [regions[county.code] for county in counties if county.code in regions]
-        values = {(value.county_id, value.indicator): value for value in stored
-                  if value.period == periods[value.indicator].period}
-        filtered_by_county = {row.county_id: row for row in filtered}
-        everything_by_county = {row.county_id: row for row in everything}
-        return CountyComparisonDTO(
-            counties=tuple(
-                self._calculator.compare(county, regions.get(county.code), filtered_by_county.get(county.id),
-                                      everything_by_county.get(county.id), periods, values)
-                for county in counties
-            ),
-            today=today,
-            filters=filters,
-            requested_period=request.period,
-            dzs_periods=tuple(periods.values()),
-            hzz_coverage=self._feed_coverage.coverage(compared_regions),
-            dzs=provenance,
-            sources=sources(provenance),
-            notes=(NOTE_SCOPE, NOTE_COUNTY_WIDE, NOTE_WORKERS, NOTE_MOMENTS, NOTE_PROVISIONAL),
-        )
+        return ComparisonSnapshot(now=now, today=today, counties=counties, filtered=filtered, everything=everything,
+                                  checks=checks, provenance=provenance, periods=periods, stored=stored)
 
     async def unemployment_history(self, request: UnemploymentHistoryRequestDTO) -> UnemploymentHistoryDTO:
         self._resolver.check_count(request.counties, 1, MAX_HISTORY_COUNTIES)
@@ -124,37 +150,46 @@ class CountyIndicatorService(CountyIndicatorServiceInterface):
             counties = await self._resolver.resolve(work, request.counties)
             ids = tuple(county.id for county in counties)
             provenance = await work.dzs_imports.get_latest_succeeded()
-            last = None
-            if provenance is not None:
-                latest = await work.dzs_indicator_values.latest_common_periods(ids, ("unemployment_rate",), request.sex)
-                last = latest.get("unemployment_rate")
-            stored: list[DzsStoredValueDTO] = []
-            if last is not None:
-                first = add_months(last, 1 - request.months)
-                previous_year = add_months(last, -12)
-                stored = await work.dzs_indicator_values.list_series(
-                    ids, "unemployment_rate", request.sex, min(first, previous_year), last)
-        notes = (NOTE_RATE, NOTE_SEASONALITY, NOTE_PROVISIONAL)
-        if last is None:
-            reason: UnavailableReason = "no_dzs_data" if provenance is None else "no_common_period"
-            return UnemploymentHistoryDTO(
-                counties=tuple(
-                    CountyUnemploymentHistoryDTO(
-                        code=county.code, name=county.name, iso_code=county.iso_code, series=(), latest=None,
-                        same_month_previous_year=None, change_pp=None, change_unavailable_reason=reason,
-                    )
-                    for county in counties
-                ),
-                sex=request.sex, months=request.months, first_period=None, last_period=None,
-                unavailable_reason=reason, dzs=provenance, sources=sources(provenance, with_hzz=False),
-                notes=notes,
-            )
+            last = None if provenance is None else await self._latest_common_rate(work, ids, request)
+            if last is None:
+                return self._unavailable_history(request, counties, provenance)
+            first = add_months(last, 1 - request.months)
+            previous_year = add_months(last, -12)
+            stored = await work.dzs_indicator_values.list_series(
+                ids, "unemployment_rate", request.sex, min(first, previous_year), last)
         rates = {(value.county_id, value.period): value for value in stored}
         window = [add_months(first, offset) for offset in range(request.months)]
         return UnemploymentHistoryDTO(
             counties=tuple(self._calculator.history(county, rates, window, previous_year) for county in counties),
             sex=request.sex, months=request.months, first_period=first, last_period=last, unavailable_reason=None,
-            dzs=provenance, sources=sources(provenance, with_hzz=False), notes=notes,
+            dzs=provenance, sources=sources(provenance, with_hzz=False), notes=HISTORY_NOTES,
+        )
+
+    @staticmethod
+    async def _latest_common_rate(
+        work: UnitOfWork, county_ids: Sequence[int], request: UnemploymentHistoryRequestDTO,
+    ) -> date | None:
+        """The latest month with a rate for every county."""
+        latest = await work.dzs_indicator_values.latest_common_periods(county_ids, ("unemployment_rate",), request.sex)
+        return latest.get("unemployment_rate")
+
+    @staticmethod
+    def _unavailable_history(
+        request: UnemploymentHistoryRequestDTO, counties: Sequence[CountyDTO],
+        provenance: DzsImportProvenanceDTO | None,
+    ) -> UnemploymentHistoryDTO:
+        reason: UnavailableReason = "no_dzs_data" if provenance is None else "no_common_period"
+        return UnemploymentHistoryDTO(
+            counties=tuple(
+                CountyUnemploymentHistoryDTO(
+                    code=county.code, name=county.name, iso_code=county.iso_code, series=(), latest=None,
+                    same_month_previous_year=None, change_pp=None, change_unavailable_reason=reason,
+                )
+                for county in counties
+            ),
+            sex=request.sex, months=request.months, first_period=None, last_period=None,
+            unavailable_reason=reason, dzs=provenance, sources=sources(provenance, with_hzz=False),
+            notes=HISTORY_NOTES,
         )
 
     @staticmethod

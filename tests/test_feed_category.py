@@ -14,7 +14,7 @@ def jobs(*categories: str | None) -> tuple[ParsedJobDTO, ...]:
     return tuple(
         ParsedJobDTO(
             source_job_id=str(number), canonical_url=f"https://example.com/{number}", title=None,
-            description_raw="", description_text=None, published_on=date(2026, 10, 31), deadline_on=None,
+            description_text=None, published_on=date(2026, 10, 31), deadline_on=None,
             category=category, location_text=None, municipality=None, quality_flags=(), content_hash=str(number),
         )
         for number, category in enumerate(categories)
