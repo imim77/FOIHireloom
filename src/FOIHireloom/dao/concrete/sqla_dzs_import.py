@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from FOIHireloom.dao.interfaces.dzs_import import DzsImportRepository
@@ -9,11 +8,10 @@ from FOIHireloom.db.models import DzsImport, DzsImportFile
 from FOIHireloom.dto.dzs import DzsImportFileRefDTO, DzsImportOutcomeDTO, DzsImportProvenanceDTO
 from FOIHireloom.exceptions import NotFoundError
 
+from .sqla_base import SqlAlchemyRepository
 
-class SqlAlchemyDzsImportRepository(DzsImportRepository):
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
 
+class SqlAlchemyDzsImportRepository(SqlAlchemyRepository, DzsImportRepository):
     async def get_by_id(self, import_id: int) -> DzsImport | None:
         statement = select(DzsImport).where(DzsImport.id == import_id).options(selectinload(DzsImport.files))
         return await self._session.scalar(statement)

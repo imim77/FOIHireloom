@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import SourceFeed, SyncRun
 from FOIHireloom.db.models.source_feed import SYNCED_SCOPES
@@ -9,11 +8,10 @@ from FOIHireloom.dao.interfaces.sync_run import SyncRunRepository
 from FOIHireloom.dto.job_sync import SyncRunOutcomeDTO
 from FOIHireloom.exceptions import NotFoundError
 
+from .sqla_base import SqlAlchemyRepository
 
-class SqlAlchemySyncRunRepository(SyncRunRepository):
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
 
+class SqlAlchemySyncRunRepository(SqlAlchemyRepository, SyncRunRepository):
     async def get_by_id(self, run_id: int) -> SyncRun | None:
         statement = select(SyncRun).join(SourceFeed).where(
             SyncRun.id == run_id,

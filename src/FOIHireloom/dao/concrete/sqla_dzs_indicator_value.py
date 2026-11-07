@@ -2,7 +2,6 @@ from collections.abc import Collection, Sequence
 from datetime import date
 
 from sqlalchemy import Select, func, insert, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.dao.interfaces.dzs_indicator_value import DzsIndicatorValueRepository
 from FOIHireloom.db.models import County, DzsIndicatorValue
@@ -15,20 +14,18 @@ from FOIHireloom.dto.dzs import (
     DzsValueSnapshotDTO,
 )
 
+from .sqla_base import SqlAlchemyRepository
+
 CONTENT_FIELDS = ("value", "missing_reason", "is_provisional", "source")
 
 
-class SqlAlchemyDzsIndicatorValueRepository(DzsIndicatorValueRepository):
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
-
+class SqlAlchemyDzsIndicatorValueRepository(SqlAlchemyRepository, DzsIndicatorValueRepository):
     async def list_snapshots(self) -> list[DzsValueSnapshotDTO]:
         statement = select(
             DzsIndicatorValue.id, County.iso_code.label("county_iso"), DzsIndicatorValue.indicator,
             DzsIndicatorValue.period, DzsIndicatorValue.sex, *(getattr(DzsIndicatorValue, f) for f in CONTENT_FIELDS),
         ).join(County)
-        result = await self._session.execute(statement)
-        return [DzsValueSnapshotDTO.model_validate(row) for row in result.all()]
+        return await self._rows(statement, DzsValueSnapshotDTO)
 
     async def create_many(self, values: Sequence[DzsValueDTO], import_id: int) -> None:
         if not values:
@@ -63,7 +60,7 @@ class SqlAlchemyDzsIndicatorValueRepository(DzsIndicatorValueRepository):
             DzsIndicatorValue.county_id.in_(county_ids), DzsIndicatorValue.indicator.in_(indicators),
             DzsIndicatorValue.sex == sex, DzsIndicatorValue.period.in_(periods),
         )
-        return [DzsStoredValueDTO.model_validate(row) for row in (await self._session.execute(statement)).all()]
+        return await self._rows(statement, DzsStoredValueDTO)
 
     async def list_series(
         self, county_ids: Collection[int], indicator: DzsIndicator, sex: DzsSex, first: date, last: date,
@@ -74,7 +71,7 @@ class SqlAlchemyDzsIndicatorValueRepository(DzsIndicatorValueRepository):
             DzsIndicatorValue.county_id.in_(county_ids), DzsIndicatorValue.indicator == indicator,
             DzsIndicatorValue.sex == sex, DzsIndicatorValue.period.between(first, last),
         ).order_by(DzsIndicatorValue.period, DzsIndicatorValue.county_id)
-        return [DzsStoredValueDTO.model_validate(row) for row in (await self._session.execute(statement)).all()]
+        return await self._rows(statement, DzsStoredValueDTO)
 
     async def latest_common_periods(
         self, county_ids: Collection[int], indicators: Collection[DzsIndicator], sex: DzsSex,
