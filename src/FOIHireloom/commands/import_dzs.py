@@ -7,20 +7,21 @@
 """
 
 import argparse
-import asyncio
 import json
-import sys
 from pathlib import Path
 
 from FOIHireloom.config.settings import Settings
 from FOIHireloom.dto.dzs import DzsSourceDTO
-from FOIHireloom.exceptions import PersistenceError
 from FOIHireloom.services.dependency import DependencyService
 from FOIHireloom.services.interfaces.dzs_import import DzsImportServiceInterface
 from FOIHireloom.services.interfaces.lifecycle import DatabaseServiceOpener
 
+from .command_line import CommandLine, CommandRun
+
 
 class DzsImportCommand:
+    """DzsImportCommand imports, or with dry_run only validates, a DZS release from its URLs or local files."""
+
     def __init__(self, settings: Settings, service: DatabaseServiceOpener[DzsImportServiceInterface]) -> None:
         self._settings = settings
         self._open_service = service
@@ -38,29 +39,30 @@ class DzsImportCommand:
         return DzsSourceDTO(location=url) if path is None else DzsSourceDTO(location=str(path), local=True)
 
 
-def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(
-        description="Import DZS county labour-market data from release table T1 and the county workbook."
-    )
-    parser.add_argument("--t1-file", type=Path, help="Read the T1 XLSX from this file instead of DZS_T1_URL.")
-    parser.add_argument("--workbook-file", type=Path,
-                        help="Read the county workbook XLSX from this file instead of DZS_WORKBOOK_URL.")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Parse and validate the files without accessing the database.")
-    args = parser.parse_args(argv)
-    try:
+class DzsImportCommandLine(CommandLine[dict]):
+    description = "Import DZS county labour-market data from release table T1 and the county workbook."
+    failure = "DZS import failed"
+    reported_errors = (ValueError,)
+
+    def _add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--t1-file", type=Path, help="Read the T1 XLSX from this file instead of DZS_T1_URL.")
+        parser.add_argument("--workbook-file", type=Path,
+                            help="Read the county workbook XLSX from this file instead of DZS_WORKBOOK_URL.")
+        parser.add_argument("--dry-run", action="store_true",
+                            help="Parse and validate the files without accessing the database.")
+
+    def _start(self, args: argparse.Namespace) -> CommandRun[dict]:
         settings = Settings()
         command = DzsImportCommand(settings, DependencyService(settings).dzs_import_service)
-        result = asyncio.run(command.run(args.t1_file, args.workbook_file, args.dry_run))
-    except (PersistenceError, OSError):
-        print("DZS import failed: check DATABASE_URL and apply Alembic migrations.", file=sys.stderr)
-        raise SystemExit(1) from None
-    except ValueError as error:
-        print(f"DZS import failed: {error}", file=sys.stderr)
-        raise SystemExit(1) from None
-    print(json.dumps(result, ensure_ascii=False))
-    if result["status"] in {"failed", "rejected"}:
-        raise SystemExit(1)
+        return command.run(args.t1_file, args.workbook_file, args.dry_run)
+
+    def _report(self, args: argparse.Namespace, result: dict) -> int:
+        print(json.dumps(result, ensure_ascii=False))
+        return int(result["status"] in {"failed", "rejected"})
+
+
+def main(argv: list[str] | None = None) -> None:
+    DzsImportCommandLine().main(argv)
 
 
 if __name__ == "__main__":
