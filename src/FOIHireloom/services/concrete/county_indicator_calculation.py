@@ -37,15 +37,7 @@ class CountyIndicatorCalculator:
         all_active = self._job_counts(everything, county.id)
         # A county none of whose feeds was ever loaded has no known ads, not zero ads.
         hzz_known = region is not None and region.last_success_at is not None
-        workers: int | None = all_active.workers_needed if all_active.workers_needed_coverage.part else None
-        workers_reason: UnavailableReason | None = None
-        if not hzz_known:
-            workers, workers_reason = None, "no_hzz_data"
-        elif all_active.jobs and workers is None:
-            workers_reason = "no_known_workers"
-        elif not all_active.jobs:
-            # No active ads: the county seeks no workers through HZZ.
-            workers = 0
+        workers, workers_reason = self._workers_needed(all_active, hzz_known)
         return ComparedCountyDTO(
             code=county.code, name=county.name, iso_code=county.iso_code,
             hzz_data_status=region.data_status if region is not None else "unavailable",
@@ -60,6 +52,19 @@ class CountyIndicatorCalculator:
                                              None if hzz_known else "no_hzz_data", dzs_is_numerator=False,
                                              scale=1000),
         )
+
+    @staticmethod
+    def _workers_needed(
+        all_active: CountyJobCountsDTO, hzz_known: bool,
+    ) -> tuple[int | None, UnavailableReason | None]:
+        """The workers the county's active ads seek, or None with the reason they are unknown."""
+        if not hzz_known:
+            return None, "no_hzz_data"
+        if not all_active.jobs:
+            return 0, None  # No active ads: the county seeks no workers through HZZ.
+        if not all_active.workers_needed_coverage.part:
+            return None, "no_known_workers"
+        return all_active.workers_needed, None
 
     @staticmethod
     def _job_counts(row: CountyJobCountsRowDTO | None, county_id: int) -> CountyJobCountsDTO:
