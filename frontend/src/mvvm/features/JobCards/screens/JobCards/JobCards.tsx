@@ -18,7 +18,7 @@ export function JobCards({ data, cards, loading, error, actions, comparison,
   const compareBar = useAppear<HTMLDivElement>()
 
   return (
-    <Card sunken eyebrow={EYEBROW} title={data.title} description={data.description} actions={cards.length > 1 && (
+    <Card eyebrow={EYEBROW} title={data.title} description={data.description} actions={cards.length > 1 && (
       <ExpandButton expanded={expanded} label={expanded ? 'Smanji prikaz' : 'Prikaži oglase preko cijelog zaslona'}
         onClick={toggle} />
     )}>

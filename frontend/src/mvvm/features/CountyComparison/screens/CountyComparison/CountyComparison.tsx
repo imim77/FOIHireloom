@@ -19,7 +19,7 @@ export function CountyComparison({ data, loading, error, removeFilter, expanded,
     onOpenLink: (url: string) => void
   }) {
   return (
-    <Card sunken eyebrow={EYEBROW} title={data.title} description={data.description} actions={(
+    <Card eyebrow={EYEBROW} title={data.title} description={data.description} actions={(
       <ExpandButton expanded={expanded} label={expanded ? 'Smanji prikaz' : 'Prikaži usporedbu preko cijelog zaslona'}
         onClick={toggle} />
     )}>

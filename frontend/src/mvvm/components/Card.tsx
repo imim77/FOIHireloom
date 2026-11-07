@@ -20,8 +20,6 @@ interface CardProps {
   // Buttons at the end of the header, e.g. <ExpandButton>.
   actions?: ReactNode
   children?: ReactNode
-  // Retained as a layout marker for the job and comparison screens.
-  sunken?: boolean
   loading?: boolean
 }
 
@@ -30,7 +28,7 @@ interface CardProps {
  * way: the header (eyebrow, title, description, actions) rises in first, the notes with the view's readout, and the
  * sources, footers and other marked parts once the view's own marks have drawn. Views animate their content.
  */
-export function Card({ eyebrow, title, description, actions, children, sunken = false, loading = false }: CardProps) {
+export function Card({ eyebrow, title, description, actions, children, loading = false }: CardProps) {
   const root = useRef<HTMLDivElement>(null)
   useChartEntrance(root, (timeline) => {
     const card = root.current!
@@ -52,7 +50,7 @@ export function Card({ eyebrow, title, description, actions, children, sunken = 
     return () => clearEntrance([...header, ...parts])
   }, !loading)
   return (
-    <SurfaceCard className={cn('card min-w-0', sunken && 'sunken')} role="group" aria-label={title} aria-busy={loading}
+    <SurfaceCard className="card min-w-0" role="group" aria-label={title} aria-busy={loading}
       ref={root}>
       {/* With an eyebrow, actions sit beside the eyebrow line rather than centred on three lines. */}
       <CardHeader className={cn('header flex min-w-0 gap-3', eyebrow ? 'items-start' : 'items-center')}>

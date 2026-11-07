@@ -5,10 +5,11 @@ import { Badge } from '@/components/ui/badge'
 import { type ReactNode, useId, useLayoutEffect, useRef } from 'react'
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceDot, ReferenceLine, XAxis, YAxis } from 'recharts'
 import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
-import { clearEntrance, countTo, EASE, enter, MOTION, roll, s, useChartEntrance, useReducedMotion }
+import { clearEntrance, enter, MOTION, roll, useChartEntrance, useReducedMotion }
   from '../../../hooks/chart-motion'
 import { type ForecastRow, forecastRows, formatChange, formatPeriod, formatPeriodGenitive, formatValue, valueTicks }
   from '../utils/forecast-chart'
+import { useReadoutCount } from '../../../hooks/use-readout-count'
 import type { useForecast } from '../hooks/use-forecast'
 import type { CountyForecast, ForecastData, ObservedPoint } from '../types'
 
@@ -32,48 +33,17 @@ function Readout({ context, median, format, children }: {
   const root = useRef<HTMLDivElement>(null)
   const contextRef = useRef<HTMLParagraphElement>(null)
   const numberRef = useRef<HTMLParagraphElement>(null)
-  const latest = useRef(median)
-  useLayoutEffect(() => {
-    latest.current = median
-  })
-  // The median on screen; while the entrance counts it up, a new period leaves the counting to the entrance.
-  const count = useRef<{ tween: gsap.core.Tween | null; value: number; entering: boolean }>(
-    { tween: null, value: median, entering: false })
-  const show = (value: number) => {
-    count.current.value = value
-    if (numberRef.current) numberRef.current.textContent = format(value)
-  }
+  const count = useReadoutCount(numberRef, median, format)
 
   useChartEntrance(root, (timeline) => {
     const lines = [...root.current!.children] as HTMLElement[]
-    const up = { t: 0 }
-    const countUp = () => show(latest.current * up.t)
-    count.current.entering = true
-    countUp()
-    const { readout, headline } = MOTION
-    enter(timeline, lines, readout.at, readout)
-    timeline.fromTo(up, { t: 0 }, { t: 1, duration: s(headline.duration), ease: EASE.arrive, onUpdate: countUp,
-      onComplete: () => { count.current.entering = false } }, s(headline.at))
+    enter(timeline, lines, MOTION.readout.at, MOTION.readout)
+    const finishCount = count(timeline)
     return () => {
-      count.current.entering = false
-      show(latest.current)
+      finishCount()
       clearEntrance(lines)
     }
   })
-
-  useLayoutEffect(() => {
-    const state = count.current
-    if (state.entering || state.value === median) return
-    state.tween?.kill()
-    state.tween = null
-    if (reduced) {
-      show(median)
-      return
-    }
-    state.tween = countTo({ value: state.value }, median, show)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [median, reduced])
-  useLayoutEffect(() => () => { count.current.tween?.kill() }, [])
 
   const lastContext = useRef(context)
   useLayoutEffect(() => {

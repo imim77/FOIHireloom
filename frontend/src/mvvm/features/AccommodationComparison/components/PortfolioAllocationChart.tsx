@@ -11,9 +11,10 @@ import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } f
 // counts to its number.
 import { type KeyboardEvent, useId, useLayoutEffect, useRef } from 'react'
 import { Pie, PieChart, Sector } from 'recharts'
-import { clearEntrance, countTo, EASE, enter, MOTION, roll, s, useChartEntrance, useReducedMotion }
+import { clearEntrance, enter, MOTION, roll, useChartEntrance, useReducedMotion }
   from '../../../hooks/chart-motion'
 import { formatAds, formatInteger, formatShare } from '../../../utils/format'
+import { useReadoutCount } from '../../../hooks/use-readout-count'
 import type { useAllocation } from '../hooks/use-allocation'
 
 const percent = (value: number) => `${formatInteger(value)} %`
@@ -36,33 +37,18 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
   const id = useId().replace(/[^\w-]/g, '')
   const contextRef = useRef<HTMLParagraphElement>(null)
   const amountRef = useRef<HTMLParagraphElement>(null)
+  const amountCount = useReadoutCount(amountRef, readout.amount, formatAds)
   const all = (selector: string) => [...root.current?.querySelectorAll<HTMLElement>(selector) ?? []]
 
-  // The readout's ad count on screen; the entrance counts it up from zero, later changes count from here.
-  const latestAmount = useRef(readout.amount)
-  useLayoutEffect(() => { latestAmount.current = readout.amount })
-  const countingAmount = useRef(false)
-  const amountCount = useRef<{ tween: gsap.core.Tween | null; value: number }>({ tween: null, value: readout.amount })
-  const showAmount = (value: number) => {
-    amountCount.current.value = value
-    if (amountRef.current) amountRef.current.textContent = formatAds(value)
-  }
-
   useChartEntrance(root, (timeline) => {
-    const { readout, headline, labels } = MOTION
+    const { readout, labels } = MOTION
     const lines = all('[data-slot="allocation-readout"] > *')
     enter(timeline, lines, readout.at, readout)
-    const up = { t: 0 }
-    const countUp = () => showAmount(latestAmount.current * up.t)
-    countingAmount.current = true
-    countUp()
-    timeline.fromTo(up, { t: 0 }, { t: 1, duration: s(headline.duration), ease: EASE.arrive, onUpdate: countUp,
-      onComplete: () => { countingAmount.current = false } }, s(headline.at))
+    const finishCount = amountCount(timeline)
     const buttons = all('.allocation-legend-item')
     enter(timeline, buttons, labels.at)
     return () => {
-      countingAmount.current = false
-      showAmount(latestAmount.current)
+      finishCount()
       clearEntrance([...lines, ...buttons])
     }
   })
@@ -75,17 +61,6 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
     if (reduced || before === active || !contextRef.current) return
     roll(contextRef.current)
   }, [active, reduced])
-
-  // The ad count counts from the number on screen to the new one; during the entrance its count-up carries on to it.
-  useLayoutEffect(() => {
-    const count = amountCount.current
-    if (countingAmount.current || count.value === readout.amount) return
-    count.tween?.kill()
-    count.tween = null
-    if (reduced) { showAmount(readout.amount); return }
-    count.tween = countTo({ value: count.value }, readout.amount, showAmount)
-  }, [readout.amount, reduced])
-  useLayoutEffect(() => () => { amountCount.current.tween?.kill() }, [])
 
   function onSliceKeyDown(event: KeyboardEvent<SVGElement>, index: number) {
     const next = navigate(event.key, index)

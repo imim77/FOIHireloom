@@ -10,7 +10,6 @@ export function useForecast(data: ForecastData, county: CountyForecast) {
   const active = hovered ?? selected
   const point = county.forecast[active]
   const last = county.last_observed
-  const end = county.forecast.at(-1)
   const value = (n: number) => formatValue(n, data.unit)
   const period = (iso: string) => formatPeriod(iso, data.frequency)
   const interval = `${Math.round(data.interval * 100)}% interval`
@@ -21,5 +20,5 @@ export function useForecast(data: ForecastData, county: CountyForecast) {
   }
 
   return { data, county, selected, active, selectPeriod, hoverPeriod: setHovered, point,
-    selectedPoint: county.forecast[selected], last, end, value, period, interval }
+    selectedPoint: county.forecast[selected], last, value, period, interval }
 }

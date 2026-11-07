@@ -9,9 +9,10 @@ import { cn } from 'cn'
 
 import { type KeyboardEvent, useLayoutEffect, useRef } from 'react'
 import { Bar, BarChart, Cell, LabelList, XAxis, YAxis } from 'recharts'
-import { clearEntrance, countTo, EASE, enter, MOTION, roll, s, useChartEntrance, useReducedMotion }
+import { clearEntrance, enter, MOTION, roll, useChartEntrance, useReducedMotion }
   from '../../../hooks/chart-motion'
 import { formatAds, formatInteger, formatShare, formatWorkers } from '../../../utils/format'
+import { useReadoutCount } from '../../../hooks/use-readout-count'
 import type { useJobsByCounty } from '../hooks/use-jobs-by-county'
 
 const PLOT_HEIGHT = 209 // the tallest column with its 16px value and a 4px gap over it
@@ -33,37 +34,20 @@ export function CountyColumns({ counties, values, selected, active, county, work
   const root = useRef<HTMLDivElement>(null)
   const nameRef = useRef<HTMLParagraphElement>(null)
   const workersRef = useRef<HTMLParagraphElement>(null)
-  const latest = useRef(workers)
-  useLayoutEffect(() => {
-    latest.current = workers
-  })
+  const workersCount = useReadoutCount(workersRef, workers, formatWorkers)
   const all = (selector: string) => [...root.current?.querySelectorAll<HTMLElement>(selector) ?? []]
   const rows = counties.map((county, index) => ({ index, name: county.name, value: values[index] }))
 
-  // While the entrance counts the workers up, a new selection leaves the counting to it.
-  const countingWorkers = useRef(false)
-  const workersCount = useRef<{ tween: gsap.core.Tween | null; value: number }>({ tween: null, value: workers })
-  const showWorkers = (value: number) => {
-    workersCount.current.value = value
-    if (workersRef.current) workersRef.current.textContent = formatWorkers(value)
-  }
-
   // Entrance: the selection comes in and its workers count up while Recharts grows the columns, then the names come in.
   useChartEntrance(root, (timeline) => {
-    const up = { t: 0 }
-    const countUp = () => showWorkers(latest.current * up.t)
-    countingWorkers.current = true
-    countUp()
+    const finishCount = workersCount(timeline)
     const selection = all('[data-slot="selection"] > *')
     const names = all('[data-slot="column"] > span')
-    const { readout, headline, labels } = MOTION
+    const { readout, labels } = MOTION
     enter(timeline, selection, readout.at, readout)
-    timeline.fromTo(up, { t: 0 }, { t: 1, duration: s(headline.duration), ease: EASE.arrive, onUpdate: countUp,
-      onComplete: () => { countingWorkers.current = false } }, s(headline.at))
     enter(timeline, names, labels.at)
     return () => {
-      countingWorkers.current = false
-      showWorkers(latest.current)
+      finishCount()
       clearEntrance([...selection, ...names])
     }
   })
@@ -76,20 +60,6 @@ export function CountyColumns({ counties, values, selected, active, county, work
     if (!nameRef.current || reduced || before === active) return
     roll(nameRef.current)
   }, [active, reduced])
-
-  // The workers sought count from the number on screen to the new county's.
-  useLayoutEffect(() => {
-    const count = workersCount.current
-    if (countingWorkers.current || count.value === workers) return
-    count.tween?.kill()
-    count.tween = null
-    if (reduced) {
-      showWorkers(workers)
-      return
-    }
-    count.tween = countTo({ value: count.value }, workers, showWorkers)
-  }, [workers, reduced])
-  useLayoutEffect(() => () => { workersCount.current.tween?.kill() }, [])
 
   function onColumnKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     const index = navigate(event.key)
