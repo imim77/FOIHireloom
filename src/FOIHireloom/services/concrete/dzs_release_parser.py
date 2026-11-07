@@ -2,6 +2,7 @@ import io
 import math
 import re
 import zipfile
+from abc import ABC, abstractmethod
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date
@@ -9,7 +10,7 @@ from decimal import Decimal, InvalidOperation
 from itertools import pairwise
 from typing import Any
 
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 
 from FOIHireloom.dto.dzs import DzsReleaseDTO, DzsSeriesDTO, DzsValueDTO
@@ -74,6 +75,47 @@ SERIES_SHEETS = (
 SOURCE_ORDER = ("t1", *(sheet.source for sheet in SERIES_SHEETS))
 # The sheets read from each file, by file role.
 SHEETS = {"t1": (T1_SHEET,), "workbook": tuple(sheet.name for sheet in SERIES_SHEETS)}
+
+
+class CellNumber(ABC):
+    """CellNumber checks that a cell's number fits its indicator and returns it at the stored precision.
+
+    A new kind of indicator value is a new subclass listed in CELL_NUMBERS.
+    """
+
+    @abstractmethod
+    def value(self, number: Decimal) -> Decimal | None:
+        """Return the number as stored, or None when the indicator cannot have it."""
+
+    @abstractmethod
+    def problem(self, raw: Any) -> str:
+        """Return why raw was rejected."""
+
+
+class PercentageCell(CellNumber):
+    """PercentageCell reads a rate in percent with one decimal."""
+
+    def value(self, number: Decimal) -> Decimal | None:
+        value = number.quantize(Decimal("0.1"))
+        return value if value == number and 0 <= value <= 100 else None
+
+    def problem(self, raw: Any) -> str:
+        return f"rate {raw!r} is not a percentage with one decimal."
+
+
+class PersonCountCell(CellNumber):
+    """PersonCountCell reads a whole, non-negative number of persons."""
+
+    def value(self, number: Decimal) -> Decimal | None:
+        return number.quantize(Decimal(1)) if number >= 0 and number == number.to_integral_value() else None
+
+    def problem(self, raw: Any) -> str:
+        return f"{raw!r} is not a whole number of persons."
+
+
+# Indicators not listed count persons.
+CELL_NUMBERS: dict[str, CellNumber] = {"unemployment_rate": PercentageCell()}
+PERSON_COUNT = PersonCountCell()
 
 
 def squash(value: Any) -> str:
@@ -162,14 +204,8 @@ class DzsReleaseParser:
         self, content: bytes, label: str, sheet_names: tuple[str, ...], problems: list[str]
     ) -> dict[str, Sheet] | None:
         """Read the named sheets, or record why they cannot be read and return None."""
-        try:
-            with zipfile.ZipFile(io.BytesIO(content)) as archive:
-                unpacked = sum(info.file_size for info in archive.infolist())
-        except zipfile.BadZipFile:
-            problems.append(f"{label}: not an XLSX workbook.")
-            return None
-        if unpacked > self._max_unpacked_bytes:
-            problems.append(f"{label}: unpacks to {unpacked} bytes, more than {self._max_unpacked_bytes}.")
+        if (problem := self._archive_problem(content, label)) is not None:
+            problems.append(problem)
             return None
         # openpyxl parses the XML with defusedxml, which the project depends on.
         # It raises many unrelated types for a malformed package, so any error
@@ -180,23 +216,40 @@ class DzsReleaseParser:
             problems.append(f"{label}: cannot be read as an XLSX workbook ({type(error).__name__}).")
             return None
         try:
-            names = {squash(name): name for name in workbook.sheetnames}
-            missing = [name for name in sheet_names if name not in names]
-            if missing:
-                problems.append(f"{label}: missing sheet(s) {', '.join(missing)}; found {', '.join(names)}.")
-                return None
-            sheets = {}
-            for name in sheet_names:
-                worksheet = workbook[names[name]]
-                # The stored dimension can be wrong; read every cell that is present.
-                worksheet.reset_dimensions()
-                sheets[name] = Sheet(name, [list(row) for row in worksheet.iter_rows(values_only=True)], problems)
-            return sheets
+            return self._sheets(workbook, label, sheet_names, problems)
         except Exception as error:
             problems.append(f"{label}: cannot be read as an XLSX workbook ({type(error).__name__}).")
             return None
         finally:
             workbook.close()
+
+    def _archive_problem(self, content: bytes, label: str) -> str | None:
+        """Return why content is not a ZIP package small enough to open, or None."""
+        try:
+            with zipfile.ZipFile(io.BytesIO(content)) as archive:
+                unpacked = sum(info.file_size for info in archive.infolist())
+        except zipfile.BadZipFile:
+            return f"{label}: not an XLSX workbook."
+        if unpacked > self._max_unpacked_bytes:
+            return f"{label}: unpacks to {unpacked} bytes, more than {self._max_unpacked_bytes}."
+        return None
+
+    @staticmethod
+    def _sheets(
+        workbook: Workbook, label: str, sheet_names: tuple[str, ...], problems: list[str]
+    ) -> dict[str, Sheet] | None:
+        names = {squash(name): name for name in workbook.sheetnames}
+        missing = [name for name in sheet_names if name not in names]
+        if missing:
+            problems.append(f"{label}: missing sheet(s) {', '.join(missing)}; found {', '.join(names)}.")
+            return None
+        sheets = {}
+        for name in sheet_names:
+            worksheet = workbook[names[name]]
+            # The stored dimension can be wrong; read every cell that is present.
+            worksheet.reset_dimensions()
+            sheets[name] = Sheet(name, [list(row) for row in worksheet.iter_rows(values_only=True)], problems)
+        return sheets
 
     def _parse_t1(self, sheet: Sheet) -> list[DzsValueDTO]:
         header = sheet.find_row(HEADER)
@@ -408,19 +461,15 @@ class DzsReleaseParser:
             sheet.problem(f"{raw!r} is not a number.", row, column)
             return None
         number = Decimal(raw) if isinstance(raw, int) else Decimal(repr(raw))
+        reader = CELL_NUMBERS.get(indicator, PERSON_COUNT)
         try:
-            if indicator == "unemployment_rate":
-                value = number.quantize(Decimal("0.1"))
-                if value == number and 0 <= value <= 100:
-                    return value, None
-                sheet.problem(f"rate {raw!r} is not a percentage with one decimal.", row, column)
-                return None
-            if number >= 0 and number == number.to_integral_value():
-                return number.quantize(Decimal(1)), None
-        except InvalidOperation:
-            pass
-        sheet.problem(f"{raw!r} is not a whole number of persons.", row, column)
-        return None
+            value = reader.value(number)
+        except InvalidOperation:  # Too many digits to quantize.
+            value = None
+        if value is None:
+            sheet.problem(reader.problem(raw), row, column)
+            return None
+        return value, None
 
     def _check_t1(self, values: list[DzsValueDTO], problems: list[str]) -> None:
         """Active population is employed plus unemployed; county unemployed add up to Croatia's."""
