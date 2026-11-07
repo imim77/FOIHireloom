@@ -5,11 +5,11 @@ import { Button } from '@/components/ui/button'
 import { ChevronDownIcon } from 'lucide-react'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableCaption } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { animate, type JSAnimation, stagger } from 'animejs'
 import { type ReactNode, useId, useLayoutEffect, useRef } from 'react'
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceDot, ReferenceLine, XAxis, YAxis } from 'recharts'
 import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
-import { fadeIn, finish, MOTION, releaseStyles, useChartEntrance, useReducedMotion } from '../../../hooks/chart-motion'
+import { clearEntrance, countTo, EASE, enter, MOTION, roll, s, useChartEntrance, useReducedMotion }
+  from '../../../hooks/chart-motion'
 import { type ForecastRow, forecastRows, formatChange, formatPeriod, formatPeriodGenitive, formatValue, valueTicks }
   from '../utils/forecast-chart'
 import type { useForecast } from '../hooks/use-forecast'
@@ -22,7 +22,7 @@ function Flags({ point }: { point: ObservedPoint }) {
 
 /**
  * Readout shows the inspected period's median over the chart, as the county chart shows its county's workers: the
- * eyebrow and lines rise in and the median counts up from 0; a newly inspected period rolls its name in and the
+ * lines rise in and the median counts up from 0; a newly inspected period rolls its name in and the
  * median counts to its value.
  */
 function Readout({ context, median, format, children }: {
@@ -40,7 +40,7 @@ function Readout({ context, median, format, children }: {
     latest.current = median
   })
   // The median on screen; while the entrance counts it up, a new period leaves the counting to the entrance.
-  const count = useRef<{ tween: JSAnimation | null; value: number; entering: boolean }>(
+  const count = useRef<{ tween: gsap.core.Tween | null; value: number; entering: boolean }>(
     { tween: null, value: median, entering: false })
   const show = (value: number) => {
     count.current.value = value
@@ -48,58 +48,42 @@ function Readout({ context, median, format, children }: {
   }
 
   useChartEntrance(root, (timeline) => {
-    // The card's eyebrow comes in with the readout, ahead of it.
-    const eyebrow = root.current!.closest('[data-slot="card"]')?.querySelector<HTMLElement>('[data-slot="eyebrow"]')
-    const lines = [...(eyebrow ? [eyebrow] : []), ...root.current!.children] as HTMLElement[]
+    const lines = [...root.current!.children] as HTMLElement[]
     const up = { t: 0 }
     const countUp = () => show(latest.current * up.t)
     count.current.entering = true
     countUp()
     const { readout, headline } = MOTION
-    timeline
-      .add(lines, { ...fadeIn(lines, readout.rise), duration: readout.duration, delay: stagger(readout.stagger) },
-        readout.at)
-      .add(up, { t: [0, 1], duration: headline.duration, ease: 'outExpo', onUpdate: countUp,
-        onComplete: () => { count.current.entering = false } }, headline.at)
+    enter(timeline, lines, readout.at, readout)
+    timeline.fromTo(up, { t: 0 }, { t: 1, duration: s(headline.duration), ease: EASE.arrive, onUpdate: countUp,
+      onComplete: () => { count.current.entering = false } }, s(headline.at))
     return () => {
       count.current.entering = false
       show(latest.current)
-      for (const el of lines) {
-        el.style.removeProperty('opacity')
-        el.style.removeProperty('transform')
-      }
+      clearEntrance(lines)
     }
   })
 
   useLayoutEffect(() => {
     const state = count.current
     if (state.entering || state.value === median) return
-    state.tween?.cancel()
+    state.tween?.kill()
     state.tween = null
     if (reduced) {
       show(median)
       return
     }
-    const from = { value: state.value }
-    state.tween = finish(animate(from, {
-      value: median, duration: MOTION.count, ease: 'outExpo',
-      onUpdate: () => show(from.value),
-      onComplete: () => {
-        state.tween = null
-        show(median)
-      },
-    }))
+    state.tween = countTo({ value: state.value }, median, show)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [median, reduced])
-  useLayoutEffect(() => () => { count.current.tween?.cancel() }, [])
+  useLayoutEffect(() => () => { count.current.tween?.kill() }, [])
 
   const lastContext = useRef(context)
   useLayoutEffect(() => {
     if (lastContext.current === context) return
     lastContext.current = context
     if (reduced || !contextRef.current) return
-    finish(animate(contextRef.current, { translateY: ['100%', '0%'], duration: MOTION.roll, ease: 'outExpo',
-      onComplete: releaseStyles('transform') }))
+    roll(contextRef.current)
   }, [context, reduced])
 
   return <div className="forecast-readout flex flex-col items-start gap-2.5" ref={root} data-slot="readout">
@@ -135,7 +119,7 @@ export function ForecastView(model: ReturnType<typeof useForecast>) {
     {county.history.some((p) => p.value !== null) || point ?
       <ForecastChart data={data} county={county} active={active} onSelect={selectPeriod} onHover={hoverPeriod} />
       : null}
-    {selectedPoint && <FieldGroup className="forecast-control">
+    {selectedPoint && <FieldGroup className="forecast-control" data-enter>
       <Field>
         <FieldLabel id={sliderLabel}>{data.frequency === 'month' ? 'Mjesec prognoze' : 'Tjedan prognoze'}</FieldLabel>
         <Slider min={0} max={county.forecast.length - 1} step={1} value={[selected]}
@@ -145,12 +129,12 @@ export function ForecastView(model: ReturnType<typeof useForecast>) {
               + `${value(selectedPoint.low)} – ${value(selectedPoint.high)}` }} />
       </Field>
     </FieldGroup>}
-    {end && county.change_to_horizon !== null && <p className="forecast-change flex flex-wrap items-baseline [gap:6px_12px] m-0 mono-label text-fg-soft
+    {end && county.change_to_horizon !== null && <p data-enter className="forecast-change flex flex-wrap items-baseline [gap:6px_12px] m-0 mono-label text-fg-soft
       [&_strong]:text-fg-loud [&_strong]:text-[14px] [&_strong]:font-medium">
       <strong>{formatChange(county.change_to_horizon, data.unit)}</strong>
       <span className="uppercase">do {formatPeriodGenitive(end.period, data.frequency)}, u odnosu na posljednji podatak</span>
     </p>}
-    {county.forecast.length > 0 && <div className="forecast-table-scroll focus-visible:outline-none focus-visible:shadow-focus overflow-auto [max-height:290px]
+    {county.forecast.length > 0 && <div data-enter className="forecast-table-scroll focus-visible:outline-none focus-visible:shadow-focus overflow-auto [max-height:290px]
       border border-border rounded-[10px]" tabIndex={0} role="region" aria-label="Prognozirane vrijednosti">
       <Table variant="numeric" containerClassName="contents" className="forecast-table w-full border-collapse text-right tabular-nums [&_caption]:text-left [&_caption]:p-3
         [&_caption]:text-fg-soft [&_th]:[padding:9px_12px] [&_th]:[border-top:1px_solid_var(--border)]
@@ -168,7 +152,7 @@ export function ForecastView(model: ReturnType<typeof useForecast>) {
         </TableRow>)}</TableBody>
       </Table>
     </div>}
-    {county.history.length > 0 && <Collapsible className="forecast-history">
+    {county.history.length > 0 && <Collapsible className="forecast-history" data-enter>
       <CollapsibleTrigger render={<Button variant="ghost" />}>
         Povijesni podaci ({county.history.length})<ChevronDownIcon data-icon="inline-end" aria-hidden="true" />
       </CollapsibleTrigger>

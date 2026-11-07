@@ -20,7 +20,7 @@ export function AccommodationComparison({ data, allocation, onOpenLink }: {
         {data.total_jobs > 0 ? <>
           <PortfolioAllocationChart {...allocation} />
           {/* The chart's footer: pulled up so it reads with the legend and hint above it. */}
-          <p className="soft accommodation-known m-0 -mt-2 mono-label uppercase text-fg-soft">Podatak o smještaju poznat je za {formatInteger(data.known_jobs)} od {formatInteger(data.total_jobs)} oglasa.</p>
+          <p data-enter className="soft accommodation-known m-0 -mt-2 mono-label uppercase text-fg-soft">Podatak o smještaju poznat je za {formatInteger(data.known_jobs)} od {formatInteger(data.total_jobs)} oglasa.</p>
         </> : <EmptyState>Nema oglasa za zadane filtre.</EmptyState>}
         <Sources onOpenLink={onOpenLink} links={[{ label: 'HZZ, Burza rada', url: 'https://burzarada.hzz.hr/' }]}>
           {data.coverage.data_as_of && <span>Oglasi provjereni {formatMoment(data.coverage.data_as_of)}</span>}

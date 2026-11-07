@@ -9,10 +9,10 @@ import { cn } from 'cn'
 // inspected month read out above the chart. The legend picks the county (hover previews, click or the arrow keys
 // select); the plot picks the month (hover previews, click, a touch drag or the arrow keys select).
 // Rates retain the original DZS gaps and provenance; provisional runs are dashed.
-import { animate, stagger } from 'animejs'
 import { type KeyboardEvent, type PointerEvent, useId, useLayoutEffect, useRef } from 'react'
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine, XAxis, YAxis } from 'recharts'
-import { fadeIn, finish, MOTION, releaseStyles, useChartEntrance, useCountUp, useReducedMotion } from '../../../hooks/chart-motion'
+import { clearEntrance, EASE, enter, MOTION, roll, s, useChartEntrance, useCountUp, useReducedMotion }
+  from '../../../hooks/chart-motion'
 import { formatMonth, formatRate, formatShortMonth } from '../../../utils/format'
 import { useChartWidth } from '../../../hooks/use-chart-size'
 import { growthRows, provisionalBands, type GrowthRow } from '../utils/chart-data'
@@ -90,28 +90,22 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
   const motion = { isAnimationActive: !reduced, animationBegin: MOTION.marks.at, animationDuration: MOTION.marks.duration }
   const at = (index: unknown) => index == null || Number.isNaN(Number(index)) ? null : Number(index)
 
-  // Entrance: the eyebrow and readout come in and the rate counts up, and the legend comes in; Recharts draws the
+  // Entrance: the readout comes in and the rate counts up, and the legend comes in; Recharts draws the
   // curves in over the same span.
   useChartEntrance(root, (timeline) => {
     const stats = all<HTMLElement>('[data-slot="growth-readout-value"]')
-    // The card's eyebrow comes in with the readout, ahead of it.
-    const eyebrow = root.current?.closest('[data-slot="card"]')?.querySelector<HTMLElement>('[data-slot="eyebrow"]')
-    const readout = [...(eyebrow ? [eyebrow] : []), ...all<HTMLElement>('[data-slot="readout"] > *')]
+    const readout = all<HTMLElement>('[data-slot="readout"] > *')
     const legendItems = all<HTMLElement>('[data-slot="legend-county"]')
     const state = { count: 0 }
     const count = () => stats.forEach((el) => { el.textContent = formatRate(Number(el.dataset.value) * state.count) })
     count()
     const { headline, labels } = MOTION
-    timeline.add(readout, { ...fadeIn(readout, MOTION.readout.rise), duration: MOTION.readout.duration,
-      delay: stagger(MOTION.readout.stagger) }, MOTION.readout.at)
-    timeline.add(state, { count: [0, 1], duration: headline.duration, ease: 'outExpo', onUpdate: count }, headline.at)
-    if (legendItems.length) timeline.add(legendItems, { ...fadeIn(legendItems, labels.rise), duration: labels.duration,
-      delay: stagger(labels.stagger) }, labels.at)
+    enter(timeline, readout, MOTION.readout.at, MOTION.readout)
+    timeline.fromTo(state, { count: 0 }, { count: 1, duration: s(headline.duration), ease: EASE.arrive, onUpdate: count },
+      s(headline.at))
+    enter(timeline, legendItems, labels.at)
     return () => {
-      for (const el of [...readout, ...legendItems]) {
-        el.style.removeProperty('opacity')
-        el.style.removeProperty('transform')
-      }
+      clearEntrance([...readout, ...legendItems])
       stats.forEach((el) => { el.textContent = formatRate(Number(el.dataset.value)) })
     }
   })
@@ -122,8 +116,7 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
     const before = lastSeries.current
     lastSeries.current = activeSeries
     if (!nameRef.current || reduced || before === activeSeries) return
-    finish(animate(nameRef.current, { translateY: ['100%', '0%'], duration: MOTION.roll, ease: 'outExpo',
-      onComplete: releaseStyles('transform') }))
+    roll(nameRef.current)
   }, [activeSeries, reduced])
 
   // A touch or pen picks the month under it and drags along; Recharts reports no month on touchstart. The plot

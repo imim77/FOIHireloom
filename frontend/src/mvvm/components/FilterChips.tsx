@@ -14,7 +14,7 @@ interface FilterChipsProps {
 /** FilterChips shows active filters, with removal when the host allows it. */
 export function FilterChips({ filters, label = 'Filtri', disabled = false, onRemove }: FilterChipsProps) {
   if (!filters.length) return null
-  return <ul className="filters m-0 flex list-none flex-wrap gap-1.5 p-0" aria-label={label}>
+  return <ul data-enter className="filters m-0 flex list-none flex-wrap gap-1.5 p-0" aria-label={label}>
     {filters.map((filter) => <li key={filter.argument} className="min-w-0 max-w-full">
       <Badge variant="secondary" className="filter h-auto max-w-full gap-1">
         <span className="truncate">{capitalise(filter.label)}</span>

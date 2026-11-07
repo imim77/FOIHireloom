@@ -4,13 +4,13 @@ import { cn } from 'cn'
 // The counties as flat columns drawn with shadcn chart over Recharts, after the "Investment App User Age Chart" from
 // the Keitoto library: the active county is red with its name in a dark pill, the others grey; the selected county's
 // workers sought stand over the chart. Hover previews a county, click or the arrow keys select one. Recharts grows
-// the columns from their feet and regrows them from the heights on screen for new data; anime.js brings the
+// the columns from their feet and regrows them from the heights on screen for new data; GSAP brings the
 // selection in, counts the workers to the active county's number and rolls its name in.
 
-import { animate, type JSAnimation, stagger } from 'animejs'
 import { type KeyboardEvent, useLayoutEffect, useRef } from 'react'
 import { Bar, BarChart, Cell, LabelList, XAxis, YAxis } from 'recharts'
-import { fadeIn, finish, MOTION, releaseStyles, useChartEntrance, useReducedMotion } from '../../../hooks/chart-motion'
+import { clearEntrance, countTo, EASE, enter, MOTION, roll, s, useChartEntrance, useReducedMotion }
+  from '../../../hooks/chart-motion'
 import { formatAds, formatInteger, formatShare, formatWorkers } from '../../../utils/format'
 import type { useJobsByCounty } from '../hooks/use-jobs-by-county'
 
@@ -42,7 +42,7 @@ export function CountyColumns({ counties, values, selected, active, county, work
 
   // While the entrance counts the workers up, a new selection leaves the counting to it.
   const countingWorkers = useRef(false)
-  const workersCount = useRef<{ tween: JSAnimation | null; value: number }>({ tween: null, value: workers })
+  const workersCount = useRef<{ tween: gsap.core.Tween | null; value: number }>({ tween: null, value: workers })
   const showWorkers = (value: number) => {
     workersCount.current.value = value
     if (workersRef.current) workersRef.current.textContent = formatWorkers(value)
@@ -54,27 +54,17 @@ export function CountyColumns({ counties, values, selected, active, county, work
     const countUp = () => showWorkers(latest.current * up.t)
     countingWorkers.current = true
     countUp()
-    // The card's eyebrow comes in with the readout, ahead of it.
-    const eyebrow = root.current?.closest('[data-slot="card"]')?.querySelector<HTMLElement>('[data-slot="eyebrow"]')
-    const selection = [...(eyebrow ? [eyebrow] : []), ...all('[data-slot="selection"] > *')]
+    const selection = all('[data-slot="selection"] > *')
     const names = all('[data-slot="column"] > span')
     const { readout, headline, labels } = MOTION
-    timeline
-      .add(selection, { ...fadeIn(selection, readout.rise), duration: readout.duration, delay: stagger(readout.stagger) },
-        readout.at)
-      .add(up, {
-        t: [0, 1], duration: headline.duration, ease: 'outExpo', onUpdate: countUp,
-        onComplete: () => { countingWorkers.current = false },
-      }, headline.at)
-    if (names.length) timeline.add(names, { ...fadeIn(names, labels.rise), duration: labels.duration,
-      delay: stagger(labels.stagger) }, labels.at)
+    enter(timeline, selection, readout.at, readout)
+    timeline.fromTo(up, { t: 0 }, { t: 1, duration: s(headline.duration), ease: EASE.arrive, onUpdate: countUp,
+      onComplete: () => { countingWorkers.current = false } }, s(headline.at))
+    enter(timeline, names, labels.at)
     return () => {
       countingWorkers.current = false
       showWorkers(latest.current)
-      for (const el of [...selection, ...names]) {
-        el.style.removeProperty('opacity')
-        el.style.removeProperty('transform')
-      }
+      clearEntrance([...selection, ...names])
     }
   })
 
@@ -84,31 +74,22 @@ export function CountyColumns({ counties, values, selected, active, county, work
     const before = lastActive.current
     lastActive.current = active
     if (!nameRef.current || reduced || before === active) return
-    finish(animate(nameRef.current, { translateY: ['100%', '0%'], duration: MOTION.roll, ease: 'outExpo',
-      onComplete: releaseStyles('transform') }))
+    roll(nameRef.current)
   }, [active, reduced])
 
   // The workers sought count from the number on screen to the new county's.
   useLayoutEffect(() => {
     const count = workersCount.current
     if (countingWorkers.current || count.value === workers) return
-    count.tween?.cancel()
+    count.tween?.kill()
     count.tween = null
     if (reduced) {
       showWorkers(workers)
       return
     }
-    const state = { value: count.value }
-    count.tween = finish(animate(state, {
-      value: workers, duration: MOTION.count, ease: 'outExpo',
-      onUpdate: () => showWorkers(state.value),
-      onComplete: () => {
-        count.tween = null
-        showWorkers(workers)
-      },
-    }))
+    count.tween = countTo({ value: count.value }, workers, showWorkers)
   }, [workers, reduced])
-  useLayoutEffect(() => () => { workersCount.current.tween?.cancel() }, [])
+  useLayoutEffect(() => () => { workersCount.current.tween?.kill() }, [])
 
   function onColumnKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     const index = navigate(event.key)

@@ -5,10 +5,9 @@ import { Badge } from '@/components/ui/badge'
 // same month a year earlier; the focused county's tile is marked like its curve. The tiles fade in one after another
 // once the lines have drawn in.
 
-import { stagger } from 'animejs'
 import { useRef } from 'react'
 import { Card, Notes, Warning } from '../../../../components/Card'
-import { fadeIn, MOTION, useChartEntrance } from '../../../../hooks/chart-motion'
+import { clearEntrance, enter, MOTION, useChartEntrance } from '../../../../hooks/chart-motion'
 import { formatDay, formatMonth, formatPoints, formatRate, plural } from '../../../../utils/format'
 import { Sources } from '../../../../components/Sources'
 import { UnemploymentGrowthChart } from '../../components/UnemploymentGrowthChart'
@@ -48,14 +47,8 @@ function History({ data, chart, onOpenLink }: {
 
   useChartEntrance(root, (timeline) => {
     const tiles = [...root.current!.querySelectorAll<HTMLElement>('[data-slot="tile"]')]
-    timeline.add(tiles, { ...fadeIn(tiles, MOTION.readout.rise), duration: MOTION.readout.duration,
-      delay: stagger(MOTION.marks.stagger) }, TILES_AT)
-    return () => {
-      for (const el of tiles) {
-        el.style.removeProperty('opacity')
-        el.style.removeProperty('transform')
-      }
-    }
+    enter(timeline, tiles, TILES_AT, { ...MOTION.readout, stagger: MOTION.marks.stagger })
+    return () => clearEntrance(tiles)
   })
 
   return (

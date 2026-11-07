@@ -1,10 +1,9 @@
 // One job on a tile of the Performance chart, laid out after the reference job row (without the company logo): labels
 // for how long ago it was published and its category, the title, the employer in capitals over a slash and its
 // county, then the details on a sunken tile, each with its icon, like Dalco's spec panels, and the pill to the ad. Picking the job for a
-// comparison is the card's only red. Animated with anime.js on the DESIGN.md timings: the tile rises in after the
+// comparison is the card's only red. Animated with GSAP on the DESIGN.md timings: the tile rises in after the
 // ones before it, its labels come in, then the details one after another.
 
-import { animate, stagger } from 'animejs'
 import { cn } from 'cn'
 import { useId, useRef } from 'react'
 import { MessageCircleIcon, type LucideIcon } from 'lucide-react'
@@ -14,7 +13,7 @@ import { Card as SurfaceCard, CardContent, CardHeader } from '@/components/ui/ca
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { RollLabel } from '../../../components/RollLabel'
-import { fadeIn, finish, MOTION, releaseStyles, useChartEntrance } from '../../../hooks/chart-motion'
+import { clearEntrance, enter, MOTION, pop, useChartEntrance } from '../../../hooks/chart-motion'
 import { FEED_CATEGORY, sentenceCase } from '../../../utils/text'
 import { age, type DetailKind, details } from '../utils/job-format'
 import type { JobCard } from '../types'
@@ -61,12 +60,6 @@ function Icon({ paths }: { paths: string[] }) {
       {paths.map((d) => <path key={d} d={d} />)}
     </svg>
   )
-}
-
-// Pressing a button pops it, as a new focus pops the active value in the charts.
-function pop(target: Element) {
-  finish(animate(target, { scale: [0.86, 1], duration: MOTION.pop, ease: 'outBack(2)',
-    onComplete: releaseStyles('transform') }))
 }
 
 /** An icon action at the end of the label row: its icon pops when pressed. */
@@ -117,22 +110,13 @@ export function JobCardView({ job, today, order, actions, compare }: {
   useChartEntrance(root, (timeline) => {
     const card = root.current!
     const at = order * MOTION.readout.stagger
-    timeline.add(card, { ...fadeIn([card], MOTION.readout.rise), duration: MOTION.readout.duration }, at)
+    enter(timeline, [card], at, MOTION.readout)
     const all = (selector: string) => [...card.querySelectorAll<HTMLElement>(selector)]
-    const fadeAll = (targets: HTMLElement[], start: number) => {
-      if (targets.length) timeline.add(targets, { ...fadeIn(targets, MOTION.labels.rise), duration: MOTION.labels.duration,
-        delay: stagger(MOTION.labels.stagger) }, start)
-    }
     const labels = all('[data-slot="label"]')
-    fadeAll(labels, at + LABELS_AT)
+    enter(timeline, labels, at + LABELS_AT)
     const items = all('[data-slot="detail"]')
-    fadeAll(items, at + DETAILS_AT)
-    return () => {
-      for (const el of [card, ...labels, ...items]) {
-        el.style.removeProperty('opacity')
-        el.style.removeProperty('transform')
-      }
-    }
+    enter(timeline, items, at + DETAILS_AT)
+    return () => clearEntrance([card, ...labels, ...items])
   })
 
   return (

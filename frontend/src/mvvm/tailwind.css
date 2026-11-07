@@ -105,13 +105,6 @@
   letter-spacing: -0.02em;
 }
 
-@theme {
-  --animate-fade-in: fade-in 400ms ease-out;
-  @keyframes fade-in {
-    from { opacity: 0; transform: translateY(4px); }
-  }
-}
-
 /* Semantic tokens also feed SVG gradients and data-driven chart geometry. */
 :root {
   --radius: 0.625rem;

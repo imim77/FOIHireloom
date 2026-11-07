@@ -7,12 +7,12 @@ import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } f
 // ramp (offered red, not offered grey, unknown light grey), share discs on the segments, a readout over the ring
 // with the active segment's name, share and ad count, and the other segments dimmed. Drawn flat, as Dalco draws:
 // no shadow, glow, bevel or glass. Each segment is a button: hover previews, click or the arrow keys select. The
-// eyebrow and readout fade in and count up while the ring sweeps in; another active segment rolls its name in and
+// readout fades in and counts up while the ring sweeps in; another active segment rolls its name in and
 // counts to its number.
-import { animate, type JSAnimation, stagger } from 'animejs'
 import { type KeyboardEvent, useId, useLayoutEffect, useRef } from 'react'
 import { Pie, PieChart, Sector } from 'recharts'
-import { fadeIn, finish, MOTION, releaseStyles, useChartEntrance, useReducedMotion } from '../../../hooks/chart-motion'
+import { clearEntrance, countTo, EASE, enter, MOTION, roll, s, useChartEntrance, useReducedMotion }
+  from '../../../hooks/chart-motion'
 import { formatAds, formatInteger, formatShare } from '../../../utils/format'
 import type { useAllocation } from '../hooks/use-allocation'
 
@@ -42,7 +42,7 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
   const latestAmount = useRef(readout.amount)
   useLayoutEffect(() => { latestAmount.current = readout.amount })
   const countingAmount = useRef(false)
-  const amountCount = useRef<{ tween: JSAnimation | null; value: number }>({ tween: null, value: readout.amount })
+  const amountCount = useRef<{ tween: gsap.core.Tween | null; value: number }>({ tween: null, value: readout.amount })
   const showAmount = (value: number) => {
     amountCount.current.value = value
     if (amountRef.current) amountRef.current.textContent = formatAds(value)
@@ -50,26 +50,20 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
 
   useChartEntrance(root, (timeline) => {
     const { readout, headline, labels } = MOTION
-    // The card's eyebrow comes in with the readout, ahead of it.
-    const eyebrow = root.current?.closest('[data-slot="card"]')?.querySelector<HTMLElement>('[data-slot="eyebrow"]')
-    const lines = [...(eyebrow ? [eyebrow] : []), ...all('[data-slot="allocation-readout"] > *')]
-    timeline.add(lines, { ...fadeIn(lines, readout.rise), duration: readout.duration, delay: stagger(readout.stagger) },
-      readout.at)
+    const lines = all('[data-slot="allocation-readout"] > *')
+    enter(timeline, lines, readout.at, readout)
     const up = { t: 0 }
     const countUp = () => showAmount(latestAmount.current * up.t)
     countingAmount.current = true
     countUp()
-    timeline.add(up, { t: [0, 1], duration: headline.duration, ease: 'outExpo', onUpdate: countUp,
-      onComplete: () => { countingAmount.current = false } }, headline.at)
+    timeline.fromTo(up, { t: 0 }, { t: 1, duration: s(headline.duration), ease: EASE.arrive, onUpdate: countUp,
+      onComplete: () => { countingAmount.current = false } }, s(headline.at))
     const buttons = all('.allocation-legend-item')
-    timeline.add(buttons, { ...fadeIn(buttons, labels.rise), duration: labels.duration, delay: stagger(labels.stagger) },
-      labels.at)
+    enter(timeline, buttons, labels.at)
     return () => {
       countingAmount.current = false
       showAmount(latestAmount.current)
-      for (const node of [...lines, ...buttons]) {
-        node.style.removeProperty('opacity'); node.style.removeProperty('transform')
-      }
+      clearEntrance([...lines, ...buttons])
     }
   })
 
@@ -79,24 +73,19 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
     const before = lastActive.current
     lastActive.current = active
     if (reduced || before === active || !contextRef.current) return
-    finish(animate(contextRef.current, { translateY: ['100%', '0%'], duration: MOTION.roll, ease: 'outExpo',
-      onComplete: releaseStyles('transform') }))
+    roll(contextRef.current)
   }, [active, reduced])
 
   // The ad count counts from the number on screen to the new one; during the entrance its count-up carries on to it.
   useLayoutEffect(() => {
     const count = amountCount.current
     if (countingAmount.current || count.value === readout.amount) return
-    count.tween?.cancel()
+    count.tween?.kill()
     count.tween = null
     if (reduced) { showAmount(readout.amount); return }
-    const state = { value: count.value }
-    const target = readout.amount
-    count.tween = finish(animate(state, { value: target, duration: MOTION.count, ease: 'outExpo',
-      onUpdate: () => showAmount(state.value),
-      onComplete: () => { count.tween = null; showAmount(target) } }))
+    count.tween = countTo({ value: count.value }, readout.amount, showAmount)
   }, [readout.amount, reduced])
-  useLayoutEffect(() => () => { amountCount.current.tween?.cancel() }, [])
+  useLayoutEffect(() => () => { amountCount.current.tween?.kill() }, [])
 
   function onSliceKeyDown(event: KeyboardEvent<SVGElement>, index: number) {
     const next = navigate(event.key, index)
@@ -208,6 +197,6 @@ export function PortfolioAllocationChart(model: ReturnType<typeof useAllocation>
       <span>Prikazano {formatInteger(visibleTotal)} od {formatInteger(total)} oglasa. Udjeli su među prikazanim oglasima.</span>
       <Button type="button" variant="link" size="sm" className="link text-[12px]" onClick={resetGroups}><RollLabel>Prikaži sve skupine</RollLabel></Button>
     </div>}
-    <p id={`${id}-hint`} className="soft allocation-hint m-0 text-[12px] font-medium leading-[1.25] text-fg-soft w-full">Odaberite segment za broj i udio oglasa. Klikom na legendu sakrivate ili vraćate skupinu; strelicama birate segment.</p>
+    <p id={`${id}-hint`} data-enter className="soft allocation-hint m-0 text-[12px] font-medium leading-[1.25] text-fg-soft w-full">Odaberite segment za broj i udio oglasa. Klikom na legendu sakrivate ili vraćate skupinu; strelicama birate segment.</p>
   </div>
 }

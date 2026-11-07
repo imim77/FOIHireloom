@@ -23,7 +23,7 @@ export function Moments({ data }: { data: CountyComparisonData }) {
   const provisional = data.counties.some((county) => [county.unemployed, county.active_population,
     county.unemployment_rate].some((value) => value.is_provisional))
   return (
-    <dl className="moments grid [grid-template-columns:repeat(auto-fit,_minmax(180px,_1fr))] gap-2 m-0">
+    <dl data-enter className="moments grid [grid-template-columns:repeat(auto-fit,_minmax(180px,_1fr))] gap-2 m-0">
       <Moment label="HZZ oglasi provjereni" note="posljednja uspješna provjera svih uspoređenih županija">
         {data.hzz_coverage.data_as_of ? formatMoment(data.hzz_coverage.data_as_of) : 'nije poznato'}
       </Moment>

@@ -206,18 +206,22 @@ Footer           PRIKAZANO 8 OD 21 ŽUPANIJA …     12px mono soft
 ## Motion
 
 Recharts draws the marks in (`animationBegin`/`animationDuration` from the
-`marks` row below) and morphs them to new data; anime.js, through the helpers
-in `hooks/chart-motion.ts`, moves everything else: eyebrow, readout, labels
-and counting numbers. Dalco moves fast and
+`marks` row below) and morphs them to new data; GSAP, through the helpers
+in `hooks/chart-motion.ts`, moves everything else: the card frame, readout,
+labels and counting numbers. Every view is animated: `Card` plays the frame's
+entrance (header, notes, sources, footers and parts a view marks with
+`data-enter`), and each view animates its own content. Dalco moves fast and
 in sequence, so durations are short and staggers tight; easing is `outExpo`
 for arrivals, `inQuad` for exits, `outBack` only for the pill pop.
 
 | Moment | What moves | Timing |
 | --- | --- | --- |
-| Entrance | eyebrow and readout fade in, rising 6 px, staggered 60 ms | 500 ms at 100 ms |
+| Entrance | card header (eyebrow, title, description, actions) rises in, staggered 60 ms | 500 ms at 0 ms |
+| | readout, filters and warnings above the content fade in, rising 6 px, staggered 60 ms | 500 ms at 100 ms |
 | | headline number counts up from 0 | 1200 ms at 150 ms |
 | | Recharts draws the marks in: columns grow from their feet, lines and the ring sweep in | 900 ms from 250 ms |
 | | axis and legend labels fade in, rising 4 px, staggered 20 ms per label | 400 ms at 350 ms |
+| | sources, footers and notes under the content rise in, staggered 60 ms | 500 ms at 1150 ms |
 | New focus | the pill moves to the new item by cross-fading | 300 ms CSS |
 | | readout label rolls to the new name; number counts to the new value | 250 ms / 600 ms |
 | | lit and grey looks cross-fade | 300 ms CSS |
@@ -225,7 +229,7 @@ for arrivals, `inQuad` for exits, `outBack` only for the pill pop.
 | New data | Recharts morphs every shape from the size on screen | 900 ms |
 
 Rules: animate from what is on screen, never jump back to zero on an update;
-wrap every anime.js animation in `finish()` so hidden host frames still reach
+wrap every GSAP animation in `finish()` so hidden host frames still reach
 the end state (Recharts plays its marks once the frame shows); `prefers-reduced-motion` skips straight to the final state; release
 inline styles when an animation ends so the stylesheet applies again.
 
