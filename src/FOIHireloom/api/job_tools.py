@@ -40,7 +40,7 @@ from .job_filters import (
     CATEGORY_DESCRIPTION, Accommodation, ContractFilter, Education, EmploymentTags,
     FullTime, MaxExperienceMonths, Place, SearchQuery, Skills,
 )
-from .tool_provider import READ_ONLY, ToolGroup
+from .tool_provider import DATA_ONLY, READ_ONLY, ToolGroup
 
 # Key of the search service in the server's lifespan context.
 JOB_SEARCH_SERVICE = "job_search_service"
@@ -80,11 +80,12 @@ class JobTools(ToolGroup):
 
     Tools only translate arguments and errors; JobSearchService holds the
     rules. The server's lifespan must provide the service under
-    JOB_SEARCH_SERVICE.
+    JOB_SEARCH_SERVICE. Raw search and comparison endpoints remain app-only;
+    user requests go to the corresponding show_ workflows by default.
     """
 
     def register(self, server: FastMCP) -> None:
-        @server.tool(annotations=READ_ONLY)
+        @server.tool(app=DATA_ONLY, annotations=READ_ONLY)
         async def search_jobs(
             ctx: Context,
             query: SearchQuery = None,
@@ -108,51 +109,14 @@ class JobTools(ToolGroup):
                 description="next_cursor from the previous page, with the same other arguments.",
             )] = None,
         ) -> JobSearchPageDTO:
-            """Search Croatian Employment Service (HZZ) job advertisements, newest first.
+            """App-only data search and pagination endpoint. For user job-search requests use show_jobs.
 
-            For 'Koliko oglasa nudi smještaj, a koliko ne?' or accommodation
-            percentages, call show_accommodation_comparison directly. Do not
-            count a search page or infer accommodation from free text for
-            these aggregate questions. This tool lists individual ads.
-
-            Returns jobs still listed in an HZZ county feed. With a query,
-            jobs whose title contains every query word come first
-            (title_match true), then jobs that match only elsewhere, such as
-            a driving licence or a language mentioned in the description;
-            each group is ordered newest first. deadline_on is
-            the application deadline; with deadline_source 'job_page' it is
-            the "Natječaj vrijedi do" date from the job's HZZ page. Jobs whose
-            known deadline has passed are left out unless include_expired is
-            true; jobs without a known deadline are included, with
-            deadline_passed null. Null fields were not stated by the source;
-            display_title labels jobs without a title. Show display_location
-            as the job's location: it is the place of work from the job page
-            when that has been read, otherwise the town from the feed or, when
-            HZZ gave none, the county. category_source says where category
-            came from: 'description' when the job's own description states
-            it, 'feed' when it was filled in from an HZZ occupation feed whose
-            category was verified on its jobs. Use get_job for the full
-            details, and canonical_url to view or apply on the HZZ site.
-            To compare 2 or 3 found jobs, pass their ids to
-            show_job_comparison to show the comparison, or to compare_jobs.
-
-            The condition filters (max_experience_months, contract,
-            full_time, education, accommodation, employment_tags and place)
-            use the values read from the job's HZZ page, and place also the
-            feed's municipality. A job whose value is unknown, because its
-            page was not read or does not state it, never matches.
-            unknown_total is the number of jobs left out only for unknown
-            values: they meet or might meet every condition filter.
-            unknown_conditions gives, per condition filter, how many of them
-            have an unknown value for it; a job can count under several.
-            Whenever unknown_total is not 0, tell the user how many jobs might
-            also match and which filters had unknown values, and never say
-            those jobs meet the conditions.
-
-            coverage says how current the searched counties are. When
-            coverage.warning is set, tell the user that results may be
-            outdated or incomplete; few or no results then do not mean HZZ
-            has no such jobs.
+            show_jobs searches the same stored HZZ advertisements, returns job data
+            and presents the results automatically. Prefer it even for "find jobs",
+            "tražim posao" or "ima li poslova", without asking for a display format.
+            This endpoint returns a page of summaries and next_cursor for app workflows.
+            Keep the same filters when continuing a cursor. Missing fields are unknown;
+            report unknown_total and coverage.warning. Use get_job for one job's full text.
             """
             filters = JobSearchFiltersDTO(
                 query=query, county=county, category=category, max_experience_months=max_experience_months,
@@ -189,41 +153,32 @@ class JobTools(ToolGroup):
                 description="next_cursor from the previous result, with the same other arguments.",
             )] = None,
         ) -> JobCardsDTO:
-            """Show the user the jobs search_jobs would find as cards, newest first.
+            """Find job vacancies matching the user's occupation, location and working conditions.
 
-            For accommodation counts or shares, use show_accommodation_comparison
-            directly; it counts all matching ads and displays the distribution.
-            Use these cards when the user wants to browse individual jobs.
+            DEFAULT for finding or browsing individual jobs, including "Nađi mi posao",
+            "Tražim posao kuhara u Istri", "Ima li poslova bez iskustva?" and
+            "Find nursing jobs in Zagreb". Call directly; the user does not need to
+            request cards, a visual display or a tool. Do not ask which format to use.
+            Searches stored HZZ ads and automatically presents matching jobs as cards
+            on supported hosts; the same call also returns structured job data.
 
-            Use it when the user wants to see or browse jobs, not just read
-            about them. Hosts that support MCP Apps draw a card per job: the
-            employer, the title, the place, the employment type, working
-            hours, education, experience, workers sought, accommodation and
-            the application deadline, with a link to the HZZ advertisement.
-            The user can load more cards there, and remove a filter, which
-            shows the cards found without it. The user can also pick 2 or 3
-            cards to compare, which sends a message naming them with their
-            ids; show those jobs with show_job_comparison, passing only the
-            conditions the user stated. Every host also gets the data:
-            the jobs as in search_jobs, category_source included, plus those
-            job page values as text, which are null until the job's HZZ page
-            has been read. conditions holds the same page's normalised
-            conditions, as the filters read them (codes as in the filter
-            arguments, experience_months, weekly_hours, trainee for trainee
-            ads, accommodation 'none', 'shared', 'single' or 'family'); it is
-            null until the page has been read, and a null value in it is
-            unknown, not "not required". Condition filters, unknown_total and
-            unknown_conditions work as in search_jobs; report unknown_total
-            whenever it is not 0. When coverage.warning is set, tell the user
-            the results may be outdated or incomplete. active_filters,
-            coverage_note and unknown_note are the Croatian wording the view
-            shows for the filters, coverage.warning and unknown_total.
-
+            Extract only stated conditions into filters. "Posao kuhara sa smještajem"
+            means query='kuhar', accommodation=true. Use place for a town and county
+            for a county. Omit unspecified filters; exclude expired jobs by default.
             Put programming languages and tools in skills, not query. Title matches
             rank first, then the number of requested skills mentioned, then newest
             publication. When direct skill matches are few, also offer a separate
             search without skills for a related occupation or category, keeping the
-            user's other filters. Label those as related jobs.
+            user's other filters. Label those as related jobs. Use next_cursor with
+            unchanged filters for more results, get_job for one ad's full details,
+            and canonical_url to read the original or apply.
+
+            For counts or shares by accommodation use show_accommodation_comparison;
+            for where jobs or workers are concentrated use show_jobs_by_county.
+            Compare only jobs the user selected with show_job_comparison.
+            Null conditions mean unknown, never "not required". Report unknown_total,
+            unknown_note and coverage_note when present; stale or empty results do
+            not prove there are no jobs.
             """
             filters = JobSearchFiltersDTO(
                 query=query, county=county, category=category, max_experience_months=max_experience_months,
@@ -256,48 +211,25 @@ class JobTools(ToolGroup):
                 ge=1, le=MAX_MARKET_TOP, description="Entries in the employers list.",
             )] = DEFAULT_MARKET_TOP,
         ) -> JobMarketStatsDTO:
-            """General labour-market counts; for accommodation counts or shares use show_accommodation_comparison.
+            """Count matching job ads and summarize employers, contracts, education and other job conditions.
 
-            Use it for questions such as where most jobs of a kind are, which
-            employers hire most, or what share is permanent; use search_jobs
-            to list the jobs themselves. For accommodation counts, shares or
-            distribution (smještaj / bez smještaja / nepoznato), automatically
-            use show_accommodation_comparison even if the user does not request
-            a chart, a comparison or a named tool. It displays the chart and returns
-            the counts together. jobs is the number of matching jobs
-            and workers_needed the positions their HZZ pages state, so one job
-            can seek several workers. Each breakdown entry gives jobs and
-            workers_needed per value, most common first.
+            Use for totals and general labour-market breakdowns: "Koliko ima oglasa
+            za kuhare u Istri?", "Koji poslodavci najviše zapošljavaju?", "Koliki je
+            udio ugovora na neodređeno?" or "How many jobs are available?".
+            Choose by the question's subject:
+            - Where jobs or workers are concentrated across counties: show_jobs_by_county.
+            - Counts, shares or distribution by accommodation: show_accommodation_comparison.
+            - Specific counties compared with unemployment: show_county_comparison.
+            - Individual job recommendations or browsing: show_jobs.
+            These choices do not require the user to ask for a chart or cards.
 
-            counties cover every matching job. categories cover only the
-            with_category jobs: category_from_description of them state it in
-            their own description, category_from_feed got it from an HZZ
-            occupation feed verified on its jobs. The rest have an unknown
-            category, not a different one; tell the user the actual coverage
-            (with_category of jobs) whenever you use categories.
-            The other breakdowns come from the job pages, so they cover at
-            most with_details jobs, and each counts only jobs whose value is
-            known: employers; contracts ('permanent', 'fixed_term', 'other');
-            employment_tags (codes as in the employment_tags argument);
-            working_time ('full_time', 'part_time'); experience_bands ('none'
-            for no experience or trainee ads, '1_to_12_months',
-            '13_to_36_months', 'over_36_months'); education_levels (each
-            level a job accepts, codes as in the education argument);
-            accommodation ('none', 'shared', 'single', 'family');
-            schedule_tags ('morning', 'afternoon', 'two_shifts',
-            'three_shifts', 'split' for split shifts, 'night',
-            'weekends_holidays'); transport_allowance ('full', 'partial',
-            'none'). A job can have several employment tags, education
-            levels and schedule tags, so those counts may add up to more than
-            jobs. published_recently and closing_soon count jobs published in
-            the last window_days days, or closing within the next window_days
-            days, counted from today. Condition filters, unknown_total and
-            unknown_conditions work as in search_jobs; report unknown_total
-            whenever it is not 0, as jobs that might also match.
-
-            coverage says how current the counted counties are. When
-            coverage.warning is set, tell the user the numbers may be
-            outdated or incomplete.
+            Returns totals, workers sought, breakdowns, freshness and unknown-condition
+            counts for all matching stored HZZ ads, not just one page. One ad may seek
+            several workers. Categories cover with_category ads; normalized conditions
+            cover only known values. Multi-valued tags or education can count one ad
+            in several groups. Shares must name their denominator. published_recently
+            and closing_soon use window_days relative to today. Report unknown_total
+            and coverage.warning. Null or unreported conditions are never negative answers.
             """
             filters = JobMarketFiltersDTO(
                 query=query, county=county, category=category, max_experience_months=max_experience_months,
@@ -322,25 +254,24 @@ class JobTools(ToolGroup):
             skills: Skills = None,
             include_expired: Annotated[bool, Field(description="Also include ads whose deadline has passed.")] = False,
         ) -> AccommodationComparisonDTO:
-            """Koliko oglasa nudi smještaj, a koliko ne? Vraća brojeve i postotke te odmah prikazuje graf.
+            """Count and compare job ads offering accommodation, not offering it, or leaving it unknown.
 
-            Odaberi ovaj alat za pitanja o broju, udjelu ili raspodjeli oglasa prema smještaju.
-            Korisnik ne mora spomenuti graf, usporedbu ni naziv alata.
-            Primjeri: 'Koliko oglasa za kuhare u Varaždinskoj županiji nudi smještaj, a koliko ne?',
-            'Koliki udio poslova u Istri ima smještaj?', 'Usporedi oglase sa smještajem i bez njega'.
-            Za prvi primjer pozovi query='kuhar', county='varazdinska'. Pozovi izravno, bez prethodnog
-            search_jobs, ručnog brojanja oglasa ili biranja nekoliko primjera za show_job_comparison.
+            DEFAULT for accommodation counts, percentages and distributions, including
+            "Koliko oglasa za kuhare u Varaždinskoj nudi smještaj?", "Koliki udio
+            poslova u Istri ima smještaj?" and "How many jobs offer accommodation?".
+            Call directly even when the user never says "graf", "chart", "usporedba"
+            or a tool name. Do not ask for a format, count a search page or select
+            example jobs. Automatically presents the distribution and returns its data.
 
-            Obuhvaća sve oglase za zadane filtre i prikazuje tri skupine: nudi smještaj (shared,
-            single, family), izričito nema smještaja (none), podatak nepoznat. Nepoznato nikad ne
-            pribrajaj skupini bez smještaja niti nagađaj iz slobodnog teksta. Udjeli se računaju od
-            svih pronađenih oglasa, ne radnih mjesta. Nema filtra accommodation jer se uspoređuju
-            sve tri skupine. Prenesi coverage_note i unknown_note. Query pretražuje tekst, a category
-            obuhvaća samo oglase poznate kategorije. Skrivanje skupine u legendi ne mijenja izvorne
-            brojeve. Vraća podatke i na hostu bez MCP Apps podrške.
+            For cooks in Varaždinska use query='kuhar', county='varazdinska'. Counts
+            all matching ads in three groups: offered (shared/single/family), explicitly
+            not offered (none), unknown. Shares use all matching ads, not workers.
+            There is no accommodation filter because all three groups must remain
+            in the population. Preserve unknown values, coverage_note and unknown_note.
 
-            Za 'Pronađi mi posao kuhara sa smještajem' koristi show_jobs s accommodation=True;
-            ovaj alat služi pitanjima o broju i udjelima, a show_job_comparison odabranim oglasima.
+            A request to FIND a job with accommodation, such as "Tražim posao kuhara
+            sa smještajem", belongs to show_jobs(query='kuhar', accommodation=true).
+            This tool answers aggregate questions, not recommendations of individual jobs.
             """
             filters = JobMarketFiltersDTO(
                 query=query, county=county, category=category, max_experience_months=max_experience_months,
@@ -377,19 +308,25 @@ class JobTools(ToolGroup):
                             "e.g. 'workers_needed' for which county needs the most workers.",
             )] = "jobs",
         ) -> JobsByCountyDTO:
-            """Show the user a chart of the counties ranked by matching jobs or by workers sought.
+            """Find which Croatian counties have the most job ads or seek the most workers.
 
-            Use it when the user wants to see where jobs of a kind are, or
-            which county needs the most workers, not just read it. Hosts that
-            support MCP Apps draw the top counties as columns the user can
-            hover and select, with a button that opens every county full
-            screen. Every host also gets the data: each county with matching
-            jobs, ranked by metric, with jobs, workers_needed and share
-            (percent of total_jobs). Condition filters, unknown_total and
-            unknown_conditions work as in search_jobs; report unknown_total
-            whenever it is not 0. When coverage.warning is set, tell the user
-            the numbers may be outdated or incomplete. active_filters,
-            coverage_note and unknown_note are as in show_jobs.
+            DEFAULT for geographic job distribution, county rankings and where demand
+            is highest: "Gdje ima najviše poslova za kuhare?", "U kojim županijama
+            se najviše zapošljava?", "Koja županija traži najviše radnika?" and
+            "Where are most nursing jobs?". Call directly without requiring "graf",
+            "chart", "prikaži" or a chosen format. Automatically presents a county
+            ranking and returns the counts for every matching county.
+
+            Use metric='jobs' for ads and metric='workers_needed' for workers or
+            positions; one ad may seek several workers. query and condition filters
+            select the occupation and requirements. top limits initially visible
+            counties, not the counted population. share is a percentage of total_jobs.
+            Report coverage_note and unknown_note; missing conditions stay unknown.
+
+            For a comparison of named counties including DZS unemployment use
+            show_county_comparison. For actual job vacancies use show_jobs; for
+            accommodation shares use show_accommodation_comparison. General totals
+            or employer/contract breakdowns belong to job_market_stats.
             """
             filters = JobMarketFiltersDTO(
                 query=query, category=category, max_experience_months=max_experience_months, contract=contract,
@@ -402,25 +339,24 @@ class JobTools(ToolGroup):
         @server.tool(annotations=READ_ONLY)
         async def get_job(
             ctx: Context,
-            job_id: Annotated[int, Field(ge=1, le=2**63 - 1, description="id of a job from search_jobs.")],
+            job_id: Annotated[int, Field(ge=1, le=2**63 - 1, description="id of a job from earlier show_jobs results.")],
         ) -> JobDetailsDTO:
-            """Return one stored job advertisement with its details and county listings.
+            """Read the full details of one job the user already found or selected.
 
-            Once the job's HZZ page has been read (details_status 'fetched'),
-            description_text is the full text and the employment type, working
-            hours, accommodation, education and experience come from the page.
-            Before that, description_text is the feed's summary, which HZZ
-            cuts at 512 characters; quality_flags marks fields that may be
-            incomplete. details_status 'unavailable' means HZZ showed an error
-            page, not that the job closed. A listing with presence_status 'missing'
-            means the job left that feed, not that it was filled or closed;
-            availability_status stays 'unknown' without evidence either way.
-            A listing is only as current as its feed: data_status 'stale' or
-            'unavailable' means its presence_status may be out of date.
+            Use for "Reci mi više o ovom oglasu", "Koji je rok prijave?" or a
+            specific ad's requirements, taking job_id from earlier show_jobs results.
+            For a new job search use show_jobs; for comparing 2 or 3 selected ads
+            use show_job_comparison. Do not invent an ID.
+
+            Returns stored feed/page text, conditions, deadline, original HZZ URL and
+            feed listings. Page text replaces the truncated feed summary once fetched.
+            Null fields are unknown. An unavailable page or a missing feed listing
+            does not prove the job closed; availability_status remains unknown without
+            evidence. Preserve freshness warnings and use canonical_url to apply.
             """
             return await self._call(service(ctx).get_job(job_id))
 
-        @server.tool(annotations=READ_ONLY)
+        @server.tool(app=DATA_ONLY, annotations=READ_ONLY)
         async def compare_jobs(
             ctx: Context,
             job_ids: ComparedJobIds,
@@ -430,51 +366,15 @@ class JobTools(ToolGroup):
             education: UserEducation = None,
             accommodation: UserAccommodation = None,
         ) -> JobComparisonDTO:
-            """Compare 2 or 3 jobs the user picked side by side, against the conditions the user stated.
+            """App-only data comparison endpoint. For a user's selected ads use show_job_comparison.
 
-            Use it when the user wants to compare particular jobs, e.g. "compare
-            the first and the third", and only the data is needed; to show the
-            user the comparison as a table, use show_job_comparison. Take
-            job_ids from earlier search_jobs or show_jobs results in this
-            conversation, in the order the user named them: the selection
-            lives only in the conversation, as there are no accounts or saved
-            lists. Do not select example jobs on the user's behalf for a
-            market-wide comparison. For counts or shares of ads with, without
-            or with unknown accommodation, use show_accommodation_comparison.
-            Expired jobs, jobs no longer listed and jobs whose HZZ page
-            was not read are compared too.
-
-            jobs names each job as its card does, in the given order, with
-            its published_on, deadline_on and deadline_passed. rows
-            hold one aspect each, in the order experience, education,
-            contract, working_time, accommodation and deadline, with a cell
-            per job in the jobs' order. A cell's value is a short English
-            summary of what the job states, null when it is unknown; evidence
-            is the job page's own text for the aspect, null when the page was
-            not read or does not state it, and for the deadline the date and
-            whether it came from the job page or the HZZ feed. differs is true
-            when the jobs' values are not all equal, an unknown value
-            differing from a known one; point out the rows that differ. today
-            is the day in Croatia the deadlines are counted from. When a
-            value is null on any aspect but the deadline, unknown_reason
-            says why: 'page_not_read', 'page_unavailable' (HZZ returned an
-            error page) or 'page_failed' while the page was not read,
-            'not_stated' when it does not state it, 'unreadable' when its
-            words were not recognised, 'contract_not_stated' when it states
-            the type of employment but not the contract.
-
-            Pass only the conditions the user actually stated about themselves
-            or the job they want; never guess or infer one, and leave the rest
-            out. A row's condition is then the user's value, and each of its
-            cells has a verdict with a reason: 'match' when the job's stated
-            condition meets the user's, 'no_match' when it is known and does
-            not, 'unknown' when the job does not state it or its page was not
-            read. Report 'unknown' as unknown, never as met. A verdict only
-            says whether what the advertisement states meets what the user
-            said, never that the employer will accept the user, so do not
-            claim that. Quote the evidence when you explain a verdict. The
-            deadline has no verdict. Send the user to each job's
-            canonical_url to read the full advertisement or apply.
+            show_job_comparison returns the same comparison with an automatic table;
+            use it for "Usporedi prvi i treći oglas" without requiring a format request.
+            This endpoint remains callable for app workflows that consume raw rows.
+            Compare 2 or 3 distinct known IDs in the user's order. Conditions must be
+            stated by the user, never guessed or inferred. Report unknown as unknown;
+            a match describes the advertisement, never that the employer will accept the user.
+            Market-wide accommodation counts belong to show_accommodation_comparison.
             """
             conditions = JobComparisonConditionsDTO(
                 max_experience_months=max_experience_months, contract=contract, full_time=full_time,
@@ -492,33 +392,25 @@ class JobTools(ToolGroup):
             education: UserEducation = None,
             accommodation: UserAccommodation = None,
         ) -> JobComparisonViewDTO:
-            """Display a table comparing 2 or 3 specific job ads explicitly selected by the user.
+            """Compare 2 or 3 specific job advertisements selected by the user against their stated conditions.
 
-            Use only when the user identified the particular ads, e.g. 'compare
-            the first and third' or after picking jobs on the cards. Take
-            job_ids from those selected ads; do not choose 2 or 3 examples on
-            the user's behalf. A request to compare counts or percentages of
-            ads offering accommodation, not offering it and having unknown data
-            ('usporedba oglasa sa smještajem i bez smještaja') belongs to
-            show_accommodation_comparison, which displays the aggregate donut
-            chart for the entire matching population; use compare_jobs when only the data is
-            needed. Hosts that support MCP Apps draw a table with a column per
-            job and a row per aspect (experience, education, contract,
-            working time, accommodation, deadline), the job page's own words
-            in each cell, a verdict for each condition the user stated and
-            the rows that differ marked, with a link to each HZZ
-            advertisement. Every host also gets the data, as in compare_jobs.
+            DEFAULT for "Usporedi prvi i treći oglas", "Koji je od ova dva posla
+            prikladniji za mene?" and "Compare these jobs". Call directly with their
+            known job_ids in selection order. The user does not need to ask for a
+            table, cards or any display format. Automatically presents a side-by-side
+            comparison and also returns the data. If the selected ads cannot be
+            identified from the conversation, ask which ads to compare; never invent IDs.
 
-            The rules of compare_jobs apply: pass only the conditions the
-            user actually stated, never guessed or inferred ones; report
-            'unknown' as unknown, never as met; a verdict says only whether
-            what the advertisement states meets what the user said, never
-            that the employer will accept the user, so do not claim that.
-            unknown_reason is a code for why a cell's value is unknown.
-            title, description (the user's conditions), the rows' name and
-            condition_label, the cells' text, note and verdict_label,
-            disclaimer and unknown_note are the Croatian wording the view
-            shows.
+            Pass only the user's stated conditions, never guessed or inferred ones.
+            Returns rows for experience, education, contract, working time,
+            accommodation and deadline, with evidence and per-condition verdicts.
+            Report 'unknown' as unknown; a match describes what the ad states,
+            never that the employer will accept the user. Expired or unread ads may
+            still be compared. Use canonical_url for full advertisements or applications.
+
+            Do not select a few ads to answer an aggregate question. Accommodation
+            counts or shares belong to show_accommodation_comparison; comparing
+            counties belongs to show_county_comparison; finding new jobs to show_jobs.
             """
             conditions = JobComparisonConditionsDTO(
                 max_experience_months=max_experience_months, contract=contract, full_time=full_time,
@@ -528,22 +420,24 @@ class JobTools(ToolGroup):
 
         @server.tool(annotations=READ_ONLY)
         async def list_regions(ctx: Context) -> list[RegionDTO]:
-            """List the Croatian counties with the number of jobs search_jobs finds in each by default.
+            """Look up valid Croatian county names and codes for other tools' county filters.
 
-            data_status is 'fresh' when the county's feeds were checked
-            recently, 'stale' when the last successful check is too old, and
-            'unavailable' when the county has no working feed.
+            Use when a county label is uncertain or the user asks which counties are
+            supported. Returns reference names, codes, open-ad counts and freshness.
+            For "Gdje ima najviše poslova?" use show_jobs_by_county directly; this
+            lookup is not the user-facing geographic comparison workflow.
             """
             return list(await self._call(service(ctx).list_regions()))
 
         @server.tool(annotations=READ_ONLY)
         async def list_categories(ctx: Context) -> list[CategoryDTO]:
-            """List job categories with the number of jobs search_jobs finds in each by default, most common first.
+            """Look up valid occupation-category names for the category filter.
 
-            A job's category is stated in its description or filled in from an
-            HZZ occupation feed verified on its jobs. Jobs without one are not
-            counted, so the counts may not add up to all jobs; also search by
-            query when every job of an occupation matters.
+            Use when a category name is uncertain or the user asks for supported
+            categories. Returns names and open-ad counts. Prefer query keywords for
+            broad occupation searches, since jobs with unknown categories would be
+            excluded by category. For finding jobs use show_jobs; for market
+            breakdowns use job_market_stats.
             """
             return list(await self._call(service(ctx).list_categories()))
 

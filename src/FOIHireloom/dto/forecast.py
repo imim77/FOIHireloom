@@ -10,7 +10,7 @@ from datetime import date
 from typing import Literal
 
 from .base import ModelConfigBaseModel
-from .county_indicators import SourceDTO
+from .county_indicators import SourceDTO, SourceLinkDTO
 from .dzs import DzsSex
 
 # unemployment_rate, unemployed and employed are DZS monthly county values;
@@ -112,3 +112,13 @@ class CountyForecastDTO(ModelConfigBaseModel):
     unavailable_reason: ForecastUnavailableReason | None
     sources: tuple[SourceDTO, ...]
     notes: tuple[str, ...]
+
+
+class CountyForecastViewDTO(CountyForecastDTO):
+    """CountyForecastViewDTO adds Croatian presentation labels to the unchanged forecast data."""
+
+    title: str
+    description: str
+    unavailable_label: str | None
+    source_links: tuple[SourceLinkDTO, ...]
+    view_notes: tuple[str, ...]

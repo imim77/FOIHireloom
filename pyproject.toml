@@ -23,6 +23,7 @@ forecast = [
 [project.scripts]
 foihireloom-category-snapshot = "FOIHireloom.commands.category_snapshot:main"
 foihireloom-fetch-job-pages = "FOIHireloom.commands.fetch_job_pages:main"
+foihireloom-forecast-accuracy = "FOIHireloom.commands.forecast_accuracy:main"
 foihireloom-import-dzs = "FOIHireloom.commands.import_dzs:main"
 foihireloom-mcp = "FOIHireloom.main:main"
 foihireloom-normalize-job-conditions = "FOIHireloom.commands.normalize_job_conditions:main"

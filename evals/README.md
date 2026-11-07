@@ -2,7 +2,7 @@
 
 The cases reproduce ordinary Croatian and English requests without asking for
 cards or charts. They cover job search, geographic demand, accommodation,
-county comparison, unemployment history, selected ads, details and statistics.
+county comparison, unemployment history, county forecasts, selected ads, details and statistics.
 `arguments` are reference values for human review, not an exact string oracle:
 equivalent occupation stems, county names and omitted schema defaults are valid.
 
@@ -50,7 +50,7 @@ freshness warnings remain visible. Record these outcomes alongside routing.
 
 Backend tests check published tool metadata, reference argument schemas and the
 scorer. They do not run Claude or ChatGPT and cannot demonstrate model accuracy.
-These 29 cases are an initial regression set; extend it with production failures,
+These 31 cases are an initial regression set; extend it with production failures,
 ambiguous requests and longer conversations before treating scores as reliable.
 
 The skill cases check that the user's technologies go into `skills`, with the

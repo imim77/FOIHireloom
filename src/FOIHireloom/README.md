@@ -37,6 +37,26 @@ Responsibilities that change independently have their own modules:
 Import implementations and contracts from their defining modules. Service and
 factory package initializers do not eagerly import unrelated implementations.
 
+MCP descriptions route by user intent. The seven `show_` workflows return data and
+their appropriate app without requiring a display-format request. Raw search
+and comparison counterparts remain callable with app-only visibility so they do
+not compete for model selection. Hosts that ignore visibility receive explicit
+routing guidance too. See [routing evaluation](../../evals/README.md) for client
+regression cases and recorded-call scoring.
+
+`show_labour_market_forecast` presents one county's Chronos history, forecast
+medians, 80% intervals and exact values. `forecast_labour_market` stays available
+as an app-only endpoint for raw forecasts of up to six counties. Both use the
+same forecast service; presentation does not run another inference or alter
+predictions. Start with `uv run --locked --extra forecast foihireloom-mcp` after
+installing the optional extra with `uv sync --locked --extra forecast`.
+
+`foihireloom-forecast-accuracy` backtests DZS unemployment-rate forecasts on
+rolling monthly origins against a prior-year seasonal baseline. It reports
+MAE, interval coverage, paired monthly evidence and skipped windows without
+writing to the database. See [forecast accuracy](FORECAST_ACCURACY.md) for
+commands, metrics and the limitations of evaluating revised source data.
+
 Use `show_jobs(skills=["csharp", "python"])` for programming languages or tools.
 An ad must mention at least one requested skill; title matches come first when
 `query` is also set, then ads with more requested skills, then newest ads.

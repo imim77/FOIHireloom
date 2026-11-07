@@ -131,3 +131,14 @@ Varaždinska and query `kuhar` (2/7/1 ads), with its freshness warning.
 
 Build before starting a fresh MCP server. A process already running and a connector with cached tool metadata
 need to load the new server version to expose the new tool; this is separate from the local browser preview.
+
+The Chronos view at `/labour-market-forecast.html` is served by
+`show_labour_market_forecast(county="varazdinska", target="unemployment_rate", horizon=6)`.
+It shows one county's recent history, forecast median, 80% interval and exact forecast values.
+Use `unemployed` or `employed` for people, and `job_ads` for weekly ad counts.
+History is grey and the projection dashed red; the readout over the chart follows the hovered period, a
+click selects one, and the period slider supports keyboard and touch. Missing history stays missing; estimated and provisional
+observations are labelled. A missing forecast explains the reason while retaining available history.
+The standalone preview explicitly uses synthetic data; MCP hosts receive the service's actual result.
+Install `uv sync --locked --extra forecast` before requesting a real forecast, and keep that extra enabled
+when running the MCP server with `uv run --locked --extra forecast foihireloom-mcp`.

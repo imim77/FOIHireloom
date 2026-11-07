@@ -48,6 +48,7 @@ class CountySeries:
     estimated: dict[int, list[bool | None]] = field(default_factory=dict)
     unavailable_reason: ForecastUnavailableReason | None = None
     sources: tuple[SourceDTO, ...] = ()
+    latest_source_period: date | None = None
 
 
 class CountySeriesLoader(ABC):
@@ -106,7 +107,8 @@ class DzsSeriesLoader(CountySeriesLoader):
         self.upper_bound = upper_bound
         self.notes = (NOTE_DZS_PERIOD, *notes)
 
-    async def load(self, work: UnitOfWork, counties: Sequence[CountyDTO], sex: DzsSex) -> CountySeries:
+    async def load(self, work: UnitOfWork, counties: Sequence[CountyDTO], sex: DzsSex, *,
+                   end_period: date | None = None, context_months: int = MAX_CONTEXT_MONTHS) -> CountySeries:
         ids = tuple(county.id for county in counties)
         provenance = await work.dzs_imports.get_latest_succeeded()
         if provenance is None:
@@ -115,9 +117,11 @@ class DzsSeriesLoader(CountySeriesLoader):
         last = await self._last_period(work, ids, sex)
         if last is None:
             return CountySeries(periods=(), unavailable_reason="no_common_period", sources=found)
-        first = add_months(last, 1 - MAX_CONTEXT_MONTHS)
+        latest = last
+        last = min(last, end_period) if end_period is not None else last
+        first = add_months(last, 1 - context_months)
         by_key = await self._values(work, ids, sex, first, last)
-        periods = tuple(add_months(first, offset) for offset in range(MAX_CONTEXT_MONTHS))
+        periods = tuple(add_months(first, offset) for offset in range(context_months))
         values: dict[int, list[float | None]] = {}
         provisional: dict[int, list[bool | None]] = {}
         estimated: dict[int, list[bool | None]] = {}
@@ -127,7 +131,7 @@ class DzsSeriesLoader(CountySeriesLoader):
             provisional[county_id] = [None if p is None else p.is_provisional for p in points]
             estimated[county_id] = [None if p is None else p.is_estimated for p in points]
         return CountySeries(periods=periods, values=values, provisional=provisional, estimated=estimated,
-                            sources=found)
+                            sources=found, latest_source_period=latest)
 
     def after(self, period: date, steps: int) -> date:
         return add_months(period, steps)

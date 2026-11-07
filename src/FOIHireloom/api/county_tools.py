@@ -41,7 +41,7 @@ from .job_filters import (
     SearchQuery,
     Skills,
 )
-from .tool_provider import READ_ONLY, ToolGroup
+from .tool_provider import DATA_ONLY, READ_ONLY, ToolGroup
 
 # Key of the indicator service in the server's lifespan context.
 COUNTY_INDICATOR_SERVICE = "county_indicator_service"
@@ -76,7 +76,6 @@ HistoryMonths = Annotated[int, Field(
                 "for every requested county.",
 )]
 HistorySex = Annotated[DzsSex, Field(description="Whose unemployment rate: 'total', 'women' or 'men'.")]
-DATA_ONLY = AppConfig(visibility=["app"])
 
 
 class CountyIndicatorTools(ToolGroup):
@@ -110,47 +109,15 @@ class CountyIndicatorTools(ToolGroup):
             include_expired: CountyIncludeExpired = False,
             period: Period = None,
         ) -> CountyComparisonDTO:
-            """Return the data of a comparison of 2 to 6 Croatian counties, without a view.
+            """App-only county data endpoint. For user county comparisons use show_county_comparison.
 
-            When the user asks to compare counties, call show_county_comparison
-            instead: it returns the same data and also shows it. Use this tool
-            only when you need the numbers without showing them, e.g. to choose
-            counties before showing a comparison. Per county:
-            filtered_jobs counts the HZZ ads matching the job filters, which
-            work as in job_market_stats: jobs, workers_needed with
-            workers_needed_coverage (ads stating the number out of all; an
-            unknown number is not 0), permanent_share (permanent contracts out
-            of the ads whose contract is known; whole is that denominator)
-            with contract_coverage, and closing_soon (deadline within
-            window_days days). all_active_jobs are the same counts over every
-            active ad of the county, ignoring the filters.
-            unemployed, active_population and unemployment_rate are DZS values
-            for their reference month (period, first day of the month), with
-            is_provisional.
-
-            The two indicators describe each county as a whole, never one
-            occupation: unemployed_per_worker is registered unemployed divided
-            by all_active_jobs.workers_needed, and jobs_per_1000_active is
-            all_active_jobs.jobs per 1,000 active population. They do not use
-            the job filters; report the filtered counts next to them, never
-            divide the unemployed by one occupation's ads. Each gives the
-            numerator and denominator used. A null value has an
-            unavailable_reason: 'no_dzs_data' (no DZS import),
-            'no_common_period', 'dzs_value_missing' (no value for that month;
-            another month is never substituted), 'no_hzz_data' (the county's
-            HZZ feeds were never loaded), 'no_known_workers' or
-            'zero_denominator'. Say "the indicator is not available" and why;
-            never show 0 or infinity instead.
-
-            dzs_periods gives each DZS indicator's month, which may differ
-            between indicators. HZZ counts are as of hzz_coverage.data_as_of
-            and DZS values for a past month; tell the user both dates. Name
-            the sources, mark 2026 months as provisional and pass on the
-            notes, in particular that the indicators describe HZZ ads and
-            registered unemployment, not the whole labour market or anyone's
-            chance of employment. When hzz_coverage.warning is set, tell the
-            user the HZZ counts may be outdated or incomplete. active_filters
-            are the Croatian labels of the set filters.
+            show_county_comparison returns the same HZZ/DZS data with an automatic
+            comparison, even without a request for a table or chart. This endpoint
+            remains callable by apps consuming raw county data. Compare 2 to 6 distinct
+            county codes or names. Job filters apply only to filtered_jobs; the
+            indicators always use all_active_jobs. Missing values remain null with
+            unavailable_reason. Preserve HZZ check times, DZS reference periods,
+            sources and provisional flags; indicators describe county-wide statistics.
             """
             filters = JobCountFiltersDTO(
                 query=query, category=category, max_experience_months=max_experience_months, contract=contract,
@@ -176,22 +143,27 @@ class CountyIndicatorTools(ToolGroup):
             include_expired: CountyIncludeExpired = False,
             period: Period = None,
         ) -> CountyComparisonViewDTO:
-            """Show the user 2 to 6 Croatian counties side by side by HZZ job ads and DZS registered unemployment.
+            """Compare job demand and registered unemployment in 2 to 6 Croatian counties.
 
-            Use it whenever the user asks to compare counties, e.g. "compare
-            demand for cooks in Varaždinska and Međimurska" or "where are the
-            most unemployed per sought worker". Hosts that support
-            MCP Apps draw a column per county with the ads matching the
-            filters, the DZS values with their reference months and the two
-            county-wide indicators, each unavailable value with its reason,
-            next to the HZZ check time, the sources and the notes. Every host
-            also gets the data, as in compare_counties, whose rules apply:
-            the indicators describe each county as a whole, never the
-            filtered ads; say "the indicator is not available" and why,
-            never 0 or infinity; tell the user both dates and the sources.
-            title, description, short_name, unavailable_label, coverage_note,
-            source_links, view_notes and disclaimer are the Croatian wording
-            the view shows.
+            DEFAULT when the user compares named counties or asks about county-wide
+            unemployment relative to jobs: "Usporedi Istru i Varaždinsku", "Kakva je
+            potražnja za kuharima u Varaždinskoj i Međimurskoj?" or "Compare jobs and
+            unemployment in Zagreb and Split-Dalmatia". Call directly; the user does
+            not need to say "tablica", "graf", "prikaži" or pick a format.
+            Automatically presents a county comparison and returns its data.
+
+            Pass distinct county codes or names in the requested order. Use query
+            and job-condition filters only when stated. period selects a requested
+            DZS month (YYYY-MM); otherwise use the latest common month per indicator.
+            Returns filtered and all-active HZZ ad/worker counts, DZS unemployed,
+            active population, unemployment rate and county-wide ratios. Indicators
+            always use all_active_jobs, never just one occupation's ads. Preserve
+            unavailable reasons, provisional flags, sources and both data dates;
+            unknown is not zero. These statistics do not predict personal employment chances.
+
+            For an all-county ranking by jobs or workers use show_jobs_by_county.
+            For unemployment changes over time use show_unemployment_history.
+            For individual job vacancies use show_jobs.
             """
             filters = JobCountFiltersDTO(
                 query=query, category=category, max_experience_months=max_experience_months, contract=contract,
@@ -207,24 +179,14 @@ class CountyIndicatorTools(ToolGroup):
             months: HistoryMonths = DEFAULT_HISTORY_MONTHS,
             sex: HistorySex = "total",
         ) -> UnemploymentHistoryDTO:
-            """Return the monthly registered unemployment rate of 1 to 6 counties (DZS), without a view.
+            """App-only unemployment-series endpoint. For user trend questions use show_unemployment_history.
 
-            When the user asks how unemployment changed, call
-            show_unemployment_history instead: it returns the same data and
-            also draws a chart. Use this tool only when you need the numbers
-            without showing them. Each county's
-            series runs from first_period to last_period (first days of the
-            months), oldest first; each point has the rate in percent with
-            one decimal and is_provisional. A null rate has
-            unavailable_reason 'dzs_value_missing'. latest is the last month,
-            same_month_previous_year the same month a year earlier, and
-            change_pp their difference in percentage points, null with
-            change_unavailable_reason when either is unknown. Report the
-            change in percentage points, not percent. Comparing with the same
-            month a year earlier reduces seasonality but is not seasonal
-            adjustment; months of 2026 are provisional, so mark them. Without
-            DZS data, every series is empty and unavailable_reason says why.
-            Name the sources and pass on the notes.
+            show_unemployment_history returns the same DZS observations with an
+            automatic time-series view, without a graph request. This endpoint
+            remains callable for app workflows consuming raw monthly values.
+            Accepts 1 to 6 counties and 12 to 24 months. Null rates are missing data;
+            changes are percentage points, not percentages. Preserve sources,
+            reference months and provisional flags.
             """
             return await self._history(ctx, counties, months, sex)
 
@@ -235,21 +197,25 @@ class CountyIndicatorTools(ToolGroup):
             months: HistoryMonths = DEFAULT_HISTORY_MONTHS,
             sex: HistorySex = "total",
         ) -> UnemploymentHistoryViewDTO:
-            """Show the user a line chart of the monthly registered unemployment rate of 1 to 6 counties (DZS).
+            """Track how registered unemployment changed over the last 12 to 24 months in Croatian counties.
 
-            Use it whenever the user asks how unemployment changed, e.g. "how
-            did unemployment in Varaždinska change over the last year". Hosts
-            that
-            support MCP Apps draw a line per county, with provisional months
-            dashed and missing months as gaps, and per county the latest
-            rate, the same month a year earlier and the change in percentage
-            points, with the sources and the notes. Every host also gets the
-            data, as in unemployment_history, whose rules apply: report the
-            change in percentage points, mark 2026 months as provisional and
-            say that comparing with the same month is not seasonal
-            adjustment. title, description, short_name,
-            change_unavailable_label, unavailable_label, source_links and
-            view_notes are the Croatian wording the view shows.
+            DEFAULT for unemployment history, trends, increases or decreases:
+            "Kako se kretala nezaposlenost u Istri zadnjih godinu dana?",
+            "Je li nezaposlenost u Varaždinskoj pala?", "Usporedi kretanje
+            nezaposlenosti u Istri i Zagrebu" or "How has unemployment changed?".
+            Call directly; the user does not need to ask for a graph, chart or format.
+            Automatically presents monthly rates over time and returns the same data.
+
+            Pass 1 to 6 distinct counties. Default months=12 and sex='total'; use
+            months=24 for two years, sex='women' or 'men' only when requested.
+            If the county cannot be identified, ask which county; do not invent one.
+            Returns monthly DZS rates, the latest rate, the same month a year earlier
+            and change_pp. Report changes in percentage points, preserve gaps and
+            provisional flags, name sources and reference months. A year-on-year
+            comparison is not seasonal adjustment. Missing observations are not zero.
+
+            For current job demand compared with unemployment in named counties use
+            show_county_comparison. For where job ads are concentrated use show_jobs_by_county.
             """
             return history_view.unemployment_history(await self._history(ctx, counties, months, sex))
 
