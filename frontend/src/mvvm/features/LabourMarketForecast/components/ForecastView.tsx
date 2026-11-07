@@ -1,8 +1,5 @@
 import { Slider } from '@/components/ui/slider'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Button } from '@/components/ui/button'
-import { ChevronDownIcon } from 'lucide-react'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableCaption } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { type ReactNode, useId, useLayoutEffect, useRef } from 'react'
@@ -97,83 +94,84 @@ function Readout({ context, median, format, children }: {
   </div>
 }
 
+/**
+ * ForecastView puts one message first: the inspected period's median, then one sentence with its interval and how
+ * far it is from the last observed value. The chart is the focus; the slider under it is the keyboard route to a
+ * period. Every exact value is in ForecastTables, which the screen keeps behind its details control.
+ */
 export function ForecastView(model: ReturnType<typeof useForecast>) {
-  const { data, county, active, selected, selectPeriod, hoverPeriod, point, selectedPoint, last, end, value, period,
+  const { data, county, active, selected, selectPeriod, hoverPeriod, point, selectedPoint, last, value, period,
     interval } = model
   const sliderId = useId()
   const sliderLabel = `${sliderId}-label`
+  const change = point && last?.value != null ? formatChange(point.median - last.value, data.unit) : null
   return <div className="forecast-content min-w-0 flex flex-col gap-6">
     {point && <Readout context={`${period(point.period)} · medijan prognoze`} median={point.median} format={value}>
-      {/* Values keep their units' own case; only the label words are uppercase. */}
-      <p className="forecast-interval m-0 mono-label text-fg-soft" data-slot="forecast-interval">
-        {value(point.low)} – {value(point.high)} · <span className="uppercase">{interval}</span></p>
-      {/* The badges keep their own case, as in the other views' readouts. */}
-      <div className="forecast-last flex flex-wrap items-center [gap:4px_8px] mono-label text-fg-soft"
-        data-slot="forecast-last">
-        <span><span className="uppercase">Posljednji podatak: </span>
-          {last?.value == null ? <span className="uppercase">nema podatka</span> : value(last.value)}
-          {last && <> · <span className="uppercase">{period(last.period)}</span></>}</span>
-        {last && <Flags point={last} />}
-      </div>
+      {/* One plain sentence instead of more mono label rows: the range, then the change against the last value. */}
+      <p className="forecast-summary m-0 text-[14px] leading-[1.4] text-fg-soft" data-slot="forecast-summary">
+        <span data-slot="forecast-interval">{value(point.low)} – {value(point.high)} ({interval})</span>
+        {change && last && <>{' · '}<span className="font-medium text-fg-loud">{change}</span>
+          {` u odnosu na ${period(last.period)}${last.is_provisional ? ' (privremeno)' : last.is_estimated ? ' (procijenjeno)' : ''}`}</>}
+      </p>
     </Readout>}
-    {county.history.some((p) => p.value !== null) || point ?
+    {county.history.some((p) => p.value !== null) || point ? <div className="flex flex-col gap-3">
       <ForecastChart data={data} county={county} active={active} onSelect={selectPeriod} onHover={hoverPeriod} />
-      : null}
-    {selectedPoint && <FieldGroup className="forecast-control" data-enter>
-      <Field>
-        <FieldLabel id={sliderLabel}>{data.frequency === 'month' ? 'Mjesec prognoze' : 'Tjedan prognoze'}</FieldLabel>
-        <Slider min={0} max={county.forecast.length - 1} step={1} value={[selected]}
-          onValueChange={(values) => selectPeriod(Array.isArray(values) ? values[0] : values)}
-          thumbProps={{ 'aria-labelledby': sliderLabel,
-            'aria-valuetext': `${period(selectedPoint.period)}: ${value(selectedPoint.median)}, ${interval} `
-              + `${value(selectedPoint.low)} – ${value(selectedPoint.high)}` }} />
-      </Field>
-    </FieldGroup>}
-    {end && county.change_to_horizon !== null && <p data-enter className="forecast-change flex flex-wrap items-baseline [gap:6px_12px] m-0 mono-label text-fg-soft
-      [&_strong]:text-fg-loud [&_strong]:text-[14px] [&_strong]:font-medium">
-      <strong>{formatChange(county.change_to_horizon, data.unit)}</strong>
-      <span className="uppercase">do {formatPeriodGenitive(end.period, data.frequency)}, u odnosu na posljednji podatak</span>
+      {selectedPoint && <FieldGroup className="forecast-control">
+        <Field>
+          {/* Named for screen readers; on screen the chart above says what the slider moves. */}
+          <FieldLabel id={sliderLabel} className="sr-only">
+            {data.frequency === 'month' ? 'Mjesec prognoze' : 'Tjedan prognoze'}</FieldLabel>
+          <Slider min={0} max={county.forecast.length - 1} step={1} value={[selected]}
+            onValueChange={(values) => selectPeriod(Array.isArray(values) ? values[0] : values)}
+            thumbProps={{ 'aria-labelledby': sliderLabel,
+              'aria-valuetext': `${period(selectedPoint.period)}: ${value(selectedPoint.median)}, ${interval} `
+                + `${value(selectedPoint.low)} – ${value(selectedPoint.high)}` }} />
+        </Field>
+      </FieldGroup>}
+    </div> : null}
+  </div>
+}
+
+const TABLE = `forecast-table w-full border-collapse text-right tabular-nums [&_caption]:text-left [&_caption]:p-3
+  [&_caption]:text-fg-soft [&_th]:[padding:9px_12px] [&_th]:[border-top:1px_solid_var(--border)]
+  [&_th]:whitespace-nowrap [&_td]:[padding:9px_12px] [&_td]:[border-top:1px_solid_var(--border)]
+  [&_td]:whitespace-nowrap [&_th]:font-medium [&_th:first-child]:text-left [&_thead_th]:sticky
+  [&_thead_th]:top-0 [&_thead_th]:text-fg-soft [&_.provisional]:m-0.5 [@media(max-width:_420px)]:[&_th]:p-2
+  [@media(max-width:_420px)]:[&_td]:p-2`
+const SCROLL = `forecast-table-scroll focus-visible:outline-none focus-visible:shadow-focus overflow-auto
+  [max-height:290px] border border-border rounded-[10px]`
+
+/** ForecastTables lists every forecast and history value exactly, with the change to the horizon. */
+export function ForecastTables({ data, county }: { data: ForecastData; county: CountyForecast }) {
+  const value = (n: number) => formatValue(n, data.unit)
+  const period = (iso: string) => formatPeriod(iso, data.frequency)
+  const end = county.forecast.at(-1)
+  return <div className="forecast-tables flex flex-col gap-4">
+    {end && county.change_to_horizon !== null && <p className="forecast-change m-0 text-[14px] text-fg-soft">
+      <span className="font-medium text-fg-loud">{formatChange(county.change_to_horizon, data.unit)}</span>
+      {` do ${formatPeriodGenitive(end.period, data.frequency)}, u odnosu na posljednji podatak`}
     </p>}
-    {county.forecast.length > 0 && <div data-enter className="forecast-table-scroll focus-visible:outline-none focus-visible:shadow-focus overflow-auto [max-height:290px]
-      border border-border rounded-[10px]" tabIndex={0} role="region" aria-label="Prognozirane vrijednosti">
-      <Table variant="numeric" containerClassName="contents" className="forecast-table w-full border-collapse text-right tabular-nums [&_caption]:text-left [&_caption]:p-3
-        [&_caption]:text-fg-soft [&_th]:[padding:9px_12px] [&_th]:[border-top:1px_solid_var(--border)]
-        [&_th]:whitespace-nowrap [&_td]:[padding:9px_12px] [&_td]:[border-top:1px_solid_var(--border)]
-        [&_td]:whitespace-nowrap [&_th]:font-medium [&_th:first-child]:text-left [&_thead_th]:sticky
-        [&_thead_th]:top-0 [&_thead_th]:text-fg-soft [&_.provisional]:m-0.5 [@media(max-width:_420px)]:[&_th]:p-2
-        [@media(max-width:_420px)]:[&_td]:p-2">
+    {county.forecast.length > 0 && <div className={SCROLL} tabIndex={0} role="region" aria-label="Prognozirane vrijednosti">
+      <Table variant="numeric" containerClassName="contents" className={TABLE}>
         <TableCaption>Sve prognozirane vrijednosti · {data.unit === 'percent' ? '%' : data.unit === 'persons' ? 'osobe' : 'oglasi'}</TableCaption>
         <TableHeader><TableRow><TableHead scope="col" sticky="header">{data.frequency === 'month' ? 'Mjesec' : 'Tjedan od'}</TableHead>
           <TableHead scope="col" sticky="header">Medijan</TableHead><TableHead scope="col" sticky="header">Donja granica</TableHead><TableHead scope="col" sticky="header">Gornja granica</TableHead></TableRow></TableHeader>
-        <TableBody>{county.forecast.map((p) => <TableRow key={p.period} data-period={p.period} data-slot="forecast-row"
-          data-state={point?.period === p.period ? 'selected' : undefined}>
+        <TableBody>{county.forecast.map((p) => <TableRow key={p.period} data-period={p.period} data-slot="forecast-row">
           <TableHead scope="row">{period(p.period).replace('tjedan od ', '')}</TableHead><TableCell>{value(p.median)}</TableCell>
           <TableCell>{value(p.low)}</TableCell><TableCell>{value(p.high)}</TableCell>
         </TableRow>)}</TableBody>
       </Table>
     </div>}
-    {county.history.length > 0 && <Collapsible className="forecast-history" data-enter>
-      <CollapsibleTrigger render={<Button variant="ghost" />}>
-        Povijesni podaci ({county.history.length})<ChevronDownIcon data-icon="inline-end" aria-hidden="true" />
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-      <div className="forecast-table-scroll focus-visible:outline-none focus-visible:shadow-focus overflow-auto [max-height:290px]
-        border border-border rounded-[10px]" tabIndex={0} role="region" aria-label="Povijesne vrijednosti">
-        <Table variant="numeric" containerClassName="contents" className="forecast-table w-full border-collapse text-right tabular-nums [&_caption]:text-left [&_caption]:p-3
-        [&_caption]:text-fg-soft [&_th]:[padding:9px_12px] [&_th]:[border-top:1px_solid_var(--border)]
-        [&_th]:whitespace-nowrap [&_td]:[padding:9px_12px] [&_td]:[border-top:1px_solid_var(--border)]
-        [&_td]:whitespace-nowrap [&_th]:font-medium [&_th:first-child]:text-left [&_thead_th]:sticky
-        [&_thead_th]:top-0 [&_thead_th]:text-fg-soft [&_.provisional]:m-0.5 [@media(max-width:_420px)]:[&_th]:p-2
-        [@media(max-width:_420px)]:[&_td]:p-2"><TableCaption>Povijesne vrijednosti korištene u prikazu</TableCaption>
-          <TableHeader><TableRow><TableHead scope="col" sticky="header">Razdoblje</TableHead><TableHead scope="col" sticky="header">Vrijednost</TableHead><TableHead scope="col" sticky="header">Status</TableHead></TableRow></TableHeader>
-          <TableBody>{county.history.map((p) => <TableRow key={p.period}><TableHead scope="row">{period(p.period)}</TableHead>
-            <TableCell>{p.value === null ? 'nema podatka' : value(p.value)}</TableCell>
-            <TableCell>{p.value === null ? 'nedostaje' : p.is_estimated || p.is_provisional ? <Flags point={p} /> : 'objavljeno'}</TableCell>
-          </TableRow>)}</TableBody>
-        </Table>
-      </div>
-      </CollapsibleContent>
-    </Collapsible>}
+    {county.history.length > 0 && <div className={SCROLL} tabIndex={0} role="region" aria-label="Povijesne vrijednosti">
+      <Table variant="numeric" containerClassName="contents" className={TABLE}>
+        <TableCaption>Povijesni podaci ({county.history.length})</TableCaption>
+        <TableHeader><TableRow><TableHead scope="col" sticky="header">Razdoblje</TableHead><TableHead scope="col" sticky="header">Vrijednost</TableHead><TableHead scope="col" sticky="header">Status</TableHead></TableRow></TableHeader>
+        <TableBody>{county.history.map((p) => <TableRow key={p.period}><TableHead scope="row">{period(p.period)}</TableHead>
+          <TableCell>{p.value === null ? 'nema podatka' : value(p.value)}</TableCell>
+          <TableCell>{p.value === null ? 'nedostaje' : p.is_estimated || p.is_provisional ? <Flags point={p} /> : 'objavljeno'}</TableCell>
+        </TableRow>)}</TableBody>
+      </Table>
+    </div>}
   </div>
 }
 
@@ -205,13 +203,15 @@ function ForecastChart({ data, county, active, onSelect, onHover }: {
   const interval = `${Math.round(data.interval * 100)}% interval`
   const config = {
     history: { label: 'Povijest', color: 'var(--fg-soft)', icon: legendKey('h-0 border-t-2 border-fg-soft') },
-    median: { label: 'Prognoza (medijan)', color: 'var(--accent-500)',
-      icon: legendKey('h-0 border-t-2 border-dashed border-accent-500') },
-    range: { label: interval, color: 'var(--accent-wash)', icon: legendKey(`h-2.5 ${WASH_KEY}`) },
-    flagged: { label: 'Procijenjeno / privremeno', color: 'var(--fg-soft)',
+    // The median and its interval read as one thing, the forecast: one key, a dashed line over the wash.
+    median: { label: `Prognoza · ${interval}`, color: 'var(--accent-500)', icon: () => <span aria-hidden="true"
+      className={`forecast-key relative w-4 h-2.5 ${WASH_KEY} after:absolute after:inset-x-0 after:top-1/2
+        after:border-t-2 after:border-dashed after:border-accent-500 after:-translate-y-1/2`} /> },
+    range: { label: interval, color: 'var(--accent-wash)' },
+    flagged: { label: 'privremeno', color: 'var(--fg-soft)',
       icon: legendKey('h-0 border-t-2 border-dashed border-fg-soft') },
   } satisfies ChartConfig
-  const legend = (['history', ...(county.forecast.length ? ['median', 'range'] : []), ...(flags ? ['flagged'] : [])])
+  const legend = (['history', ...(county.forecast.length ? ['median'] : []), ...(flags ? ['flagged'] : [])])
     .map((key) => ({ value: key, dataKey: key, type: 'line' as const, color: config[key as keyof typeof config].color }))
   const motion = { isAnimationActive: !reduced, animationBegin: MOTION.marks.at, animationDuration: MOTION.marks.duration }
   // The forecast row under the pointer; null over the history.

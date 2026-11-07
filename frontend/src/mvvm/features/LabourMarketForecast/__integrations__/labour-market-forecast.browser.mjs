@@ -10,7 +10,11 @@ test('Chronos displays exact medians and intervals, preserves gaps and supports 
   county.history[4].is_estimated = true
   const { page, frame } = await open('labour-market-forecast', data)
   try {
+    // Exact values, sources and notes wait behind one details control, so the chart is the focus.
+    assert.equal(await frame.locator('[data-slot="forecast-row"], .sources, .notes').count(), 0)
+    await frame.getByRole('button', { name: 'Detalji, izvori i napomene' }).click()
     assert.equal(await frame.locator('[data-slot="forecast-row"]').count(), county.forecast.length)
+    assert.equal(await frame.locator('.sources').count(), 1)
     assert.equal(await frame.locator('.forecast-band .recharts-area-area').count(), 1)
     assert.equal(await frame.locator('[data-slot="history-node"]').count(), county.history.length - 1)
     // No history line crosses the missing month; the estimated month starts a dashed run.
@@ -25,6 +29,9 @@ test('Chronos displays exact medians and intervals, preserves gaps and supports 
     await frame.waitForFunction(() => document.querySelector('[data-slot="forecast-cursor"]').dataset.period === '2026-10-01')
     assert.match(await frame.locator('[data-slot="forecast-median"]').textContent(), /2,6.*%/)
     assert.match(await frame.locator('[data-slot="forecast-interval"]').textContent(), /2,3.*2,9.*80%/)
+    // One sentence carries the interval and the change against the last observed value.
+    assert.match(await frame.locator('[data-slot="forecast-summary"]').textContent(),
+      /\+0,1\s?p\.\s?b\. u odnosu na rujan 2026\. \(privremeno\)/)
     await slider.press('ArrowRight')
     await frame.waitForFunction(() => document.querySelector('[data-slot="forecast-cursor"]').dataset.period === '2026-11-01')
     // Hover previews the last period, leaving falls back to the selection, a click selects.
@@ -42,7 +49,6 @@ test('Chronos displays exact medians and intervals, preserves gaps and supports 
     await page.mouse.move(plot.x + plot.width / 2, plot.y - 200)
     await cursor('2027-03-01')
     assert.match(await slider.getAttribute('aria-valuetext'), /ožujak 2027/)
-    await frame.getByText('Povijesni podaci (24)', { exact: true }).click()
     assert.ok(await frame.getByRole('region', { name: 'Povijesne vrijednosti' }).getByText('procijenjeno', { exact: true }).count())
     // Grey history, dashed red projection, in both themes.
     const strokes = () => frame.evaluate(() => ({

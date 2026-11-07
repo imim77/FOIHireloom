@@ -64,6 +64,8 @@ test('source callbacks open the requested URLs through the host', async () => {
   ]) {
     const { page, frame } = await open(view, data)
     try {
+      // The forecast keeps its sources behind its details control.
+      if (view === 'labour-market-forecast') await frame.getByRole('button', { name: 'Detalji, izvori i napomene' }).click()
       const source = frame.locator('.sources button').first()
       const url = await source.getAttribute('title')
       await source.click()
