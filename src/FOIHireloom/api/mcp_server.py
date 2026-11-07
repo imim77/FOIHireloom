@@ -17,9 +17,12 @@ from FOIHireloom.services.interfaces.lifecycle import ServiceOpener
 
 from .app_views import AppViews
 from .apps.views import BUILD_HINT, stale_sources
-from .county_tools import COUNTY_INDICATOR_SERVICE, CountyIndicatorTools
+from .county_tools import COUNTY_INDICATOR_SERVICE, CountyComparisonTools, UnemploymentHistoryTools
 from .forecast_tools import LABOUR_FORECAST_SERVICE, ForecastTools
-from .job_tools import JOB_SEARCH_SERVICE, JobTools
+from .job_comparison_tools import JobComparisonTools
+from .job_market_tools import JobMarketTools
+from .job_tools import JOB_SEARCH_SERVICE, JobDetailTools, JobReferenceTools, JobSearchTools
+from .tool_provider import ToolGroup
 
 INSTRUCTIONS = """Help users find Croatian HZZ job ads and understand HZZ/DZS labour-market data.
 Choose tools by the user's task, not by whether they ask for a visual format.
@@ -64,6 +67,12 @@ County-wide ratios never use only one occupation's ads. Use canonical_url to
 read the original advertisement or apply; do not invent facts or promise employment.
 """
 
+# Every group the server registers, in the order clients list their tools and pages.
+TOOL_GROUPS: tuple[ToolGroup, ...] = (
+    JobSearchTools(), JobMarketTools(), JobDetailTools(), JobComparisonTools(), JobReferenceTools(),
+    CountyComparisonTools(), UnemploymentHistoryTools(), ForecastTools(), AppViews(),
+)
+
 
 class McpServer:
     """FastMCP server whose tools share one search, county indicator and forecast service while it runs.
@@ -89,11 +98,15 @@ class McpServer:
         self._county_indicator_service = county_indicator_service
         self._labour_forecast_service = labour_forecast_service
         # Unexpected errors reach the client without details; tools raise ToolError for the rest.
-        self.server = FastMCP("FOIHireloom", instructions=INSTRUCTIONS, lifespan=self._lifespan,
-                              mask_error_details=True)
-        for group in (JobTools(), CountyIndicatorTools(), ForecastTools(), AppViews()):
-            group.register(self.server)
-        self.server.custom_route("/health", methods=["GET"], include_in_schema=False)(self._health)
+        self._server = FastMCP("FOIHireloom", instructions=INSTRUCTIONS, lifespan=self._lifespan,
+                               mask_error_details=True)
+        for group in TOOL_GROUPS:
+            group.register(self._server)
+        self._server.custom_route("/health", methods=["GET"], include_in_schema=False)(self._health)
+
+    @property
+    def server(self) -> FastMCP:
+        return self._server
 
     @asynccontextmanager
     async def _lifespan(self, server: FastMCP) -> AsyncIterator[dict[str, Any]]:
@@ -113,14 +126,14 @@ class McpServer:
             print(f"Warning: the MCP App pages are older than {', '.join(stale)}; {BUILD_HINT}.", file=sys.stderr)
         if self._settings.MCP_TRANSPORT == "stdio":
             print("Starting MCP server", file=sys.stderr)
-            self.server.run("stdio")
+            self._server.run("stdio")
         else:
-            self.server.run("http", host=self._settings.MCP_HOST, port=self._settings.MCP_PORT,
+            self._server.run("http", host=self._settings.MCP_HOST, port=self._settings.MCP_PORT,
                             **self._http_options())
 
     async def run_http_async(self, sockets: list[socket.socket] | None = None) -> None:
         """Serve Streamable HTTP until cancelled; sockets replace host and port when given."""
-        await self.server.run_http_async(host=self._settings.MCP_HOST, port=self._settings.MCP_PORT,
+        await self._server.run_http_async(host=self._settings.MCP_HOST, port=self._settings.MCP_PORT,
                                          sockets=sockets, **self._http_options())
 
     def _http_options(self) -> dict[str, Any]:

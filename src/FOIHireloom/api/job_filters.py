@@ -11,6 +11,10 @@ CATEGORY_DESCRIPTION = (
     "description or filled in from an HZZ occupation feed verified on its jobs. Jobs without one do not match, "
     "so also use query when every job of an occupation matters."
 )
+Category = Annotated[str | None, Field(description=CATEGORY_DESCRIPTION)]
+County = Annotated[str | None, Field(
+    description="County code or name from list_regions, e.g. 'grad-zagreb' or 'Istarska županija'.",
+)]
 SearchQuery = Annotated[str | None, Field(
     max_length=MAX_QUERY_LENGTH,
     description="Occupation, foreign language or keywords, e.g. 'kuhar', 'medicinska sestra' or 'njemački'. Every word "
