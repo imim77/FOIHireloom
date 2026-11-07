@@ -324,9 +324,8 @@ class JobDetailsDTO(JobSummaryDTO):
     description_text is the full text from the job page once it has been
     read; the feed's description is cut at 512 characters. The other page
     fields are None until then or when the page omits them.
-    availability_status stays unknown until there is evidence the job is open
-    or closed. Dropping out of every feed, or an HZZ error page, is not such
-    evidence.
+    availability_status is unknown: neither feed presence nor an HZZ error
+    page confirms whether applications are still accepted.
     """
 
     description_text: str | None
@@ -341,7 +340,7 @@ class JobDetailsDTO(JobSummaryDTO):
     education: str | None = None
     experience: str | None = None
     details_checked_at: datetime | None = None
-    availability_status: str
+    availability_status: Literal["unknown"] = "unknown"
     first_seen_at: datetime
     content_changed_at: datetime
     listings: tuple[JobListingDTO, ...] = ()

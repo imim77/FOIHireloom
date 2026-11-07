@@ -92,11 +92,11 @@ class JobRepository(ABC):
         """
 
     @abstractmethod
-    async def list_snapshots(self, provider: str, source_job_ids: Collection[str]) -> list[JobSnapshotDTO]:
+    async def list_snapshots(self, source_job_ids: Collection[str]) -> list[JobSnapshotDTO]:
         """Return the ID and content hash of every listed job that exists."""
 
     @abstractmethod
-    async def create_many(self, provider: str, jobs: Sequence[ParsedJobDTO], seen_at: datetime) -> dict[str, int]:
+    async def create_many(self, jobs: Sequence[ParsedJobDTO], seen_at: datetime) -> dict[str, int]:
         """Insert first-seen jobs and flush; return database IDs by source job ID.
 
         A category is recorded as coming from the job's description.

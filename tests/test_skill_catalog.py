@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from typing import get_args
 
-from FOIHireloom.db.models.job import SKILLS_DOCUMENT
+from FOIHireloom.db.models.job import Job, SKILLS_DOCUMENT
 from FOIHireloom.domain.skill_catalog import SKILL_FOLD_FROM, SKILL_FOLD_TO, SKILL_PATTERNS, URL_PATTERN
 from FOIHireloom.dto.job_skills import Skill
 
@@ -43,4 +43,11 @@ class SkillCatalogTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("skill_migration", path)
         migration = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(migration)
-        self.assertEqual(migration.SKILLS_DOCUMENT, SKILLS_DOCUMENT)
+        # The later naming migration changes identifiers, not extraction rules.
+        names = {column.key: column.name for column in Job.__table__.columns}
+        translated = re.sub(
+            r"'(?:[^']|'')*'|\b[a-z_]+\b",
+            lambda match: names.get(match[0], match[0]) if not match[0].startswith("'") else match[0],
+            migration.SKILLS_DOCUMENT,
+        )
+        self.assertEqual(translated, SKILLS_DOCUMENT)

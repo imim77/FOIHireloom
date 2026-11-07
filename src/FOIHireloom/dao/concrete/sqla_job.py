@@ -252,18 +252,18 @@ class SqlAlchemyJobRepository(JobRepository):
         result = await self._session.execute(statement)
         return [CategoryDTO.model_validate(row) for row in result.all()]
 
-    async def list_snapshots(self, provider: str, source_job_ids: Collection[str]) -> list[JobSnapshotDTO]:
+    async def list_snapshots(self, source_job_ids: Collection[str]) -> list[JobSnapshotDTO]:
         if not source_job_ids:
             return []
         statement = select(Job.id, Job.source_job_id, Job.content_hash).where(
-            Job.provider == provider, Job.source_job_id.in_(source_job_ids)
+            Job.source_job_id.in_(source_job_ids)
         )
         result = await self._session.execute(statement)
         return [JobSnapshotDTO.model_validate(row) for row in result.all()]
 
-    async def create_many(self, provider: str, jobs: Sequence[ParsedJobDTO], seen_at: datetime) -> dict[str, int]:
+    async def create_many(self, jobs: Sequence[ParsedJobDTO], seen_at: datetime) -> dict[str, int]:
         entities = [
-            Job(provider=provider, **self._content(job), first_seen_at=seen_at, last_seen_at=seen_at,
+            Job(**self._content(job), first_seen_at=seen_at, last_seen_at=seen_at,
                 content_changed_at=seen_at)
             for job in jobs
         ]

@@ -42,11 +42,10 @@ class DzsValueSnapshotDTO(DzsValueDTO):
 
 
 class DzsValueChangeDTO(ModelConfigBaseModel):
-    """A new version of a stored row; revised is True when its value or missing reason changed."""
+    """DzsValueChangeDTO carries the replacement content of a stored row."""
 
     id: int
     value: DzsValueDTO
-    revised: bool
 
 
 class DzsSeriesDTO(ModelConfigBaseModel):
@@ -75,10 +74,9 @@ class DzsSourceDTO(ModelConfigBaseModel):
 
 
 class DzsFileResponseDTO(ModelConfigBaseModel):
-    """The bytes of one downloaded or local DZS file with its HTTP validators, if any."""
+    """The bytes of one downloaded or local DZS file with its source modification time, if known."""
 
     content: bytes
-    etag: str | None = None
     last_modified: datetime | None = None
 
 
@@ -90,7 +88,6 @@ class DzsFileDTO(ModelConfigBaseModel):
     sheets: tuple[str, ...]
     sha256: str
     size_bytes: int
-    etag: str | None = None
     last_modified: datetime | None = None
     fetched_at: datetime
 

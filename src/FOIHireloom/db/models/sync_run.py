@@ -23,47 +23,53 @@ if TYPE_CHECKING:
 
 
 class SyncRun(Base):
-    __tablename__ = "sync_runs"
+    __tablename__ = "sinkronizacije"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('running', 'succeeded', 'not_modified', 'failed', 'rejected')",
-            name="status_valid",
+            "stanje IN ('running', 'succeeded', 'not_modified', 'failed', 'rejected')",
+            name="stanje_ispravno",
         ),
         CheckConstraint(
-            "(status = 'running' AND finished_at IS NULL) OR "
-            "(status <> 'running' AND finished_at IS NOT NULL AND finished_at >= started_at)",
-            name="completion_matches_status",
+            "(stanje = 'running' AND vrijeme_zavrsetka IS NULL) OR "
+            "(stanje <> 'running' AND vrijeme_zavrsetka IS NOT NULL AND vrijeme_zavrsetka >= vrijeme_pocetka)",
+            name="zavrsetak_prema_stanju",
         ),
         CheckConstraint(
-            "http_status IS NULL OR http_status BETWEEN 100 AND 599", name="http_status_valid"
+            "http_status IS NULL OR http_status BETWEEN 100 AND 599", name="http_status_ispravan"
         ),
         CheckConstraint(
-            "status <> 'succeeded' OR (http_status IS NOT NULL AND http_status = 200)",
-            name="success_requires_http_200",
+            "stanje <> 'succeeded' OR (http_status IS NOT NULL AND http_status = 200)",
+            name="uspjeh_trazi_http_200",
         ),
         CheckConstraint(
-            "status <> 'not_modified' OR (http_status IS NOT NULL AND http_status = 304)",
-            name="not_modified_requires_http_304",
+            "stanje <> 'not_modified' OR (http_status IS NOT NULL AND http_status = 304)",
+            name="nepromijenjeno_trazi_http_304",
         ),
-        CheckConstraint("items_seen IS NULL OR items_seen >= 0", name="items_seen_nonnegative"),
-        CheckConstraint("items_added IS NULL OR items_added >= 0", name="items_added_nonnegative"),
-        CheckConstraint("items_updated IS NULL OR items_updated >= 0", name="items_updated_nonnegative"),
-        CheckConstraint("items_invalid IS NULL OR items_invalid >= 0", name="items_invalid_nonnegative"),
-        Index("ix_sync_runs_feed_id_started_at", "feed_id", text("started_at DESC")),
+        CheckConstraint("broj_videnih_stavki IS NULL OR broj_videnih_stavki >= 0", name="broj_videnih_stavki_nenegativan"),
+        CheckConstraint("broj_dodanih_stavki IS NULL OR broj_dodanih_stavki >= 0", name="broj_dodanih_stavki_nenegativan"),
+        CheckConstraint("broj_azuriranih_stavki IS NULL OR broj_azuriranih_stavki >= 0", name="broj_azuriranih_stavki_nenegativan"),
+        CheckConstraint("broj_neispravnih_stavki IS NULL OR broj_neispravnih_stavki >= 0", name="broj_neispravnih_stavki_nenegativan"),
+        Index("ix_sinkronizacije_kanal_pocetak", "feed_id", text("vrijeme_pocetka DESC")),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    id: Mapped[int] = mapped_column("id", BigInteger, Identity(), primary_key=True, key="id")
     feed_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("source_feeds.id", ondelete="RESTRICT")
+        "id_kanala", BigInteger, ForeignKey("izvorni_kanali.id", ondelete="RESTRICT"), key="feed_id",
     )
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    status: Mapped[str] = mapped_column(Text, default="running", server_default="running")
-    http_status: Mapped[int | None] = mapped_column(SmallInteger)
-    items_seen: Mapped[int | None] = mapped_column(Integer)
-    items_added: Mapped[int | None] = mapped_column(Integer)
-    items_updated: Mapped[int | None] = mapped_column(Integer)
-    items_invalid: Mapped[int | None] = mapped_column(Integer)
-    error_summary: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime] = mapped_column(
+        "vrijeme_pocetka", DateTime(timezone=True), server_default=func.now(), key="started_at",
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        "vrijeme_zavrsetka", DateTime(timezone=True), key="finished_at",
+    )
+    status: Mapped[str] = mapped_column(
+        "stanje", Text, default="running", server_default="running", key="status",
+    )
+    http_status: Mapped[int | None] = mapped_column("http_status", SmallInteger, key="http_status")
+    items_seen: Mapped[int | None] = mapped_column("broj_videnih_stavki", Integer, key="items_seen")
+    items_added: Mapped[int | None] = mapped_column("broj_dodanih_stavki", Integer, key="items_added")
+    items_updated: Mapped[int | None] = mapped_column("broj_azuriranih_stavki", Integer, key="items_updated")
+    items_invalid: Mapped[int | None] = mapped_column("broj_neispravnih_stavki", Integer, key="items_invalid")
+    error_summary: Mapped[str | None] = mapped_column("sazetak_greske", Text, key="error_summary")
 
     feed: Mapped["SourceFeed"] = relationship(back_populates="sync_runs", lazy="raise")

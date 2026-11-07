@@ -29,8 +29,7 @@ class DzsImportService(DzsImportServiceInterface):
     """Files are obtained, parsed and validated before any transaction opens;
     all values are then written in one transaction. A value is unchanged when
     its value, missing reason, provisional flag and source are all equal;
-    otherwise the row is updated and points to this import, and revised_at
-    is set when the value or missing reason changed.
+    otherwise the row is updated and points to this import.
 
     Without a uow_factory only validate_release works.
     """
@@ -88,7 +87,7 @@ class DzsImportService(DzsImportServiceInterface):
             files.append(DzsFileDTO(
                 role=role, location=source.location, sheets=SHEETS[role],
                 sha256=hashlib.sha256(response.content).hexdigest(), size_bytes=len(response.content),
-                etag=response.etag, last_modified=response.last_modified, fetched_at=datetime.now(timezone.utc),
+                last_modified=response.last_modified, fetched_at=datetime.now(timezone.utc),
             ))
             contents.append(response.content)
         return contents[0], contents[1]
@@ -108,11 +107,10 @@ class DzsImportService(DzsImportServiceInterface):
                 if stored is None:
                     new.append(value)
                 elif self._content(stored) != self._content(value):
-                    revised = (stored.value, stored.missing_reason) != (value.value, value.missing_reason)
-                    changes.append(DzsValueChangeDTO(id=stored.id, value=value, revised=revised))
+                    changes.append(DzsValueChangeDTO(id=stored.id, value=value))
             unchanged = len(release.values) - len(new) - len(changes)
-            await work.dzs_indicator_values.create_many(new, import_id, now)
-            await work.dzs_indicator_values.update_many(changes, import_id, now)
+            await work.dzs_indicator_values.create_many(new, import_id)
+            await work.dzs_indicator_values.update_many(changes, import_id)
             await work.dzs_imports.finish(import_id, DzsImportOutcomeDTO(
                 status="succeeded", values_inserted=len(new), values_updated=len(changes), values_unchanged=unchanged,
                 files=tuple(files),

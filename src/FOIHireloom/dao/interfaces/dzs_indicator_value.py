@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from collections.abc import Collection, Sequence
-from datetime import date, datetime
+from datetime import date
 
 from FOIHireloom.dto.dzs import (
     DzsIndicator,
@@ -20,16 +20,16 @@ class DzsIndicatorValueRepository(ABC):
         """Return every stored value with its county's ISO code."""
 
     @abstractmethod
-    async def create_many(self, values: Sequence[DzsValueDTO], import_id: int, written_at: datetime) -> None:
-        """Insert county values written by the import at written_at.
+    async def create_many(self, values: Sequence[DzsValueDTO], import_id: int) -> None:
+        """Insert county values written by the import.
 
         Raise ValueError before writing if a value has no county or names an
         ISO code that no stored county has. Database errors propagate.
         """
 
     @abstractmethod
-    async def update_many(self, changes: Sequence[DzsValueChangeDTO], import_id: int, written_at: datetime) -> None:
-        """Rewrite the content of existing rows by ID; a revised row also gets revised_at = written_at."""
+    async def update_many(self, changes: Sequence[DzsValueChangeDTO], import_id: int) -> None:
+        """Rewrite existing rows by ID and record the import that supplied their content."""
 
     @abstractmethod
     async def list_values(

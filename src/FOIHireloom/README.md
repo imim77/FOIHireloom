@@ -57,3 +57,56 @@ HTTP transport tests need local loopback sockets. Tests for service orchestratio
 calculations, command injection and resource cleanup use injected dependencies
 and need no PostgreSQL server. Build the frontend before testing MCP App resources
 when its sources have changed.
+
+## Database storage
+
+Apply migrations with `.venv/bin/alembic -c src/FOIHireloom/db/alembic/alembic.ini upgrade head`.
+Revision `a6c8e0f2b4d6` removes four unused tables (`employers`,
+`web_documents`, `employer_web_documents`, `job_web_documents`) and five
+`jobs` columns (`employer_id`, `description_raw`, `availability_status`,
+`availability_evidence_url`, `availability_checked_at`). Employer names come
+from `jobs.page_employer_name`. Job detail responses retain
+`availability_status="unknown"`; this app does not confirm availability.
+The RSS snippet is parsed and hashed in memory; only its cleaned description,
+parsed fields and hash are stored. Downgrade restores the old schema but cannot
+recover discarded snippets. The migration refuses to remove legacy tables or
+availability fields containing meaningful data.
+
+The eight application tables are `counties`, `source_feeds`, `jobs`,
+`job_feed_memberships`, `sync_runs`, `dzs_imports`, `dzs_import_files` and
+`dzs_indicator_values`. Feed memberships retain county/category evidence and
+missing/returned observations. Sync runs protect against unexpectedly truncated
+feeds. DZS import records and files retain provenance; indicator values support
+county comparisons, history and forecasts. Raw page conditions and normalized
+conditions both stay: results show the source wording, while SQL filters use
+normalized codes and the normalization command can rebuild them.
+
+Current ORM models in `db/models/` are the schema reference. Earlier database
+planning diagrams describe a broader design and include storage since removed.
+
+
+Revisions `b7d9f1a3c5e7` and `c8e0a2b4d6f8` simplify storage: jobs use HZZ
+source IDs directly; DZS values retain their last-writing import without
+per-value audit timestamps. The import command still computes `size_bytes`
+for its result, while the database retains SHA-256 and source provenance.
+Revision `d9f1b3c5e7a9` indexes `upper(category)` and
+`coalesce(page_valid_until, deadline_on)`, the expressions job filters compare.
+
+Run PostgreSQL regressions against a migrated, disposable copy of the seeded
+database (counties, at least two jobs and an occupation feed):
+`TEST_DATABASE_URL=postgresql+asyncpg://... .venv/bin/python -m unittest discover -s tests`.
+Without `TEST_DATABASE_URL`, the six integration tests are skipped. Each
+integration test rolls back business writes, including service commits.
+
+
+Croatian SQL naming comes from revisions `e0a2c4e6f8b0` and `f1b3d5e7a9c2`. The eight application
+tables and their columns have Croatian names without diacritics. Models use
+explicit `mapped_column` names with stable English attribute/Core keys, so
+public DTOs and MCP arguments keep their existing names. SQL constraints,
+generated expressions, indexes and identity sequences follow the renamed schema.
+The database name `myapp` and Alembic's internal version table stay unchanged.
+Primary keys are `id`, so a foreign key `id_<table>` points to `<table>.id`;
+CHECK names are Croatian and NOT NULL constraints use `<table>_<column>_not_null`.
+The six PostgreSQL regressions include physical catalog names, generated search
+and the Core batch category update. Schema inventory and the full naming map
+are in `docs/database-era.md` and `docs/database-croatian-names.md`.

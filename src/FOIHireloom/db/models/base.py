@@ -4,6 +4,8 @@ from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(AsyncAttrs, DeclarativeBase):
+    """Base maps stable Python/Core attribute keys to Croatian SQL identifiers."""
+
     metadata = MetaData(
         naming_convention={
             "ix": "ix_%(table_name)s_%(column_0_N_name)s",

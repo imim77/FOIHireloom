@@ -23,11 +23,11 @@ TODAY = date(2026, 11, 4)
 
 def job(job_id: int = 1, **changes) -> Job:
     values = dict(
-        id=job_id, provider="hzz", source_job_id=str(job_id), title="Feed title", category=None,
+        id=job_id, source_job_id=str(job_id), title="Feed title", category=None,
         location_text=None, municipality=None, published_on=date(2026, 11, 1), deadline_on=None,
         canonical_url=f"https://example.com/jobs/{job_id}", quality_flags=["title_truncated", "deadline_unknown"],
         last_seen_at=NOW, first_seen_at=NOW, content_changed_at=NOW, page_status="pending",
-        availability_status="unknown", description_text="Feed description", conditions_unrecognised=[],
+        description_text="Feed description", conditions_unrecognised=[],
     )
     return Job(**(values | changes))
 
@@ -97,6 +97,7 @@ class JobPresentationTests(unittest.TestCase):
         presenter, stored = JobPresenter(), job()
         card = presenter.card(stored, TODAY, None, None)
         details = presenter.details(stored, TODAY, None, [])
+        self.assertEqual(details.availability_status, "unknown")
         self.assertIsNone(card.conditions)
         self.assertIsNone(card.deadline_passed)
         self.assertIsNone(card.county_name)

@@ -12,28 +12,40 @@ if TYPE_CHECKING:
 
 
 class JobFeedMembership(Base):
-    __tablename__ = "job_feed_memberships"
+    __tablename__ = "pripadnosti_oglasa_kanalima"
     __table_args__ = (
-        CheckConstraint("first_seen_at <= last_seen_at", name="timestamps_ordered"),
+        CheckConstraint("vrijeme_prvog_opazanja <= vrijeme_zadnjeg_opazanja", name="vremena_opazanja_redom"),
         CheckConstraint(
-            "(presence_status = 'present' AND missing_since_at IS NULL) OR "
-            "(presence_status = 'missing' AND missing_since_at IS NOT NULL "
-            "AND missing_since_at >= last_seen_at)",
-            name="presence_matches_missing_time",
+            "(stanje_prisutnosti = 'present' AND vrijeme_nestanka IS NULL) OR "
+            "(stanje_prisutnosti = 'missing' AND vrijeme_nestanka IS NOT NULL "
+            "AND vrijeme_nestanka >= vrijeme_zadnjeg_opazanja)",
+            name="prisutnost_prema_nestanku",
         ),
-        Index("ix_job_feed_memberships_feed_presence_job", "feed_id", "presence_status", "job_id"),
+        Index("ix_pripadnosti_kanal_prisutnost_oglas", "feed_id", "presence_status", "job_id"),
     )
 
     job_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True
+        "id_oglasa", BigInteger, ForeignKey("oglasi.id", ondelete="CASCADE"), primary_key=True,
+        key="job_id",
     )
     feed_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("source_feeds.id", ondelete="RESTRICT"), primary_key=True
+        "id_kanala", BigInteger, ForeignKey("izvorni_kanali.id", ondelete="RESTRICT"),
+        primary_key=True, key="feed_id",
     )
-    presence_status: Mapped[str] = mapped_column(Text, default="present", server_default="present")
-    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    missing_since_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    presence_status: Mapped[str] = mapped_column(
+        "stanje_prisutnosti", Text, default="present", server_default="present", key="presence_status",
+    )
+    first_seen_at: Mapped[datetime] = mapped_column(
+        "vrijeme_prvog_opazanja", DateTime(timezone=True), server_default=func.now(),
+        key="first_seen_at",
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        "vrijeme_zadnjeg_opazanja", DateTime(timezone=True), server_default=func.now(),
+        key="last_seen_at",
+    )
+    missing_since_at: Mapped[datetime | None] = mapped_column(
+        "vrijeme_nestanka", DateTime(timezone=True), key="missing_since_at",
+    )
 
     job: Mapped["Job"] = relationship(back_populates="feed_memberships", lazy="raise")
     feed: Mapped["SourceFeed"] = relationship(back_populates="job_memberships", lazy="raise")

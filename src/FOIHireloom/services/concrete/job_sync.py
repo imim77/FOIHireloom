@@ -19,7 +19,6 @@ from FOIHireloom.services.interfaces.job_sync import JobSyncServiceInterface
 from .feed_category import FeedCategoryVerifier, resolve_category
 from .hzz_feed_parser import HzzFeedParser
 
-PROVIDER = "hzz"
 ERROR_SUMMARY_LIMIT = 500
 
 
@@ -193,7 +192,7 @@ class JobSyncService(JobSyncServiceInterface):
         work: UnitOfWork, jobs: tuple[ParsedJobDTO, ...], now: datetime
     ) -> tuple[dict[str, int], int, int, int]:
         """Insert new jobs, rewrite changed content and confirm the rest by hash."""
-        snapshots = await work.jobs.list_snapshots(PROVIDER, [job.source_job_id for job in jobs])
+        snapshots = await work.jobs.list_snapshots([job.source_job_id for job in jobs])
         existing = {snapshot.source_job_id: snapshot for snapshot in snapshots}
         new = [job for job in jobs if job.source_job_id not in existing]
         changed = {
@@ -205,7 +204,7 @@ class JobSyncService(JobSyncServiceInterface):
             if job.source_job_id in existing and existing[job.source_job_id].id not in changed
         ]
         job_ids = {source_job_id: snapshot.id for source_job_id, snapshot in existing.items()}
-        job_ids |= await work.jobs.create_many(PROVIDER, new, now)
+        job_ids |= await work.jobs.create_many(new, now)
         await work.jobs.update_content(changed, now)
         await work.jobs.mark_seen(unchanged, now)
         return job_ids, len(new), len(changed), len(unchanged)
@@ -213,7 +212,7 @@ class JobSyncService(JobSyncServiceInterface):
     @staticmethod
     async def _known_jobs(work: UnitOfWork, jobs: tuple[ParsedJobDTO, ...]) -> dict[str, int]:
         """Return the database IDs of the listed jobs that are already stored."""
-        snapshots = await work.jobs.list_snapshots(PROVIDER, [job.source_job_id for job in jobs])
+        snapshots = await work.jobs.list_snapshots([job.source_job_id for job in jobs])
         return {snapshot.source_job_id: snapshot.id for snapshot in snapshots}
 
     @staticmethod

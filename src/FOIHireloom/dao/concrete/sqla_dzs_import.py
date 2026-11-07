@@ -55,7 +55,7 @@ class SqlAlchemyDzsImportRepository(DzsImportRepository):
         self._session.add_all([
             DzsImportFile(
                 import_id=import_id, role=file.role, location=file.location, sheets=list(file.sheets),
-                sha256=file.sha256, size_bytes=file.size_bytes, etag=file.etag,
+                sha256=file.sha256,
                 source_last_modified_at=file.last_modified, fetched_at=file.fetched_at,
             )
             for file in outcome.files

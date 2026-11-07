@@ -37,7 +37,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
 
     Example:
         async with SqlAlchemyUnitOfWork(sessions) as work:
-            await work.jobs.create_many("hzz", jobs, await work.transaction_time())
+            await work.jobs.create_many(jobs, await work.transaction_time())
             await work.commit()
     """
 

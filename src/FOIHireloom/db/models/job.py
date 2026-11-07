@@ -33,16 +33,16 @@ from .base import Base
 SEARCH_TITLE_WEIGHT = "A"
 SEARCH_DOCUMENT = (
     "setweight(to_tsvector('simple'::regconfig, translate("
-    f"coalesce(page_title, title, ''), '{SEARCH_FOLD_FROM}', '{SEARCH_FOLD_TO}')), '{SEARCH_TITLE_WEIGHT}') || "
+    f"coalesce(naslov_stranice, naslov, ''), '{SEARCH_FOLD_FROM}', '{SEARCH_FOLD_TO}')), '{SEARCH_TITLE_WEIGHT}') || "
     "to_tsvector('simple'::regconfig, translate("
-    "coalesce(page_description_text, description_text, '') || ' ' || coalesce(page_employer_name, '') || ' ' || "
-    "coalesce(page_work_place, '') || ' ' || coalesce(page_education, ''), "
+    "coalesce(tekst_opisa_stranice, tekst_opisa, '') || ' ' || coalesce(naziv_poslodavca_stranice, '') || ' ' || "
+    "coalesce(mjesto_rada_stranice, '') || ' ' || coalesce(obrazovanje_stranice, ''), "
     f"'{SEARCH_FOLD_FROM}', '{SEARCH_FOLD_TO}'))"
 )
 # URLs must be removed before punctuation-sensitive skills are matched.
 _SKILL_TEXT = (
     "regexp_replace(lower(translate("
-    "coalesce(page_title, title, '') || ' ' || coalesce(page_description_text, description_text, ''), "
+    "coalesce(naslov_stranice, naslov, '') || ' ' || coalesce(tekst_opisa_stranice, tekst_opisa, ''), "
     f"'{SKILL_FOLD_FROM}', '{SKILL_FOLD_TO}')), '{URL_PATTERN}', ' ', 'g')"
 )
 SKILLS_DOCUMENT = "array_remove(ARRAY[" + ", ".join(
@@ -70,158 +70,195 @@ def quoted(codes: tuple[str, ...]) -> str:
     return ", ".join(f"'{code}'" for code in codes)
 
 
+CONDITION_SQL_NAMES = {'contract': 'ugovor',
+ 'employment_tags': 'oznake_zaposlenja',
+ 'education_levels': 'razine_obrazovanja',
+ 'accommodation': 'smjestaj',
+ 'schedule_tags': 'oznake_rasporeda',
+ 'transport_allowance': 'naknada_prijevoza',
+ 'conditions_unrecognised': 'neprepoznati_uvjeti'}
+
 CONDITIONS_KNOWN = " AND ".join(
-    f"{column} <@ ARRAY[{quoted(codes)}]::text[]" if column in CONDITION_LISTS else f"{column} IN ({quoted(codes)})"
+    f"{CONDITION_SQL_NAMES[column]} <@ ARRAY[{quoted(codes)}]::text[]" if column in CONDITION_LISTS
+    else f"{CONDITION_SQL_NAMES[column]} IN ({quoted(codes)})"
     for column, codes in CONDITION_CODES.items()
 )
 CONDITION_COLUMNS = (
-    "experience_months", "trainee", "contract", "employment_tags", "full_time", "weekly_hours", "education_levels",
-    "accommodation", "schedule_tags", "transport_allowance",
+    "mjeseci_iskustva", "pripravnik", "ugovor", "oznake_zaposlenja", "puno_radno_vrijeme", "tjedni_sati", "razine_obrazovanja",
+    "smjestaj", "oznake_rasporeda", "naknada_prijevoza",
 )
 
 if TYPE_CHECKING:
-    from .employer import Employer
     from .job_feed_membership import JobFeedMembership
-    from .job_web_document import JobWebDocument
 
 
 class Job(Base):
-    __tablename__ = "jobs"
+    __tablename__ = "oglasi"
     __table_args__ = (
-        UniqueConstraint("provider", "source_job_id"),
-        UniqueConstraint("provider", "canonical_url"),
-        CheckConstraint("length(btrim(provider)) > 0", name="provider_not_blank"),
-        CheckConstraint("length(btrim(canonical_url)) > 0", name="url_not_blank"),
-        CheckConstraint("length(btrim(content_hash)) > 0", name="hash_not_blank"),
+        UniqueConstraint("source_job_id"),
+        UniqueConstraint("canonical_url"),
+        CheckConstraint("length(btrim(izvorni_url)) > 0", name="izvorni_url_nije_prazan"),
+        CheckConstraint("length(btrim(sazetak_sadrzaja)) > 0", name="sazetak_sadrzaja_nije_prazan"),
+        CheckConstraint("vrijeme_prvog_opazanja <= vrijeme_zadnjeg_opazanja", name="vremena_opazanja_redom"),
         CheckConstraint(
-            "(availability_status = 'unknown' AND availability_evidence_url IS NULL "
-            "AND availability_checked_at IS NULL) OR "
-            "(availability_status IN ('confirmed_open', 'confirmed_closed') "
-            "AND availability_evidence_url IS NOT NULL "
-            "AND length(btrim(availability_evidence_url)) > 0 "
-            "AND availability_checked_at IS NOT NULL)",
-            name="availability_has_evidence",
-        ),
-        CheckConstraint("first_seen_at <= last_seen_at", name="observation_times_ordered"),
-        CheckConstraint(
-            "(category IS NULL) = (category_source IS NULL) "
-            "AND (coalesce(category_source, '') = 'feed') = (category_feed_id IS NOT NULL) "
-            "AND coalesce(category_source, 'description') IN ('description', 'feed')",
-            name="category_source_recorded",
+            "(kategorija IS NULL) = (izvor_kategorije IS NULL) "
+            "AND (coalesce(izvor_kategorije, '') = 'feed') = (id_kanala_kategorije IS NOT NULL) "
+            "AND coalesce(izvor_kategorije, 'description') IN ('description', 'feed')",
+            name="izvor_kategorije_zabiljezen",
         ),
         CheckConstraint(
-            "content_changed_at BETWEEN first_seen_at AND last_seen_at",
-            name="content_change_within_observation",
+            "vrijeme_promjene_sadrzaja BETWEEN vrijeme_prvog_opazanja AND vrijeme_zadnjeg_opazanja",
+            name="promjena_unutar_opazanja",
         ),
-        Index("ix_jobs_search_vector", "search_vector", postgresql_using="gin"),
-        Index("ix_jobs_skills", "skills", postgresql_using="gin"),
+        Index("ix_oglasi_vektor_pretrage", "search_vector", postgresql_using="gin"),
+        Index("ix_oglasi_vjestine", "skills", postgresql_using="gin"),
+        # Filters use these expressions (job_predicates.py); expression indexes
+        # let the planner narrow matches before loading job content.
+        Index("ix_oglasi_velika_kategorija", text("upper(kategorija)")),
+        Index("ix_oglasi_rok_prijave", text("coalesce(rok_prijave_stranice, rok_prijave)")),
         CheckConstraint(
-            "page_status IN ('pending', 'fetched', 'unavailable', 'failed')", name="page_status_known"
+            "stanje_stranice IN ('pending', 'fetched', 'unavailable', 'failed')", name="stanje_stranice_poznato"
         ),
-        CheckConstraint("(page_status = 'pending') = (page_checked_at IS NULL)", name="page_check_recorded"),
+        CheckConstraint("(stanje_stranice = 'pending') = (vrijeme_provjere_stranice IS NULL)", name="provjera_stranice_zabiljezena"),
         CheckConstraint(
-            "page_status <> 'fetched' OR (page_fetched_at IS NOT NULL AND page_source_hash IS NOT NULL)",
-            name="page_fetch_recorded",
+            "stanje_stranice <> 'fetched' OR (vrijeme_dohvata_stranice IS NOT NULL AND sazetak_izvora_stranice IS NOT NULL)",
+            name="dohvat_stranice_zabiljezen",
         ),
-        CheckConstraint(CONDITIONS_KNOWN, name="conditions_known"),
+        CheckConstraint(CONDITIONS_KNOWN, name="uvjeti_poznati"),
         CheckConstraint(
-            "(experience_months IS NULL) = (trainee IS NULL) AND experience_months >= 0 "
-            "AND (NOT trainee OR experience_months = 0)",
-            name="experience_consistent",
+            "(mjeseci_iskustva IS NULL) = (pripravnik IS NULL) AND mjeseci_iskustva >= 0 "
+            "AND (NOT pripravnik OR mjeseci_iskustva = 0)",
+            name="iskustvo_dosljedno",
         ),
-        CheckConstraint("weekly_hours > 0", name="weekly_hours_positive"),
+        CheckConstraint("tjedni_sati > 0", name="tjedni_sati_pozitivni"),
         CheckConstraint(
-            f"page_fetched_at IS NOT NULL OR (num_nonnulls({', '.join(CONDITION_COLUMNS)}) = 0 "
-            "AND conditions_unrecognised = '{}')",
-            name="conditions_need_page",
+            f"vrijeme_dohvata_stranice IS NOT NULL OR (num_nonnulls({', '.join(CONDITION_COLUMNS)}) = 0 "
+            "AND neprepoznati_uvjeti = '{}')",
+            name="uvjeti_traze_stranicu",
         ),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    employer_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("employers.id", ondelete="RESTRICT"), index=True
-    )
-    provider: Mapped[str] = mapped_column(Text)
-    source_job_id: Mapped[str | None] = mapped_column(Text)
-    canonical_url: Mapped[str] = mapped_column(Text)
-    title: Mapped[str | None] = mapped_column(Text)
-    description_raw: Mapped[str | None] = mapped_column(Text)
-    description_text: Mapped[str | None] = mapped_column(Text)
-    published_on: Mapped[date | None] = mapped_column(Date, index=True)
-    deadline_on: Mapped[date | None] = mapped_column(Date, index=True)
-    category: Mapped[str | None] = mapped_column(Text, index=True)
+    id: Mapped[int] = mapped_column("id", BigInteger, Identity(), primary_key=True, key="id")
+    source_job_id: Mapped[str | None] = mapped_column("id_izvornog_oglasa", Text, key="source_job_id")
+    canonical_url: Mapped[str] = mapped_column("izvorni_url", Text, key="canonical_url")
+    title: Mapped[str | None] = mapped_column("naslov", Text, key="title")
+    description_text: Mapped[str | None] = mapped_column("tekst_opisa", Text, key="description_text")
+    published_on: Mapped[date | None] = mapped_column("datum_objave", Date, index=True, key="published_on")
+    deadline_on: Mapped[date | None] = mapped_column("rok_prijave", Date, key="deadline_on")
+    category: Mapped[str | None] = mapped_column("kategorija", Text, key="category")
     # 'description' when the job's own description names the category, 'feed'
     # when it was filled in from category_feed_id's confirmed mapping. A
     # description category always replaces a filled-in one.
-    category_source: Mapped[str | None] = mapped_column(Text)
+    category_source: Mapped[str | None] = mapped_column("izvor_kategorije", Text, key="category_source")
     category_feed_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("source_feeds.id", ondelete="RESTRICT"), index=True
+        "id_kanala_kategorije", BigInteger, ForeignKey("izvorni_kanali.id", ondelete="RESTRICT"),
+        index=True, key="category_feed_id",
     )
-    location_text: Mapped[str | None] = mapped_column(Text)
-    municipality: Mapped[str | None] = mapped_column(Text)
-    availability_status: Mapped[str] = mapped_column(
-        Text, default="unknown", server_default="unknown"
-    )
-    availability_evidence_url: Mapped[str | None] = mapped_column(Text)
-    availability_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    location_text: Mapped[str | None] = mapped_column("tekst_lokacije", Text, key="location_text")
+    municipality: Mapped[str | None] = mapped_column("opcina", Text, key="municipality")
     quality_flags: Mapped[list[str]] = mapped_column(
-        MutableList.as_mutable(ARRAY(Text)), default=list, server_default=text("'{}'::text[]")
+        "oznake_kvalitete", MutableList.as_mutable(ARRAY(Text)), default=list,
+        server_default=text("'{}'::text[]"), key="quality_flags",
     )
-    content_hash: Mapped[str] = mapped_column(Text)
+    content_hash: Mapped[str] = mapped_column("sazetak_sadrzaja", Text, key="content_hash")
     search_vector: Mapped[str | None] = mapped_column(
-        TSVECTOR, Computed(SEARCH_DOCUMENT, persisted=True), deferred=True
+        "vektor_pretrage", TSVECTOR, Computed(SEARCH_DOCUMENT, persisted=True), deferred=True,
+        key="search_vector",
     )
-    skills: Mapped[list[str]] = mapped_column(ARRAY(Text), Computed(SKILLS_DOCUMENT, persisted=True))
+    skills: Mapped[list[str]] = mapped_column(
+        "vjestine", ARRAY(Text), Computed(SKILLS_DOCUMENT, persisted=True), key="skills",
+    )
     # Fields from the job's HZZ detail page, kept apart from the feed's values.
     # A later failed check keeps the last fetched values; page_source_hash is
     # the feed content hash they were fetched for.
-    page_status: Mapped[str] = mapped_column(Text, default="pending", server_default="pending")
-    page_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    page_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    page_source_hash: Mapped[str | None] = mapped_column(Text)
-    page_error: Mapped[str | None] = mapped_column(Text)
-    page_title: Mapped[str | None] = mapped_column(Text)
-    page_work_place: Mapped[str | None] = mapped_column(Text)
-    page_workers_needed: Mapped[int | None] = mapped_column(Integer)
-    page_employment_type: Mapped[str | None] = mapped_column(Text)
-    page_working_hours: Mapped[str | None] = mapped_column(Text)
-    page_work_schedule: Mapped[str | None] = mapped_column(Text)
-    page_accommodation: Mapped[str | None] = mapped_column(Text)
-    page_transport_allowance: Mapped[str | None] = mapped_column(Text)
-    page_valid_from: Mapped[date | None] = mapped_column(Date)
-    page_valid_until: Mapped[date | None] = mapped_column(Date)
-    page_education: Mapped[str | None] = mapped_column(Text)
-    page_experience: Mapped[str | None] = mapped_column(Text)
-    page_description_text: Mapped[str | None] = mapped_column(Text)
-    page_employer_name: Mapped[str | None] = mapped_column(Text)
+    page_status: Mapped[str] = mapped_column(
+        "stanje_stranice", Text, default="pending", server_default="pending", key="page_status",
+    )
+    page_checked_at: Mapped[datetime | None] = mapped_column(
+        "vrijeme_provjere_stranice", DateTime(timezone=True), key="page_checked_at",
+    )
+    page_fetched_at: Mapped[datetime | None] = mapped_column(
+        "vrijeme_dohvata_stranice", DateTime(timezone=True), key="page_fetched_at",
+    )
+    page_source_hash: Mapped[str | None] = mapped_column(
+        "sazetak_izvora_stranice", Text, key="page_source_hash",
+    )
+    page_error: Mapped[str | None] = mapped_column("greska_stranice", Text, key="page_error")
+    page_title: Mapped[str | None] = mapped_column("naslov_stranice", Text, key="page_title")
+    page_work_place: Mapped[str | None] = mapped_column("mjesto_rada_stranice", Text, key="page_work_place")
+    page_workers_needed: Mapped[int | None] = mapped_column(
+        "broj_trazenih_radnika_stranice", Integer, key="page_workers_needed",
+    )
+    page_employment_type: Mapped[str | None] = mapped_column(
+        "vrsta_zaposlenja_stranice", Text, key="page_employment_type",
+    )
+    page_working_hours: Mapped[str | None] = mapped_column(
+        "radno_vrijeme_stranice", Text, key="page_working_hours",
+    )
+    page_work_schedule: Mapped[str | None] = mapped_column(
+        "raspored_rada_stranice", Text, key="page_work_schedule",
+    )
+    page_accommodation: Mapped[str | None] = mapped_column(
+        "smjestaj_stranice", Text, key="page_accommodation",
+    )
+    page_transport_allowance: Mapped[str | None] = mapped_column(
+        "naknada_prijevoza_stranice", Text, key="page_transport_allowance",
+    )
+    page_valid_from: Mapped[date | None] = mapped_column(
+        "datum_pocetka_stranice", Date, key="page_valid_from",
+    )
+    page_valid_until: Mapped[date | None] = mapped_column(
+        "rok_prijave_stranice", Date, key="page_valid_until",
+    )
+    page_education: Mapped[str | None] = mapped_column("obrazovanje_stranice", Text, key="page_education")
+    page_experience: Mapped[str | None] = mapped_column("iskustvo_stranice", Text, key="page_experience")
+    page_description_text: Mapped[str | None] = mapped_column(
+        "tekst_opisa_stranice", Text, key="page_description_text",
+    )
+    page_employer_name: Mapped[str | None] = mapped_column(
+        "naziv_poslodavca_stranice", Text, key="page_employer_name",
+    )
     # The page's conditions as JobConditionsNormalizer codes, stored with the
     # page; None is unknown. conditions_unrecognised names the page fields
     # whose value was not recognised.
-    experience_months: Mapped[int | None] = mapped_column(Integer)
-    trainee: Mapped[bool | None] = mapped_column(Boolean)
-    contract: Mapped[str | None] = mapped_column(Text)
-    employment_tags: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
-    full_time: Mapped[bool | None] = mapped_column(Boolean)
-    weekly_hours: Mapped[int | None] = mapped_column(Integer)
-    education_levels: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
-    accommodation: Mapped[str | None] = mapped_column(Text)
-    schedule_tags: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
-    transport_allowance: Mapped[str | None] = mapped_column(Text)
+    experience_months: Mapped[int | None] = mapped_column(
+        "mjeseci_iskustva", Integer, key="experience_months",
+    )
+    trainee: Mapped[bool | None] = mapped_column("pripravnik", Boolean, key="trainee")
+    contract: Mapped[str | None] = mapped_column("ugovor", Text, key="contract")
+    employment_tags: Mapped[list[str] | None] = mapped_column(
+        "oznake_zaposlenja", ARRAY(Text), key="employment_tags",
+    )
+    full_time: Mapped[bool | None] = mapped_column("puno_radno_vrijeme", Boolean, key="full_time")
+    weekly_hours: Mapped[int | None] = mapped_column("tjedni_sati", Integer, key="weekly_hours")
+    education_levels: Mapped[list[str] | None] = mapped_column(
+        "razine_obrazovanja", ARRAY(Text), key="education_levels",
+    )
+    accommodation: Mapped[str | None] = mapped_column("smjestaj", Text, key="accommodation")
+    schedule_tags: Mapped[list[str] | None] = mapped_column(
+        "oznake_rasporeda", ARRAY(Text), key="schedule_tags",
+    )
+    transport_allowance: Mapped[str | None] = mapped_column(
+        "naknada_prijevoza", Text, key="transport_allowance",
+    )
     conditions_unrecognised: Mapped[list[str]] = mapped_column(
-        ARRAY(Text), default=list, server_default=text("'{}'::text[]")
+        "neprepoznati_uvjeti", ARRAY(Text), default=list, server_default=text("'{}'::text[]"),
+        key="conditions_unrecognised",
     )
-    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    content_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    first_seen_at: Mapped[datetime] = mapped_column(
+        "vrijeme_prvog_opazanja", DateTime(timezone=True), server_default=func.now(),
+        key="first_seen_at",
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        "vrijeme_zadnjeg_opazanja", DateTime(timezone=True), server_default=func.now(),
+        key="last_seen_at",
+    )
+    content_changed_at: Mapped[datetime] = mapped_column(
+        "vrijeme_promjene_sadrzaja", DateTime(timezone=True), server_default=func.now(),
+        key="content_changed_at",
+    )
 
-    employer: Mapped["Employer | None"] = relationship(back_populates="jobs", lazy="raise")
     feed_memberships: Mapped[list["JobFeedMembership"]] = relationship(
-        back_populates="job",
-        cascade="save-update, merge, delete, delete-orphan",
-        passive_deletes=True,
-        lazy="raise",
-    )
-    web_document_links: Mapped[list["JobWebDocument"]] = relationship(
         back_populates="job",
         cascade="save-update, merge, delete, delete-orphan",
         passive_deletes=True,

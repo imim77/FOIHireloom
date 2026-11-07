@@ -47,7 +47,6 @@ class DzsClient(DzsClientInterface):
             raise DzsTransportError("Could not download the DZS file.") from error
         return DzsFileResponseDTO(
             content=content,
-            etag=response.headers.get("etag"),
             last_modified=self._http_date(response.headers.get("last-modified")),
         )
 
