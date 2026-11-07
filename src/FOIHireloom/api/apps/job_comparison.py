@@ -91,16 +91,8 @@ def unknown_note(rows: tuple[ComparisonRowDTO, ...]) -> str | None:
 
 def condition_label(aspect: ComparisonAspect, condition: bool | int | str | None) -> str | None:
     """The person's condition for its row's heading, as in "Iskustvo · vi: bez iskustva"; None without one."""
-    if condition is None or aspect == "deadline":
-        return None
-    labels: dict[ComparisonAspect, Callable[[], str]] = {
-        "experience": lambda: experience(int(condition)),
-        "education": lambda: EDUCATION_LEVELS[str(condition)],
-        "contract": lambda: CONTRACTS[str(condition)],
-        "working_time": lambda: "puno radno vrijeme" if condition else "nepuno radno vrijeme",
-        "accommodation": lambda: "uz smještaj" if condition else "bez smještaja",
-    }
-    return labels[aspect]()
+    label = CONDITION_LABELS.get(aspect)
+    return None if condition is None or label is None else label(condition)
 
 
 def experience(months: int) -> str:
@@ -126,19 +118,53 @@ def deadline(job: ComparedJobDTO, today: date) -> str:
 
 def known_value(aspect: ComparisonAspect, conditions: JobConditionsDTO) -> str | None:
     """A known value in Croatian, for a cell without the page's text; None when the value is unknown."""
-    if aspect == "experience" and conditions.experience_months is not None:
-        return "pripravnik" if conditions.trainee else experience(conditions.experience_months)
-    if aspect == "education" and conditions.education_levels:
-        names = [EDUCATION_LEVELS[level] for level in conditions.education_levels]
-        return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} ili {names[-1]}"
-    if aspect == "contract" and conditions.contract is not None:
-        return CONTRACTS[conditions.contract]
-    if aspect == "working_time" and conditions.full_time is not None:
-        kind = "puno radno vrijeme" if conditions.full_time else "nepuno radno vrijeme"
-        return kind if conditions.weekly_hours is None else f"{kind}, {conditions.weekly_hours} h tjedno"
-    if aspect == "accommodation" and conditions.accommodation is not None:
-        return ACCOMMODATION[conditions.accommodation]
-    return None
+    value = KNOWN_VALUES.get(aspect)
+    return None if value is None else value(conditions)
+
+
+def _known_experience(conditions: JobConditionsDTO) -> str | None:
+    if conditions.experience_months is None:
+        return None
+    return "pripravnik" if conditions.trainee else experience(conditions.experience_months)
+
+
+def _known_education(conditions: JobConditionsDTO) -> str | None:
+    names = [EDUCATION_LEVELS[level] for level in conditions.education_levels or ()]
+    if not names:
+        return None
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} ili {names[-1]}"
+
+
+def _known_contract(conditions: JobConditionsDTO) -> str | None:
+    return None if conditions.contract is None else CONTRACTS[conditions.contract]
+
+
+def _known_working_time(conditions: JobConditionsDTO) -> str | None:
+    if conditions.full_time is None:
+        return None
+    kind = "puno radno vrijeme" if conditions.full_time else "nepuno radno vrijeme"
+    return kind if conditions.weekly_hours is None else f"{kind}, {conditions.weekly_hours} h tjedno"
+
+
+def _known_accommodation(conditions: JobConditionsDTO) -> str | None:
+    return None if conditions.accommodation is None else ACCOMMODATION[conditions.accommodation]
+
+
+# A deadline has neither: its cell words the date, and a person states no deadline.
+CONDITION_LABELS: dict[ComparisonAspect, Callable[[bool | int | str], str]] = {
+    "experience": lambda months: experience(int(months)),
+    "education": lambda level: EDUCATION_LEVELS[str(level)],
+    "contract": lambda contract: CONTRACTS[str(contract)],
+    "working_time": lambda full_time: "puno radno vrijeme" if full_time else "nepuno radno vrijeme",
+    "accommodation": lambda needed: "uz smještaj" if needed else "bez smještaja",
+}
+KNOWN_VALUES: dict[ComparisonAspect, Callable[[JobConditionsDTO], str | None]] = {
+    "experience": _known_experience,
+    "education": _known_education,
+    "contract": _known_contract,
+    "working_time": _known_working_time,
+    "accommodation": _known_accommodation,
+}
 
 
 def _row(row: ComparisonRowDTO, jobs: dict[int, ComparedJobDTO], today: date) -> ComparisonRowViewDTO:
