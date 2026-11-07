@@ -28,7 +28,12 @@ class SourceFeedRegistrationPlanner:
     """
 
     def __init__(self, catalog: CroatianCountyCatalog) -> None:
-        self.catalog = catalog
+        self._catalog = catalog
+
+    @property
+    def catalog(self) -> CroatianCountyCatalog:
+        """Return the counties the planner maps feeds to; registration stores the same ones."""
+        return self._catalog
 
     def build(
         self, resources: Sequence[CkanResource], occupation_resources: Sequence[CkanResource]
@@ -37,10 +42,10 @@ class SourceFeedRegistrationPlanner:
         skipped = 0
         for resource in resources:
             label = self._feed_label(resource)
-            if label is None or self.catalog.is_eu(label):
+            if label is None or self._catalog.is_eu(label):
                 skipped += 1
                 continue
-            county = self.catalog.match(label)
+            county = self._catalog.match(label)
             if county is None:
                 raise SourceFeedRegistrationError(f"Unrecognised county resource label: {label!r}.")
             sources.append(PlannedSourceDTO(resource=resource, county=county, label=label))

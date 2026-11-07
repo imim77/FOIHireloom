@@ -84,7 +84,7 @@ class Sheet:
     """A worksheet's cell values by 0-based row and column; problems are reported with Excel cell references."""
 
     def __init__(self, name: str, rows: list[list[Any]], problems: list[str]) -> None:
-        self.name = name
+        self._name = name
         self._rows = rows
         self._problems = problems
 
@@ -109,7 +109,7 @@ class Sheet:
         return any(self.text(row, column) for column in range(first_column, self.width(row)))
 
     def problem(self, message: str, row: int | None = None, column: int = 0) -> None:
-        where = self.name if row is None else f"{self.name}!{get_column_letter(column + 1)}{row + 1}"
+        where = self._name if row is None else f"{self._name}!{get_column_letter(column + 1)}{row + 1}"
         self._problems.append(f"{where}: {message}")
 
 
