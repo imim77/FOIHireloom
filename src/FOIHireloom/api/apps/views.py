@@ -7,23 +7,37 @@ dist/ is not committed: build it before starting the server or the tests.
 
 import hashlib
 import json
-from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
+
+from fastmcp.apps import AppConfig
 
 FRONTEND = Path(__file__).resolve().parents[4] / "frontend"
 DIST = FRONTEND / "dist"
 BUILD_HINT = "run npm install and npm run build in frontend/"
 
 
-@dataclass(frozen=True)
 class AppView:
-    # The page's file name in frontend/dist/ without .html, as in frontend/src/pages/.
-    name: str
-    description: str
+    """AppView is one MCP App page; a tool shows its result in the page through app_config.
+
+    name is the page's file name in frontend/dist/ without .html, as in
+    frontend/src/pages/.
+    """
+
+    def __init__(self, name: str, description: str) -> None:
+        self._name = name
+        self._description = description
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def description(self) -> str:
+        return self._description
 
     def page(self) -> str:
-        page = DIST / f"{self.name}.html"
+        page = DIST / f"{self._name}.html"
         if not page.is_file():
             raise FileNotFoundError(f"MCP App page {page} is missing; {BUILD_HINT}.")
         return page.read_text(encoding="utf-8")
@@ -31,7 +45,11 @@ class AppView:
     @cached_property
     def uri(self) -> str:
         # Hosts cache a page by its URI (Claude did not reread a changed page), so the URI names the page's version.
-        return f"ui://foihireloom/{self.name}-{hashlib.sha256(self.page().encode()).hexdigest()[:12]}.html"
+        return f"ui://foihireloom/{self._name}-{hashlib.sha256(self.page().encode()).hexdigest()[:12]}.html"
+
+    @property
+    def app_config(self) -> AppConfig:
+        return AppConfig(resource_uri=self.uri)
 
 
 JOBS_BY_COUNTY = AppView("jobs-by-county", "Chart page for show_jobs_by_county.")
