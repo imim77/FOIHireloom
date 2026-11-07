@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { formatShare } from '../../../utils/format'
-import { mod } from '../utils/ring-geometry'
 import type { AccommodationGroup } from '../types'
+
+const mod = (value: number, size: number) => ((value % size) + size) % size
 
 /** useAllocation owns visible groups, the denominator, segment selection and the readout over the ring. */
 export function useAllocation(groups: AccommodationGroup[], total: number) {

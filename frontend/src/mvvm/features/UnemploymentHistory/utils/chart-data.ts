@@ -69,3 +69,36 @@ export function provisionalBands(points: GrowthPoint[]) {
   })
   return bands
 }
+
+/** GrowthRow is one month on the chart's x axis: each county's rate under s<i>, and each of its runs under s<i>r<n>. */
+export interface GrowthRow {
+  index: number
+  period: string
+  [key: string]: number | string | null
+}
+
+/** A county's run as the chart draws it: the run's key in GrowthRow, dashed when provisional. */
+export interface ChartRun {
+  key: string
+  provisional: boolean
+  from: string
+  to: string
+}
+
+/**
+ * growthRows lays the months out for the chart. Every run gets its own key, set only on its own months, so a
+ * provisional (dashed) run is never drawn over a published one and a gap is never bridged; neighbouring runs share
+ * their joining month. Single-month runs get no key: a line needs two months, so their dot stands alone.
+ */
+export function growthRows({ series, points }: GrowthData): { rows: GrowthRow[]; runs: ChartRun[][] } {
+  const rows: GrowthRow[] = points.map((point, index) => ({ index, period: point.period,
+    ...Object.fromEntries(series.map((s, i) => [`s${i}`, point.values[s.id].rate])) }))
+  const runs = series.map((s, i) => seriesRuns(points, s.id).filter((run) => run.indices.length > 1)
+    .map((run, n) => {
+      const key = `s${i}r${n}`
+      for (const index of run.indices) rows[index][key] = points[index].values[s.id].rate
+      return { key, provisional: run.provisional, from: points[run.indices[0]].period,
+        to: points[run.indices.at(-1)!].period }
+    }))
+  return { rows, runs }
+}

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { provisionalBands, seriesRuns, toGrowthData } from './chart-data.ts'
-import { areaPath, curvePath, curveSegments, monthTicks, rateAxis } from './chart-geometry.ts'
+import { growthRows, provisionalBands, seriesRuns, toGrowthData } from './chart-data.ts'
+import { monthTicks, rateAxis } from './chart-geometry.ts'
 import { sample } from './sample.ts'
 import { formatPoints, formatRate } from '../../../utils/format.ts'
 
@@ -46,12 +46,22 @@ test('nulls break both the curve and its fill; actual zero and isolated known mo
   const runs = seriesRuns(data.points, data.series[0].id)
   assert.deepEqual(runs.map((run) => run.indices), [[0, 1], [3], [5, 6]])
   assert.equal(data.points[0].values[data.series[0].id].rate, 0)
-  for (const run of runs) {
-    const coords = run.indices.map((index) => ({ x: index * 10, y: data.points[index].values[data.series[0].id].rate }))
-    assert.equal(areaPath(coords, 100).includes('NaN'), false)
-    if (run.indices.length === 1) assert.equal(areaPath(coords, 100), '')
-    for (let i = 1; i < run.indices.length; i++) assert.equal(run.indices[i] - run.indices[i - 1], 1)
-  }
+  const { rows, runs: drawn } = growthRows(data)
+  // Each drawn run holds only its own months, so no line or fill bridges a gap; the isolated month is a dot alone.
+  assert.deepEqual(drawn[0].map((run) => rows.flatMap((row) => typeof row[run.key] === 'number' ? [row.index] : [])),
+    [[0, 1], [5, 6]])
+  assert.deepEqual(rows.map((row) => row.s0), [0, 1, null, 2, null, 3, 4])
+})
+
+test('dashed and solid runs meet at their shared month without overlapping', () => {
+  const data = dataWithRates([1, 2, 3, 4, 5], [2])
+  const { rows, runs } = growthRows(data)
+  assert.deepEqual(runs[0].map((run) => [run.provisional, run.from, run.to]), [
+    [false, data.points[0].period, data.points[1].period],
+    [true, data.points[1].period, data.points[3].period],
+    [false, data.points[3].period, data.points[4].period],
+  ])
+  assert.deepEqual(runs[0].map((run) => rows.filter((row) => typeof row[run.key] === 'number').length), [2, 3, 2])
 })
 
 test('provisional segments retain dashes on both sides of a provisional point', () => {
@@ -80,22 +90,6 @@ test('six counties keep their ids, names and the original request order', () => 
   const counties = Array.from({ length: 6 }, (_, index) => ({ ...county, code: `county-${index}`, short_name: `K${index}` }))
   const data = toGrowthData(counties)
   assert.deepEqual(data.series, counties.map((county) => ({ id: county.code, label: county.name, shortLabel: county.short_name })))
-})
-
-test('smoothing cannot overshoot endpoints, including abrupt peaks, zeros and flat segments', () => {
-  for (const values of [[0, 10, 0, 8, 0], [2, 2, 2, 2], [1, 1.1, 9, 9.1], [9, 7, 3, 0], [0]]) {
-    const points = values.map((y, index) => ({ x: index * 20, y }))
-    for (const { from, c1, c2, to } of curveSegments(points)) {
-      for (let i = 0; i <= 100; i++) {
-        const t = i / 100
-        const u = 1 - t
-        const y = u ** 3 * from.y + 3 * u ** 2 * t * c1.y + 3 * u * t ** 2 * c2.y + t ** 3 * to.y
-        assert.ok(y >= Math.min(from.y, to.y) - 1e-10 && y <= Math.max(from.y, to.y) + 1e-10)
-      }
-    }
-    assert.doesNotMatch(curvePath(points), /NaN|Infinity/)
-  }
-  assert.equal(curvePath([]), '')
 })
 
 test('axis has a finite, nonzero range for empty, zero, constant and ordinary rates', () => {

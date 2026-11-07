@@ -13,8 +13,9 @@ number above. It stays the reference implementation:
 
 - `frontend/src/mvvm/features/JobsByCounty/components/CountyColumns.tsx` —
   layout, interaction, motion
-- `frontend/src/mvvm/features/JobsByCounty/components/Bar3d.tsx` — the 3D
-  column and its gradients
+- `frontend/src/mvvm/components/ui/chart.tsx` — the shadcn chart
+  (`ChartContainer`, `ChartTooltip`, `ChartLegend` over Recharts) every
+  chart draws with
 - `frontend/src/mvvm/tailwind.css` — the tokens every rule below refers to
 - `frontend/src/mvvm/components/Card.tsx` — the frame around every view
 
@@ -102,21 +103,14 @@ text, never colour alone.
 
 ## Shape
 
-The column from `Bar3d.tsx` is the signature shape, now read as a rack unit:
-
-- two faces with a gradient (`accent-300` → `accent-500` across the face
-  when lit, `surface-disable` → `surface-subdued` when grey), so the lit
-  column reads as signal red, not pink;
-- a flat lid one step lighter (`accent-100` / `surface-subdued`);
-- hairline edges in `card` colour, so the faces read as separate planes in
-  both themes;
-- a bottom fade (`mask-image`: opaque to 72 %, transparent at 100 %), so the
-  column rises out of the card instead of standing on a baseline.
-
-Other marks borrow the same vocabulary, and stay flat (no drop shadows, glows,
-bevels or blur): flat faces, a lighter top surface,
-card-coloured separators between adjacent shapes, and no axis lines,
-gridlines or outlines unless the reader needs them to read a value.
+Every chart is a shadcn chart: a `ChartContainer` whose `ChartConfig` maps
+each series to a token (`var(--accent-500)`, `var(--surface-disable)`, …), so
+both themes follow `data-theme` without per-chart dark rules. Marks are flat
+(no gradients, drop shadows, glows, bevels or blur): solid fills, a `4px`
+radius on the top of a column, card-coloured separators between adjacent
+shapes, and no axis lines, gridlines or outlines unless the reader needs them
+to read a value. Tooltips are flat too: a `card` panel with a `border`
+hairline and mono labels.
 
 Radii follow Dalco: cards and tiles `10px`; buttons, pills and chips fully
 rounded (`9999px`); focus ring `12px` around the focused item. Hairlines are
@@ -211,7 +205,10 @@ Footer           PRIKAZANO 8 OD 21 ŽUPANIJA …     12px mono soft
 
 ## Motion
 
-anime.js through the helpers in `hooks/chart-motion.ts`. Dalco moves fast and
+Recharts draws the marks in (`animationBegin`/`animationDuration` from the
+`marks` row below) and morphs them to new data; anime.js, through the helpers
+in `hooks/chart-motion.ts`, moves everything else: eyebrow, readout, labels
+and counting numbers. Dalco moves fast and
 in sequence, so durations are short and staggers tight; easing is `outExpo`
 for arrivals, `inQuad` for exits, `outBack` only for the pill pop.
 
@@ -219,19 +216,17 @@ for arrivals, `inQuad` for exits, `outBack` only for the pill pop.
 | --- | --- | --- |
 | Entrance | eyebrow and readout fade in, rising 6 px, staggered 60 ms | 500 ms at 100 ms |
 | | headline number counts up from 0 | 1200 ms at 150 ms |
-| | columns grow from their feet, staggered 50 ms; their values count with them | 900 ms from 250 ms |
-| | axis labels fade in, rising 4 px, staggered 20 ms per label | 400 ms at 350 ms |
-| | pill pops in (scale 0.7 → 1, `outBack(1.7)`) as the active column passes 45 % | 450 ms |
-| New focus | pill slides to the new item (cross-fades where items wrap, e.g. a legend) | 450 ms |
-| | active value pops (scale 0.86 → 1, `outBack(2)`) | 400 ms |
+| | Recharts draws the marks in: columns grow from their feet, lines and the ring sweep in | 900 ms from 250 ms |
+| | axis and legend labels fade in, rising 4 px, staggered 20 ms per label | 400 ms at 350 ms |
+| New focus | the pill moves to the new item by cross-fading | 300 ms CSS |
 | | readout label rolls to the new name; number counts to the new value | 250 ms / 600 ms |
 | | lit and grey looks cross-fade | 300 ms CSS |
 | Hover | link or pill label rolls up, letters staggered 20 ms | 250 ms `ease-in` |
-| New data | every shape morphs from the size on screen | 600 ms |
+| New data | Recharts morphs every shape from the size on screen | 900 ms |
 
 Rules: animate from what is on screen, never jump back to zero on an update;
-wrap every animation in `finish()` so hidden host frames still reach the end
-state; `prefers-reduced-motion` skips straight to the final state; release
+wrap every anime.js animation in `finish()` so hidden host frames still reach
+the end state (Recharts plays its marks once the frame shows); `prefers-reduced-motion` skips straight to the final state; release
 inline styles when an animation ends so the stylesheet applies again.
 
 ## Moving from the orange style
