@@ -15,6 +15,16 @@ from FOIHireloom.services.concrete.labour_forecast_series import (
 from FOIHireloom.services.interfaces.labour_forecast import LabourMarketForecastServiceInterface
 
 
+def unemployment_rate_loader() -> DzsSeriesLoader:
+    """The DZS unemployment-rate series as the forecast tools show it, so backtests measure the same series."""
+    return DzsSeriesLoader("unemployment_rate", "percent", 1, 100.0, (NOTE_RATE,))
+
+
+def chronos_forecaster(settings: Settings) -> ChronosForecaster:
+    """The configured Chronos model; it loads on its first forecast, not here."""
+    return ChronosForecaster(settings.CHRONOS_MODEL, settings.CHRONOS_DEVICE)
+
+
 class LabourMarketForecastServiceFactory:
     """Assemble the read-only forecast service; the Chronos model loads on its first forecast, not here."""
 
@@ -24,9 +34,9 @@ class LabourMarketForecastServiceFactory:
     def create(
         self, uow_factory: UnitOfWorkFactory, forecaster: TimeSeriesForecasterInterface | None = None,
     ) -> LabourMarketForecastServiceInterface:
-        forecaster = forecaster or ChronosForecaster(self._settings.CHRONOS_MODEL, self._settings.CHRONOS_DEVICE)
+        forecaster = forecaster or chronos_forecaster(self._settings)
         loaders = {
-            "unemployment_rate": DzsSeriesLoader("unemployment_rate", "percent", 1, 100.0, (NOTE_RATE,)),
+            "unemployment_rate": unemployment_rate_loader(),
             "unemployed": DzsPersonsSeriesLoader("unemployed", (NOTE_PERSONS,)),
             "employed": DzsPersonsSeriesLoader("employed", (NOTE_PERSONS,)),
             "job_ads": HzzJobAdsSeriesLoader(),
