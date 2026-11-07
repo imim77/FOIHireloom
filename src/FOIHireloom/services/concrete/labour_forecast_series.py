@@ -54,21 +54,37 @@ class CountySeries:
 class CountySeriesLoader(ABC):
     """CountySeriesLoader reads one forecast target's past values and says how to read them.
 
-    The class attributes describe the target for users and set the limits
-    the service enforces: how far ahead to forecast and how much history a
-    county needs before the model is asked at all.
+    The class attributes set the limits the service enforces: how far ahead
+    to forecast and how much history a county needs before the model is
+    asked at all. The properties describe the target's values for users.
     """
 
     frequency: ForecastFrequency
-    unit: ForecastUnit
-    digits: int  # Decimals of the values reported.
-    upper_bound: float | None = None
     default_horizon: int
     max_horizon: int
     min_history: int  # Known past values a county needs for a forecast.
     shown_history: int  # Past periods reported next to the forecast.
     uses_sex: bool
-    notes: tuple[str, ...]
+
+    @property
+    @abstractmethod
+    def unit(self) -> ForecastUnit:
+        """Return the unit the values are counted in."""
+
+    @property
+    @abstractmethod
+    def digits(self) -> int:
+        """Return the decimals of the values reported."""
+
+    @property
+    def upper_bound(self) -> float | None:
+        """Return the largest value a forecast may reach, or None without a limit."""
+        return None
+
+    @property
+    @abstractmethod
+    def notes(self) -> tuple[str, ...]:
+        """Return what users need to know to read the values."""
 
     @abstractmethod
     async def load(self, work: UnitOfWork, counties: Sequence[CountyDTO], sex: DzsSex) -> CountySeries:
@@ -102,10 +118,26 @@ class DzsSeriesLoader(CountySeriesLoader):
     def __init__(self, indicator: DzsIndicator, unit: ForecastUnit, digits: int, upper_bound: float | None,
                  notes: tuple[str, ...]) -> None:
         self._indicator = indicator
-        self.unit = unit
-        self.digits = digits
-        self.upper_bound = upper_bound
-        self.notes = (NOTE_DZS_PERIOD, *notes)
+        self._unit = unit
+        self._digits = digits
+        self._upper_bound = upper_bound
+        self._notes = (NOTE_DZS_PERIOD, *notes)
+
+    @property
+    def unit(self) -> ForecastUnit:
+        return self._unit
+
+    @property
+    def digits(self) -> int:
+        return self._digits
+
+    @property
+    def upper_bound(self) -> float | None:
+        return self._upper_bound
+
+    @property
+    def notes(self) -> tuple[str, ...]:
+        return self._notes
 
     async def load(self, work: UnitOfWork, counties: Sequence[CountyDTO], sex: DzsSex, *,
                    end_period: date | None = None, context_months: int = MAX_CONTEXT_MONTHS) -> CountySeries:

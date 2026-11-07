@@ -62,8 +62,9 @@ class JobConditionsNormalizer:
     is recognised only when every part is, so no part is silently dropped.
     """
 
-    def normalize(self, raw: RawJobConditionsDTO) -> JobConditionsDTO:
-        parsers: dict[str, Callable[[Parts], dict[str, Any] | None]] = {
+    def __init__(self) -> None:
+        # The parser of each page field, by its RawJobConditionsDTO name; None means unrecognised.
+        self._parsers: dict[str, Callable[[Parts], dict[str, Any] | None]] = {
             "experience": self._experience,
             "employment_type": self._employment_type,
             "working_hours": self._working_hours,
@@ -72,9 +73,11 @@ class JobConditionsNormalizer:
             "work_schedule": lambda parts: self._codes(parts, SCHEDULE_TAGS, "schedule_tags"),
             "transport_allowance": lambda parts: self._single(parts, TRANSPORT_ALLOWANCE, "transport_allowance"),
         }
+
+    def normalize(self, raw: RawJobConditionsDTO) -> JobConditionsDTO:
         fields: dict[str, Any] = {}
         unrecognised = []
-        for name, parse in parsers.items():
+        for name, parse in self._parsers.items():
             parts = self._parts(getattr(raw, name))
             if not parts:
                 continue
