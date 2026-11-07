@@ -1,7 +1,9 @@
 from collections.abc import Sequence
 
+from FOIHireloom.db.models import County
 from FOIHireloom.db.uow.base import UnitOfWork, UnitOfWorkFactory
 from FOIHireloom.dto.ckan import CkanResource
+from FOIHireloom.dto.county import CountyDefinitionDTO
 from FOIHireloom.dto.source_feed import (
     PlannedSourceDTO,
     RegistrationPlanDTO,
@@ -38,6 +40,14 @@ class SourceFeedRegistrationPlanner:
     def build(
         self, resources: Sequence[CkanResource], occupation_resources: Sequence[CkanResource]
     ) -> RegistrationPlanDTO:
+        counties, county_skipped = self._county_sources(resources)
+        occupations, occupation_skipped = self._occupation_sources(occupation_resources)
+        sources = (*counties, *occupations)
+        self._check_unique(sources)
+        return RegistrationPlanDTO(sources=sources, resources_skipped=county_skipped + occupation_skipped)
+
+    def _county_sources(self, resources: Sequence[CkanResource]) -> tuple[list[PlannedSourceDTO], int]:
+        """Return a county feed per county resource and the number of resources skipped; EU feeds are skipped."""
         sources: list[PlannedSourceDTO] = []
         skipped = 0
         for resource in resources:
@@ -51,21 +61,28 @@ class SourceFeedRegistrationPlanner:
             sources.append(PlannedSourceDTO(resource=resource, county=county, label=label))
         if not sources:
             raise SourceFeedRegistrationError("CKAN returned no supported Croatian county resources.")
-        occupations = 0
-        for resource in occupation_resources:
+        return sources, skipped
+
+    def _occupation_sources(self, resources: Sequence[CkanResource]) -> tuple[list[PlannedSourceDTO], int]:
+        """Return an occupation feed per supported resource and the number of resources skipped."""
+        sources: list[PlannedSourceDTO] = []
+        skipped = 0
+        for resource in resources:
             label = self._feed_label(resource)
             if label is None:
                 skipped += 1
                 continue
             sources.append(PlannedSourceDTO(resource=resource, scope="occupation", county=None, label=label))
-            occupations += 1
-        if not occupations:
+        if not sources:
             raise SourceFeedRegistrationError("CKAN returned no supported occupation resources.")
+        return sources, skipped
+
+    @staticmethod
+    def _check_unique(sources: Sequence[PlannedSourceDTO]) -> None:
         ids = {source.resource.id for source in sources}
         urls = {str(source.resource.url) for source in sources}
         if len(ids) < len(sources) or len(urls) < len(sources):
             raise SourceFeedRegistrationError("Duplicate resource ID or feed URL in CKAN response.")
-        return RegistrationPlanDTO(sources=tuple(sources), resources_skipped=skipped)
 
     @staticmethod
     def _feed_label(resource: CkanResource) -> str | None:
@@ -121,23 +138,31 @@ class SourceFeedRegistrationService(SourceFeedRegistrationServiceInterface):
         return self._planner.build(resources, await self._client.get_resources(occupation_dataset_id))
 
     async def _ensure_counties(self, work: UnitOfWork) -> tuple[dict[str, int], int]:
+        """Return the stored county ID by code, creating missing counties, and how many were created."""
         counties: dict[str, int] = {}
         added = 0
         for definition in self._planner.catalog.definitions:
-            by_code = await work.counties.get_by_code(definition.code)
-            by_name = await work.counties.get_by_name(definition.name)
-            if by_code is not None and by_name is not None and by_code.id != by_name.id:
-                raise SourceFeedRegistrationError("County code and name identify different existing counties.")
-            county = by_code or by_name
+            county = await self._stored_county(work, definition)
             if county is None:
                 county = await work.counties.create(definition)
                 added += 1
-            elif self._planner.catalog.match(county.name) != definition:
-                raise SourceFeedRegistrationError(f"County name conflicts with code {definition.code!r}.")
-            elif county.iso_code != definition.iso_code:
-                raise SourceFeedRegistrationError(f"County ISO code conflicts with code {definition.code!r}.")
             counties[definition.code] = county.id
         return counties, added
+
+    async def _stored_county(self, work: UnitOfWork, definition: CountyDefinitionDTO) -> County | None:
+        """Return the stored county the definition names, or None; raise when stored data contradicts it."""
+        by_code = await work.counties.get_by_code(definition.code)
+        by_name = await work.counties.get_by_name(definition.name)
+        if by_code is not None and by_name is not None and by_code.id != by_name.id:
+            raise SourceFeedRegistrationError("County code and name identify different existing counties.")
+        county = by_code or by_name
+        if county is None:
+            return None
+        if self._planner.catalog.match(county.name) != definition:
+            raise SourceFeedRegistrationError(f"County name conflicts with code {definition.code!r}.")
+        if county.iso_code != definition.iso_code:
+            raise SourceFeedRegistrationError(f"County ISO code conflicts with code {definition.code!r}.")
+        return county
 
     async def _resolve_existing(
         self, work: UnitOfWork, plan: RegistrationPlanDTO
