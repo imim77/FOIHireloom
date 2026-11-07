@@ -1,8 +1,7 @@
 from collections.abc import Collection, Mapping, Sequence
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import CTE, ColumnElement, Date, Integer, and_, bindparam, case, func, not_, or_, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import CTE, ColumnElement, Date, Integer, bindparam, case, func, not_, or_, select, update
 
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.db.models.job import SEARCH_TITLE_WEIGHT
@@ -31,9 +30,10 @@ from FOIHireloom.dto.job_sync import CategoryEvidenceDTO, FilledCategoryDTO, Job
 from FOIHireloom.dao.interfaces.job import JobRepository, JobSearchHit
 
 from .job_predicates import (
-    after_descending, condition_filters, effective_deadline, filter_conditions, listed_condition,
-    open_condition, page_due_condition, terms_condition,
+    CONDITION_FILTERS, after_descending, condition_filters, county_placements, effective_deadline,
+    filter_conditions, listed_condition, open_condition, page_due_condition, terms_condition,
 )
+from .sqla_base import SqlAlchemyRepository
 
 # Columns by JobConditionsDTO field, and the page columns by RawJobConditionsDTO field.
 STORED_CONDITIONS = {
@@ -42,21 +42,11 @@ STORED_CONDITIONS = {
 }
 PAGE_CONDITIONS = {name: getattr(Job, f"page_{name}") for name in RawJobConditionsDTO.model_fields}
 # When a job's value for each JobConditionFiltersDTO filter is unknown.
-UNKNOWN_CONDITIONS = {
-    "max_experience_months": Job.experience_months.is_(None),
-    "contract": Job.contract.is_(None),
-    "full_time": Job.full_time.is_(None),
-    "education": Job.education_levels.is_(None),
-    "accommodation": Job.accommodation.is_(None),
-    "employment_tags": Job.employment_tags.is_(None),
-    "place": and_(Job.page_work_place.is_(None), Job.municipality.is_(None)),
-}
+UNKNOWN_CONDITIONS = {name: condition.unknown for name, condition in CONDITION_FILTERS.items()}
+LISTED_MEMBERSHIP = JobFeedMembership.presence_status == "present"
 
 
-class SqlAlchemyJobRepository(JobRepository):
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
-
+class SqlAlchemyJobRepository(SqlAlchemyRepository, JobRepository):
     async def get_by_id(self, job_id: int) -> Job | None:
         return await self._session.get(Job, job_id)
 
@@ -67,22 +57,32 @@ class SqlAlchemyJobRepository(JobRepository):
 
     async def search(self, criteria: JobSearchCriteriaDTO) -> list[JobSearchHit]:
         title_match = terms_condition(criteria.terms, SEARCH_TITLE_WEIGHT) if criteria.terms else None
-        skill_matches = sum(
-            (case((Job.skills.contains([skill]), 1), else_=0) for skill in dict.fromkeys(criteria.skills or ())),
-        ) if criteria.skills else None
+        keys = self._search_keys(criteria, title_match)
         statement = select(Job, title_match).where(*filter_conditions(criteria))
-        keys = []
-        if title_match is not None:
-            keys.append((title_match.cast(Integer), criteria.after.title_match if criteria.after else None))
-        if skill_matches is not None:
-            keys.append((skill_matches, criteria.after.skill_matches if criteria.after else None))
-        keys.extend(((Job.published_on, criteria.after.published_on if criteria.after else None),
-                     (Job.id, criteria.after.id if criteria.after else None)))
         if criteria.after is not None:
-            positions = [(column, int(value) if isinstance(value, bool) else value) for column, value in keys]
-            statement = statement.where(after_descending(positions))
+            statement = statement.where(after_descending(keys))
         statement = statement.order_by(*(column.desc().nulls_last() for column, _ in keys)).limit(criteria.limit)
-        return [JobSearchHit(job, title_match) for job, title_match in await self._session.execute(statement)]
+        return [JobSearchHit(job, matched) for job, matched in await self._session.execute(statement)]
+
+    @staticmethod
+    def _search_keys(
+        criteria: JobSearchCriteriaDTO, title_match: ColumnElement[bool] | None,
+    ) -> list[tuple[ColumnElement, object]]:
+        """The descending sort keys of search, each paired with the cursor's value at that key."""
+        def after(field: str) -> object:
+            value = getattr(criteria.after, field) if criteria.after is not None else None
+            return int(value) if isinstance(value, bool) else value  # title_match sorts as an integer.
+
+        keys: list[tuple[ColumnElement, object]] = []
+        if title_match is not None:
+            keys.append((title_match.cast(Integer), after("title_match")))
+        if criteria.skills:
+            skill_matches = sum(
+                case((Job.skills.contains([skill]), 1), else_=0) for skill in dict.fromkeys(criteria.skills)
+            )
+            keys.append((skill_matches, after("skill_matches")))
+        keys.extend(((Job.published_on, after("published_on")), (Job.id, after("id"))))
+        return keys
 
     async def count_unknown_conditions(self, criteria: JobFilterCriteriaDTO) -> UnknownConditionsDTO:
         conditions = condition_filters(criteria)
@@ -111,6 +111,29 @@ class SqlAlchemyJobRepository(JobRepository):
             .where(*filter_conditions(criteria))
             .cte("found")
         )
+        return JobMarketAggregatesDTO(
+            **await self._market_totals(found, criteria.today),
+            counties=await self._county_counts(found),
+            **await self._market_breakdowns(found, criteria.top),
+        )
+
+    async def _market_totals(self, found: CTE, today: date) -> dict[str, int]:
+        totals = {
+            "jobs": func.count(),
+            "with_details": func.count().filter(found.c.page_fetched_at.is_not(None)),
+            "category_from_description": func.count().filter(found.c.category_source == "description"),
+            "category_from_feed": func.count().filter(found.c.category_source == "feed"),
+            "workers_needed": self._workers_needed(found.c.workers),
+            "published_recently": func.count().filter(
+                found.c.published_on > today - timedelta(days=MARKET_WINDOW_DAYS)
+            ),
+            "closing_soon": func.count().filter(self._closes_soon(found.c.deadline, today)),
+        }
+        counted = dict(zip(totals, (await self._session.execute(select(*totals.values()))).one()))
+        return counted | {"with_category": counted["category_from_description"] + counted["category_from_feed"]}
+
+    async def _market_breakdowns(self, found: CTE, top: int) -> dict[str, tuple[MarketCountDTO, ...]]:
+        """Counts per value for each breakdown field of JobMarketAggregatesDTO."""
         # Without an else, an unknown value stays NULL and is left out.
         working_time = case((found.c.full_time, "full_time"), (not_(found.c.full_time), "part_time"))
         experience_band = case(
@@ -119,53 +142,33 @@ class SqlAlchemyJobRepository(JobRepository):
             (found.c.experience_months <= 36, "13_to_36_months"),
             (found.c.experience_months > 36, "over_36_months"),
         )
-        window_end = criteria.today + timedelta(days=MARKET_WINDOW_DAYS - 1)
-        totals = (await self._session.execute(select(
-            func.count(),
-            func.count().filter(found.c.page_fetched_at.is_not(None)),
-            func.count().filter(found.c.category_source == "description"),
-            func.count().filter(found.c.category_source == "feed"),
-            func.coalesce(func.sum(found.c.workers), 0),
-            func.count().filter(found.c.published_on > criteria.today - timedelta(days=MARKET_WINDOW_DAYS)),
-            func.count().filter(found.c.deadline.between(criteria.today, window_end)),
-        ))).one()
-        return JobMarketAggregatesDTO(
-            jobs=totals[0], with_details=totals[1], with_category=totals[2] + totals[3],
-            category_from_description=totals[2], category_from_feed=totals[3], workers_needed=totals[4],
-            published_recently=totals[5], closing_soon=totals[6],
-            counties=await self._county_counts(found),
-            categories=await self._value_counts(found, found.c.category),
-            employers=await self._value_counts(found, found.c.page_employer_name, criteria.top),
-            contracts=await self._value_counts(found, found.c.contract),
-            employment_tags=await self._value_counts(found, func.unnest(found.c.employment_tags)),
-            working_time=await self._value_counts(found, working_time),
-            experience_bands=await self._value_counts(found, experience_band),
-            education_levels=await self._value_counts(found, func.unnest(found.c.education_levels)),
-            accommodation=await self._value_counts(found, found.c.accommodation),
-            schedule_tags=await self._value_counts(found, func.unnest(found.c.schedule_tags)),
-            transport_allowance=await self._value_counts(found, found.c.transport_allowance),
-        )
+        values = {
+            "categories": found.c.category,
+            "employers": found.c.page_employer_name,
+            "contracts": found.c.contract,
+            "employment_tags": func.unnest(found.c.employment_tags),
+            "working_time": working_time,
+            "experience_bands": experience_band,
+            "education_levels": func.unnest(found.c.education_levels),
+            "accommodation": found.c.accommodation,
+            "schedule_tags": func.unnest(found.c.schedule_tags),
+            "transport_allowance": found.c.transport_allowance,
+        }
+        limits = {"employers": top}  # The other breakdowns have few values.
+        return {name: await self._value_counts(found, value, limits.get(name)) for name, value in values.items()}
 
     async def _county_counts(self, found: CTE) -> tuple[CountyMarketCountDTO, ...]:
-        # A job listed by two feeds of one county counts once.
-        placed = (
-            select(JobFeedMembership.job_id, SourceFeed.county_id)
-            .join(SourceFeed)
-            .where(JobFeedMembership.presence_status == "present", SourceFeed.scope == "county",
-                   JobFeedMembership.job_id.in_(select(found.c.id)))
-            .distinct()
-            .subquery()
-        )
+        placed = county_placements(LISTED_MEMBERSHIP, JobFeedMembership.job_id.in_(select(found.c.id)))
         jobs = func.count().label("jobs")
         statement = (
-            select(County.code, County.name, jobs, func.coalesce(func.sum(found.c.workers), 0).label("workers_needed"))
+            select(County.code, County.name, jobs, self._workers_needed(found.c.workers).label("workers_needed"))
             .select_from(placed)
             .join(County, County.id == placed.c.county_id)
             .join(found, found.c.id == placed.c.job_id)
             .group_by(County.id)
             .order_by(jobs.desc(), County.name)
         )
-        return tuple(CountyMarketCountDTO.model_validate(row) for row in (await self._session.execute(statement)).all())
+        return tuple(await self._rows(statement, CountyMarketCountDTO))
 
     async def _value_counts(
         self, found: CTE, value: ColumnElement[str | None], limit: int | None = None,
@@ -174,13 +177,13 @@ class SqlAlchemyJobRepository(JobRepository):
         values = select(found.c.id, value.label("name"), found.c.workers).distinct().subquery()
         jobs = func.count().label("jobs")
         statement = (
-            select(values.c.name, jobs, func.coalesce(func.sum(values.c.workers), 0).label("workers_needed"))
+            select(values.c.name, jobs, self._workers_needed(values.c.workers).label("workers_needed"))
             .where(values.c.name.is_not(None), values.c.name != "")
             .group_by(values.c.name)
             .order_by(jobs.desc(), values.c.name)
             .limit(limit)
         )
-        return tuple(MarketCountDTO.model_validate(row) for row in (await self._session.execute(statement)).all())
+        return tuple(await self._rows(statement, MarketCountDTO))
 
     async def county_job_counts(self, criteria: CountyJobCriteriaDTO) -> list[CountyJobCountsRowDTO]:
         found = (
@@ -189,31 +192,34 @@ class SqlAlchemyJobRepository(JobRepository):
             .where(*filter_conditions(criteria))
             .cte("found")
         )
-        # A job listed by two feeds of one county counts once there.
-        placed = (
-            select(JobFeedMembership.job_id, SourceFeed.county_id)
-            .join(SourceFeed)
-            .where(JobFeedMembership.presence_status == "present", SourceFeed.scope == "county",
-                   SourceFeed.county_id.in_(criteria.county_ids), JobFeedMembership.job_id.in_(select(found.c.id)))
-            .distinct()
-            .subquery()
+        placed = county_placements(
+            LISTED_MEMBERSHIP, SourceFeed.county_id.in_(criteria.county_ids),
+            JobFeedMembership.job_id.in_(select(found.c.id)),
         )
-        window_end = criteria.today + timedelta(days=MARKET_WINDOW_DAYS - 1)
         statement = (
             select(
                 placed.c.county_id,
                 func.count().label("jobs"),
                 func.count(found.c.workers).label("with_workers_needed"),
-                func.coalesce(func.sum(found.c.workers), 0).label("workers_needed"),
+                self._workers_needed(found.c.workers).label("workers_needed"),
                 func.count(found.c.contract).label("with_contract"),
                 func.count().filter(found.c.contract == "permanent").label("permanent"),
-                func.count().filter(found.c.deadline.between(criteria.today, window_end)).label("closing_soon"),
+                func.count().filter(self._closes_soon(found.c.deadline, criteria.today)).label("closing_soon"),
             )
             .select_from(placed)
             .join(found, found.c.id == placed.c.job_id)
             .group_by(placed.c.county_id)
         )
-        return [CountyJobCountsRowDTO.model_validate(row) for row in (await self._session.execute(statement)).all()]
+        return await self._rows(statement, CountyJobCountsRowDTO)
+
+    @staticmethod
+    def _workers_needed(workers: ColumnElement[int | None]) -> ColumnElement[int]:
+        """The workers the jobs ask for in all; a job that does not say adds none."""
+        return func.coalesce(func.sum(workers), 0)
+
+    @staticmethod
+    def _closes_soon(deadline: ColumnElement[date | None], today: date) -> ColumnElement[bool]:
+        return deadline.between(today, today + timedelta(days=MARKET_WINDOW_DAYS - 1))
 
     async def weekly_published_counts(
         self, county_ids: Collection[int], first_week: date, last_week: date,
@@ -221,13 +227,7 @@ class SqlAlchemyJobRepository(JobRepository):
         if not county_ids:
             return []
         # Expired ads count too: a forecast of demand needs every ad published.
-        placed = (
-            select(JobFeedMembership.job_id, SourceFeed.county_id)
-            .join(SourceFeed)
-            .where(SourceFeed.scope == "county", SourceFeed.county_id.in_(county_ids))
-            .distinct()
-            .subquery()
-        )
+        placed = county_placements(SourceFeed.county_id.in_(county_ids))
         week = func.date_trunc("week", Job.published_on).cast(Date).label("week")  # ISO weeks start on Monday.
         statement = (
             select(placed.c.county_id, week, func.count().label("jobs"))
@@ -236,7 +236,7 @@ class SqlAlchemyJobRepository(JobRepository):
             .where(Job.published_on.between(first_week, last_week + timedelta(days=6)))
             .group_by(placed.c.county_id, week)
         )
-        return [WeeklyJobAdsRowDTO.model_validate(row) for row in (await self._session.execute(statement)).all()]
+        return await self._rows(statement, WeeklyJobAdsRowDTO)
 
     async def tracking_started_at(self) -> datetime | None:
         return await self._session.scalar(select(func.min(Job.first_seen_at)))
@@ -249,8 +249,7 @@ class SqlAlchemyJobRepository(JobRepository):
             .group_by(Job.category)
             .order_by(open_jobs.desc(), Job.category)
         )
-        result = await self._session.execute(statement)
-        return [CategoryDTO.model_validate(row) for row in result.all()]
+        return await self._rows(statement, CategoryDTO)
 
     async def list_snapshots(self, source_job_ids: Collection[str]) -> list[JobSnapshotDTO]:
         if not source_job_ids:
@@ -258,8 +257,7 @@ class SqlAlchemyJobRepository(JobRepository):
         statement = select(Job.id, Job.source_job_id, Job.content_hash).where(
             Job.source_job_id.in_(source_job_ids)
         )
-        result = await self._session.execute(statement)
-        return [JobSnapshotDTO.model_validate(row) for row in result.all()]
+        return await self._rows(statement, JobSnapshotDTO)
 
     async def create_many(self, jobs: Sequence[ParsedJobDTO], seen_at: datetime) -> dict[str, int]:
         entities = [
@@ -330,8 +328,7 @@ class SqlAlchemyJobRepository(JobRepository):
             .where(listed_condition())
             .order_by(Job.id)
         )
-        result = await self._session.execute(statement)
-        return [CategoryInputDTO.model_validate(row) for row in result.all()]
+        return await self._rows(statement, CategoryInputDTO)
 
     async def set_feed_categories(self, categories: Mapping[int, FilledCategoryDTO | None]) -> None:
         rows = [
@@ -357,8 +354,7 @@ class SqlAlchemyJobRepository(JobRepository):
             .order_by(Job.published_on.desc().nulls_last(), Job.id.desc())
             .limit(limit)
         )
-        result = await self._session.execute(statement)
-        return [JobPageTargetDTO.model_validate(row) for row in result.all()]
+        return await self._rows(statement, JobPageTargetDTO)
 
     async def count_page_candidates(self, retry_before: datetime) -> int:
         statement = select(func.count()).select_from(Job).where(listed_condition(), page_due_condition(retry_before))

@@ -1,19 +1,17 @@
 from datetime import date
 
 from sqlalchemy import and_, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import County, Job, JobFeedMembership, SourceFeed
 from FOIHireloom.dto.county import CountyDefinitionDTO, CountyDTO
 from FOIHireloom.dto.job_search import CountyFeedCheckDTO, RegionDTO
-from .job_predicates import open_condition
 from FOIHireloom.dao.interfaces.county import CountyRepository
 
+from .job_predicates import open_condition
+from .sqla_base import SqlAlchemyRepository
 
-class SqlAlchemyCountyRepository(CountyRepository):
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
 
+class SqlAlchemyCountyRepository(SqlAlchemyRepository, CountyRepository):
     async def get_by_code(self, code: str) -> County | None:
         result = await self._session.execute(select(County).where(County.code == code))
         return result.scalar_one_or_none()
@@ -37,8 +35,7 @@ class SqlAlchemyCountyRepository(CountyRepository):
             .scalar_subquery()
         )
         statement = select(County.code, County.name, open_jobs.label("open_jobs")).order_by(County.name)
-        result = await self._session.execute(statement)
-        return [RegionDTO.model_validate(row) for row in result.all()]
+        return await self._rows(statement, RegionDTO)
 
     async def list_feed_checks(self) -> list[CountyFeedCheckDTO]:
         statement = (
@@ -50,8 +47,7 @@ class SqlAlchemyCountyRepository(CountyRepository):
             ))
             .order_by(County.name, SourceFeed.id)
         )
-        result = await self._session.execute(statement)
-        return [CountyFeedCheckDTO.model_validate(row) for row in result.all()]
+        return await self._rows(statement, CountyFeedCheckDTO)
 
     async def add(self, county: County) -> None:
         self._session.add(county)

@@ -2,7 +2,6 @@ from collections.abc import Collection
 from datetime import datetime
 
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from FOIHireloom.db.models import County, JobFeedMembership, SourceFeed
 from FOIHireloom.db.models.source_feed import SYNCED_SCOPES
@@ -10,11 +9,10 @@ from FOIHireloom.dao.interfaces.job_feed_membership import JobFeedMembershipRepo
 from FOIHireloom.dto.job_search import JobCountyDTO, JobListingDTO
 from FOIHireloom.dto.job_sync import MembershipSnapshotDTO
 
+from .sqla_base import SqlAlchemyRepository
 
-class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
 
+class SqlAlchemyJobFeedMembershipRepository(SqlAlchemyRepository, JobFeedMembershipRepository):
     async def list_listings(self, job_id: int) -> list[JobListingDTO]:
         statement = (
             select(
@@ -32,8 +30,7 @@ class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
             .where(JobFeedMembership.job_id == job_id, SourceFeed.scope == "county")
             .order_by(County.name, SourceFeed.id)
         )
-        result = await self._session.execute(statement)
-        return [JobListingDTO.model_validate(row) for row in result.all()]
+        return await self._rows(statement, JobListingDTO)
 
     async def list_counties(self, job_ids: Collection[int]) -> list[JobCountyDTO]:
         if not job_ids:
@@ -51,8 +48,7 @@ class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
             .where(JobFeedMembership.job_id.in_(job_ids), SourceFeed.scope == "county")
             .order_by(JobFeedMembership.job_id, JobFeedMembership.presence_status != "present", County.name)
         )
-        result = await self._session.execute(statement)
-        return [JobCountyDTO.model_validate(row) for row in result.all()]
+        return await self._rows(statement, JobCountyDTO)
 
     async def list_snapshots_for_feed(self, feed_id: int) -> list[MembershipSnapshotDTO]:
         statement = (
@@ -61,8 +57,7 @@ class SqlAlchemyJobFeedMembershipRepository(JobFeedMembershipRepository):
             .where(JobFeedMembership.feed_id == feed_id, SourceFeed.scope.in_(SYNCED_SCOPES))
             .order_by(JobFeedMembership.job_id)
         )
-        result = await self._session.execute(statement)
-        return [MembershipSnapshotDTO.model_validate(row) for row in result.all()]
+        return await self._rows(statement, MembershipSnapshotDTO)
 
     async def create_many(self, feed_id: int, job_ids: Collection[int], seen_at: datetime) -> None:
         if not job_ids:

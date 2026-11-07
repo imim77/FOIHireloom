@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import datetime
 from types import TracebackType
 from typing import Self
@@ -6,27 +7,53 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from FOIHireloom.db.session import SessionManager
-from FOIHireloom.dao.interfaces.county import CountyRepository
 from FOIHireloom.dao.concrete.sqla_county import SqlAlchemyCountyRepository
 from FOIHireloom.dao.concrete.sqla_dzs_import import SqlAlchemyDzsImportRepository
 from FOIHireloom.dao.concrete.sqla_dzs_indicator_value import SqlAlchemyDzsIndicatorValueRepository
 from FOIHireloom.dao.concrete.sqla_job import SqlAlchemyJobRepository
-from FOIHireloom.dao.concrete.sqla_job_feed_membership import (
-    SqlAlchemyJobFeedMembershipRepository,
-)
+from FOIHireloom.dao.concrete.sqla_job_feed_membership import SqlAlchemyJobFeedMembershipRepository
 from FOIHireloom.dao.concrete.sqla_source_feed import SqlAlchemySourceFeedRepository
 from FOIHireloom.dao.concrete.sqla_sync_run import SqlAlchemySyncRunRepository
+from FOIHireloom.dao.interfaces.county import CountyRepository
 from FOIHireloom.dao.interfaces.dzs_import import DzsImportRepository
 from FOIHireloom.dao.interfaces.dzs_indicator_value import DzsIndicatorValueRepository
 from FOIHireloom.dao.interfaces.job import JobRepository
 from FOIHireloom.dao.interfaces.job_feed_membership import JobFeedMembershipRepository
 from FOIHireloom.dao.interfaces.source_feed import SourceFeedRepository
 from FOIHireloom.dao.interfaces.sync_run import SyncRunRepository
-
+from FOIHireloom.db.session import SessionManager
 from FOIHireloom.exceptions import ConflictError, PersistenceError
 
 from .base import UnitOfWork
+
+
+@dataclass(frozen=True)
+class SessionRepositories:
+    """SessionRepositories holds the repositories of one Unit of Work context.
+
+    Binding them together keeps every repository on the same session, and
+    lets the Unit of Work drop them all at once when its context ends.
+    """
+
+    counties: CountyRepository
+    dzs_imports: DzsImportRepository
+    dzs_indicator_values: DzsIndicatorValueRepository
+    jobs: JobRepository
+    job_feed_memberships: JobFeedMembershipRepository
+    source_feeds: SourceFeedRepository
+    sync_runs: SyncRunRepository
+
+    @classmethod
+    def bind(cls, session: AsyncSession) -> Self:
+        return cls(
+            counties=SqlAlchemyCountyRepository(session),
+            dzs_imports=SqlAlchemyDzsImportRepository(session),
+            dzs_indicator_values=SqlAlchemyDzsIndicatorValueRepository(session),
+            jobs=SqlAlchemyJobRepository(session),
+            job_feed_memberships=SqlAlchemyJobFeedMembershipRepository(session),
+            source_feeds=SqlAlchemySourceFeedRepository(session),
+            sync_runs=SqlAlchemySyncRunRepository(session),
+        )
 
 
 class SqlAlchemyUnitOfWork(UnitOfWork):
@@ -45,55 +72,35 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self._sessions = sessions
         self._context: AsyncSession | None = None
         self._session: AsyncSession | None = None
-        self._counties: CountyRepository | None = None
-        self._dzs_imports: DzsImportRepository | None = None
-        self._dzs_indicator_values: DzsIndicatorValueRepository | None = None
-        self._jobs: JobRepository | None = None
-        self._job_feed_memberships: JobFeedMembershipRepository | None = None
-        self._source_feeds: SourceFeedRepository | None = None
-        self._sync_runs: SyncRunRepository | None = None
+        self._repositories: SessionRepositories | None = None
 
     @property
     def counties(self) -> CountyRepository:
-        if self._counties is None:
-            raise RuntimeError("County repository requires an active Unit of Work.")
-        return self._counties
+        return self._active_repositories().counties
 
     @property
     def dzs_imports(self) -> DzsImportRepository:
-        if self._dzs_imports is None:
-            raise RuntimeError("DZS import repository requires an active Unit of Work.")
-        return self._dzs_imports
+        return self._active_repositories().dzs_imports
 
     @property
     def dzs_indicator_values(self) -> DzsIndicatorValueRepository:
-        if self._dzs_indicator_values is None:
-            raise RuntimeError("DZS indicator value repository requires an active Unit of Work.")
-        return self._dzs_indicator_values
+        return self._active_repositories().dzs_indicator_values
 
     @property
     def jobs(self) -> JobRepository:
-        if self._jobs is None:
-            raise RuntimeError("Job repository requires an active Unit of Work.")
-        return self._jobs
+        return self._active_repositories().jobs
 
     @property
     def job_feed_memberships(self) -> JobFeedMembershipRepository:
-        if self._job_feed_memberships is None:
-            raise RuntimeError("Job feed membership repository requires an active Unit of Work.")
-        return self._job_feed_memberships
+        return self._active_repositories().job_feed_memberships
 
     @property
     def source_feeds(self) -> SourceFeedRepository:
-        if self._source_feeds is None:
-            raise RuntimeError("Source feed repository requires an active Unit of Work.")
-        return self._source_feeds
+        return self._active_repositories().source_feeds
 
     @property
     def sync_runs(self) -> SyncRunRepository:
-        if self._sync_runs is None:
-            raise RuntimeError("Sync run repository requires an active Unit of Work.")
-        return self._sync_runs
+        return self._active_repositories().sync_runs
 
     async def __aenter__(self) -> Self:
         if self._context is not None:
@@ -103,13 +110,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self._context = context
         try:
             self._session = await context.__aenter__()
-            self._counties = SqlAlchemyCountyRepository(self._session)
-            self._dzs_imports = SqlAlchemyDzsImportRepository(self._session)
-            self._dzs_indicator_values = SqlAlchemyDzsIndicatorValueRepository(self._session)
-            self._jobs = SqlAlchemyJobRepository(self._session)
-            self._job_feed_memberships = SqlAlchemyJobFeedMembershipRepository(self._session)
-            self._source_feeds = SqlAlchemySourceFeedRepository(self._session)
-            self._sync_runs = SqlAlchemySyncRunRepository(self._session)
+            self._repositories = SessionRepositories.bind(self._session)
         except BaseException as error:
             try:
                 await context.__aexit__(type(error), error, error.__traceback__)
@@ -154,6 +155,11 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
             raise RuntimeError("Unit of Work is not active. Use 'async with'.")
         return self._session
 
+    def _active_repositories(self) -> SessionRepositories:
+        if self._repositories is None:
+            raise RuntimeError("Repositories require an active Unit of Work.")
+        return self._repositories
+
     @staticmethod
     def _translate(error: SQLAlchemyError) -> PersistenceError:
         if isinstance(error, IntegrityError):
@@ -161,13 +167,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         return PersistenceError(str(error))
 
     def _clear_context(self) -> None:
-        self._counties = None
-        self._dzs_imports = None
-        self._dzs_indicator_values = None
-        self._jobs = None
-        self._job_feed_memberships = None
-        self._source_feeds = None
-        self._sync_runs = None
+        self._repositories = None
         self._session = None
         self._context = None
 
