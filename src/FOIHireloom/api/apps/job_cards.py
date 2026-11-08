@@ -17,9 +17,7 @@ def job_cards(page: JobCardsPageDTO, filters: JobSearchFiltersDTO) -> JobCardsDT
     return JobCardsDTO(
         **page.model_dump(),
         title=f"Oglasi za „{query}”" if query else "Najnoviji oglasi",
-        # The view shows the filters as chips under it.
         description=sentence(day(page.today, filters.include_expired)),
-        # The next page continues from next_cursor; the view passes it back with these filters.
         filters=filters.model_copy(update={"cursor": None}),
         active_filters=active_filters(filters),
         coverage_note=coverage_note(page.coverage),

@@ -1,11 +1,5 @@
 import type { UnemploymentHistoryData } from '../types'
 
-/**
- * Shown outside a host, e.g. on the dev server: show_unemployment_history's result for Varaždinska, Istarska and
- * Ličko-senjska over 24 months, made by the server's own code from the local data of 2. 11. 2026. and edited to
- * leave a gap in Ličko-senjska's series: August and September 2025 are missing, so its change over the year is
- * unavailable. The months of 2026 are provisional.
- */
 export function sample(): UnemploymentHistoryData {
   return {
     "counties": [

@@ -20,7 +20,6 @@ class HzzJobPageParserTests(unittest.TestCase):
         job = self.parser.parse(page("school"))
         self.assertEqual(job.title, "STRUKOVNI/A UČITELJ/ICA U KUHARSTVU")
         self.assertEqual(job.work_place, "VELIKA GORICA, ZAGREBAČKA ŽUPANIJA")
-        # "Natječaj vrijedi do: 6.11.2026." is the application deadline.
         self.assertEqual((job.valid_from, job.valid_until), (date(2026, 10, 29), date(2026, 11, 6)))
         self.assertEqual((job.workers_needed, job.working_hours, job.work_schedule), (1, "Puno radno vrijeme", "2 smjene"))
         self.assertEqual((job.accommodation, job.transport_allowance), ("Nema smještaja", "U cijelosti"))

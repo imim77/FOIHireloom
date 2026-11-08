@@ -160,7 +160,6 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("ctx", tools["search_jobs"].inputSchema["properties"])
         self.assertEqual(tools["search_jobs"].inputSchema["properties"]["limit"]["maximum"], 20)
         self.assertEqual(tools["job_market_stats"].inputSchema["properties"]["top"]["maximum"], 50)
-        # Apps can still call raw endpoints; model routing prefers their complete workflows.
         for name in ("search_jobs", "compare_jobs", "compare_counties", "unemployment_history", "forecast_labour_market"):
             self.assertEqual(tools[name].meta["ui"]["visibility"], ["app"])
             self.assertNotIn("resourceUri", tools[name].meta["ui"])
@@ -263,7 +262,6 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
                                                "university"]})
         experience = schema["properties"]["max_experience_months"]
         self.assertEqual((experience["anyOf"][0]["minimum"], experience["anyOf"][0]["maximum"]), (0, 600))
-        # The conditions describe the user, not a filter on the jobs.
         self.assertTrue(experience["description"].startswith("The user's experience in months"))
         self.assertIn("the user needs accommodation", schema["properties"]["accommodation"]["description"])
         self.assertIn("never that the employer will accept the user", " ".join(tool.description.split()))
@@ -275,7 +273,6 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
         async with Client(self.server) as client:
             compared = (await client.call_tool("compare_jobs", {"job_ids": [9, 7, 8]} | conditions)).structured_content
             plain = (await client.call_tool("compare_jobs", {"job_ids": [8, 7]})).structured_content
-            # Leaving out conditions and passing them as null are the same: no conditions.
             nulls = dict.fromkeys(conditions)
             await client.call_tool("compare_jobs", {"job_ids": [7, 8]} | nulls)
         self.assertEqual(self.service.comparisons, [([9, 7, 8], JobComparisonConditionsDTO(**conditions)),
@@ -289,14 +286,12 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_compare_jobs_rejects_wrong_counts_before_the_service_and_keeps_its_errors(self) -> None:
         async with Client(self.server) as client:
-            # Fewer than two, more than three and impossible ids fail on the input schema.
             for arguments in ({"job_ids": [7]}, {"job_ids": [7, 8, 9, 10]}, {"job_ids": []}, {"job_ids": [7, 0]},
                               {}, {"job_ids": [7, 8], "contract": "temporary"},
                               {"job_ids": [7, 8], "max_experience_months": -1}):
                 with self.subTest(arguments=arguments), self.assertRaises(ToolError):
                     await client.call_tool("compare_jobs", arguments)
             self.assertEqual(self.service.comparisons, [])
-            # Repeated and missing ids are the service's to reject.
             for error, message in (
                 (InvalidJobSearchError("Choose different jobs to compare; given more than once: 7."),
                  "Choose different jobs to compare; given more than once: 7."),
@@ -329,7 +324,6 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(expected=expected):
                 self.assertIn(expected, description)
         self.assertIn("show_job_comparison", " ".join(tools["compare_jobs"].description.split()))
-        # Leaving out conditions and passing them as null are the same, as for compare_jobs.
         self.assertEqual(self.service.comparisons, [([8, 7], JobComparisonConditionsDTO(max_experience_months=0)),
                                                     ([7, 8], None)])
         self.assertEqual((shown["title"], shown["description"], shown["unknown_note"]),
@@ -341,7 +335,6 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((experience["name"], experience["condition_label"], deadline["name"]),
                          ("Iskustvo", "bez iskustva", "Rok prijave"))
         cell = experience["cells"][0]
-        # The English fields stay for the LLM next to the Croatian ones.
         self.assertEqual((cell["reason"], cell["unknown_reason"], cell["text"], cell["verdict_label"]),
                          ("the job's HZZ page has not been read yet", "page_not_read",
                           "stranica oglasa još nije pročitana", "nije poznato"))
@@ -431,7 +424,6 @@ class McpServerTests(unittest.IsolatedAsyncioTestCase):
         async with Client(self.server) as client:
             await client.call_tool("search_jobs", conditions)
             cards = (await client.call_tool("show_jobs", conditions | {"cursor": "abc"})).structured_content
-            # The cards view asks for more with the filters it was given and next_cursor.
             await client.call_tool("show_jobs", cards["filters"] | {"cursor": cards["next_cursor"]})
             await client.call_tool("job_market_stats", conditions)
             await client.call_tool("show_jobs_by_county", conditions)
@@ -509,9 +501,6 @@ class McpHttpTransportTests(unittest.IsolatedAsyncioTestCase):
             for _ in range(100):
                 with suppress(httpx.TransportError):
                     if (await http.get(f"{base}/health")).status_code == 200:
-                        # Cancelling the server makes uvicorn log the cancelled lifespan as an
-                        # error when the loop closes. uvicorn configures its loggers on start,
-                        # so they can only be silenced now.
                         logging.getLogger("uvicorn.error").disabled = True
                         return base
                 await asyncio.sleep(0.05)

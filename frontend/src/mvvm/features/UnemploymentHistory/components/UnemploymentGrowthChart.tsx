@@ -4,11 +4,6 @@ import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, Char
   from '@/components/ui/chart'
 import { EmptyState } from '@/components/Card'
 import { cn } from 'cn'
-// Local adaptation of the supplied Keitoto RevenueGrowthChart in the jobs-by-county look, drawn with shadcn chart
-// over Recharts: every county is a grey curve and the focused one is lit red over them, with its rate for the
-// inspected month read out above the chart. The legend picks the county (hover previews, click or the arrow keys
-// select); the plot picks the month (hover previews, click, a touch drag or the arrow keys select).
-// Rates retain the original DZS gaps and provenance; provisional runs are dashed.
 import { type KeyboardEvent, type PointerEvent, useId, useLayoutEffect, useRef } from 'react'
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine, XAxis, YAxis } from 'recharts'
 import { clearEntrance, EASE, enter, MOTION, roll, s, useChartEntrance, useCountUp, useReducedMotion }
@@ -20,8 +15,8 @@ import { monthTicks, rateAxis } from '../utils/chart-geometry'
 import type { useHistoryChart } from '../hooks/use-history-chart'
 
 const HEIGHT = 360
-const Y_AXIS = 52 // the rate labels' column, inside the chart
-const EDGE = 8 // room on both sides for the end nodes
+const Y_AXIS = 52
+const EDGE = 8
 
 const config = {
   focus: { label: 'Odabrana županija', color: 'var(--accent-500)' },
@@ -36,7 +31,6 @@ const config = {
   </svg> },
 } satisfies ChartConfig
 
-/** The focused county's rate, counting from the number on screen when the county or month changes. */
 function RateValue({ rate }: { rate: number }) {
   const ref = useRef<HTMLParagraphElement>(null)
   useCountUp(ref, rate, formatRate)
@@ -44,11 +38,6 @@ function RateValue({ rate }: { rate: number }) {
     data-slot="growth-readout-value" data-value={rate}>{formatRate(rate)}</p>
 }
 
-/**
- * growthNode returns the dot renderer for one county's months. On a dense plot only the inspected month, the ends
- * and isolated months (which have no line) get a dot, so the curve stays readable. Recharts draws dots in a layer
- * of their own, outside the line's group, so each dot carries its layer's class (grey or lit, shown or faded).
- */
 function growthNode({ id, key, rows, active, dense, lit, layer }: { id: string; key: string; rows: GrowthRow[];
   active: number; dense: boolean; lit: boolean; layer: string }) {
   return function GrowthNode({ cx, cy, index }: { cx?: number; cy?: number; index?: number }) {
@@ -90,8 +79,6 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
   const motion = { isAnimationActive: !reduced, animationBegin: MOTION.marks.at, animationDuration: MOTION.marks.duration }
   const at = (index: unknown) => index == null || Number.isNaN(Number(index)) ? null : Number(index)
 
-  // Entrance: the readout comes in and the rate counts up, and the legend comes in; Recharts draws the
-  // curves in over the same span.
   useChartEntrance(root, (timeline) => {
     const stats = all<HTMLElement>('[data-slot="growth-readout-value"]')
     const readout = all<HTMLElement>('[data-slot="readout"] > *')
@@ -110,7 +97,6 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
     }
   })
 
-  // A new county rolls its name in from below; its rate counts over in RateValue and the curves cross-fade in CSS.
   const lastSeries = useRef(activeSeries)
   useLayoutEffect(() => {
     const before = lastSeries.current
@@ -119,8 +105,6 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
     roll(nameRef.current)
   }, [activeSeries, reduced])
 
-  // A touch or pen picks the month under it and drags along; Recharts reports no month on touchstart. The plot
-  // starts after the rate labels and keeps EDGE pixels at both ends.
   function touchedMonth(event: PointerEvent<HTMLDivElement>) {
     const box = event.currentTarget.getBoundingClientRect()
     const x = (event.clientX - box.left - Y_AXIS - EDGE) / Math.max(1, box.width - Y_AXIS - 2 * EDGE)
@@ -135,8 +119,6 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
     event.preventDefault()
     all<HTMLButtonElement>('[data-slot="legend-county"]')[index]?.focus()
   }
-  // Grey for every county, lit for each county's copy laid over all grey curves, so the focus is never painted under
-  // another county; only the focused copy shows and a new focus cross-fades.
   const layer = (lit: boolean, i: number) => lit
     ? cn('growth-focus [transition:opacity_300ms] motion-reduce:[transition:none]',
       i === activeSeries ? 'opacity-100' : 'opacity-0')
@@ -146,8 +128,8 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
     <div className="growth-chart flex flex-col gap-6 min-w-0" ref={root} data-slot="unemployment-growth-chart">
       {known.length === 0 ? <div ref={plot}><EmptyState>Za odabrano razdoblje nema poznatih stopa nezaposlenosti.</EmptyState></div> : <>
         {focused && point && <div className="readout flex flex-col items-start gap-2.5" data-slot="readout">
-          {/* Clips the name as it rolls in from below on a new county. Mono like every label, but only the month
-              is uppercase: county names keep their own case. */}
+          {
+                                                                }
           <div className="overflow-clip">
             <p className="growth-readout-name m-0 flex min-h-5 flex-wrap items-center gap-1.5 mono-label text-fg-soft"
               ref={nameRef}>
@@ -178,7 +160,7 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
                   lit ? 'bg-accent-500' : 'bg-surface-disable')} aria-hidden="true" />
                 {s.shortLabel}
                 <span>{rate}</span>
-                {/* keyboard focus rings the chip */}
+                {                                   }
                 <span className="focus-ring pointer-events-none absolute -inset-1 rounded-full opacity-0 shadow-focus
                   transition-opacity duration-150 group-focus-visible/button:opacity-100" aria-hidden="true" />
               </Button>
@@ -187,8 +169,8 @@ export function UnemploymentGrowthChart(model: ReturnType<typeof useHistoryChart
         </div>
         <div className="flex flex-col gap-2">
           <p className="growth-plot-heading m-0 mono-label uppercase text-fg-soft">Stopa registrirane nezaposlenosti (%)</p>
-          {/* The plot is the month slider: the arrow keys, Home and End move the month; the chart itself is
-              decorative, since every value is in the legend and the slider's value text. */}
+          {
+                                                                                            }
           <div ref={plot} role="slider" tabIndex={0} className="growth-scrubber relative min-w-0 cursor-crosshair
             touch-pan-y rounded-[8px] [outline:none] [&:focus-visible]:shadow-focus" aria-label="Odabrani mjesec"
             aria-describedby={`${id}-hint`} aria-orientation="horizontal" aria-valuemin={0} aria-valuemax={last}

@@ -40,12 +40,10 @@ from .job_filters import (
 )
 from .tool_provider import DATA_ONLY, ServiceToolGroup, tool_arguments
 
-# Key of the indicator service in the server's lifespan context.
 COUNTY_INDICATOR_SERVICE = "county_indicator_service"
 
 CountyLabel = Annotated[str, Field(min_length=1, max_length=100)]
 
-# The arguments compare_counties and show_county_comparison share, besides the shared job filters.
 ComparedCounties = Annotated[list[CountyLabel], Field(
     min_length=MIN_COMPARED_COUNTIES, max_length=MAX_COMPARED_COUNTIES,
     description=f"{MIN_COMPARED_COUNTIES} to {MAX_COMPARED_COUNTIES} different counties to compare, as codes or names "
@@ -60,7 +58,6 @@ Period = Annotated[str | None, Field(
                 "use, per indicator, the latest month known for every compared county.",
 )]
 
-# The arguments unemployment_history and show_unemployment_history share.
 HistoryCounties = Annotated[list[CountyLabel], Field(
     min_length=1, max_length=MAX_HISTORY_COUNTIES,
     description=f"1 to {MAX_HISTORY_COUNTIES} different counties, as codes or names from list_regions, e.g. "

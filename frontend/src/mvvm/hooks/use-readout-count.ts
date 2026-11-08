@@ -1,7 +1,6 @@
 import { type RefObject, useCallback, useLayoutEffect, useRef } from 'react'
 import { countTo, EASE, MOTION, s, useReducedMotion } from './chart-motion'
 
-/** useReadoutCount keeps entrance and selection changes counting from the displayed value. */
 export function useReadoutCount(ref: RefObject<HTMLElement | null>, value: number, format: (value: number) => string) {
   const latest = useRef({ value, format })
   const count = useRef<{ value: number; entering: boolean; tween: gsap.core.Tween | null }>(
@@ -29,7 +28,6 @@ export function useReadoutCount(ref: RefObject<HTMLElement | null>, value: numbe
 
   useLayoutEffect(() => {
     const state = count.current
-    // During entrance, the same timeline follows the latest selection.
     if (state.entering || state.value === value) return
     state.tween?.kill()
     state.tween = null

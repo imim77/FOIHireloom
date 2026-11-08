@@ -1,12 +1,5 @@
 import type { CountyComparisonData } from '../types'
 
-/**
- * Shown outside a host, e.g. on the dev server: show_county_comparison's result for Varaždinska, Međimurska and
- * Ličko-senjska with the query "kuhar" and full time, made by the server's own code from the local data of
- * 2. 11. 2026. and edited to show the unavailable cases: DZS has no count of Međimurska's unemployed for the month
- * (dzs_value_missing), and no active ad of Ličko-senjska states the number of workers (no_known_workers).
- * September 2026's active population and rate are provisional; the HZZ data is stale, so the coverage note shows.
- */
 export function sample(): CountyComparisonData {
   return {
     "counties": [

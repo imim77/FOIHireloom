@@ -6,8 +6,6 @@ import { join } from 'node:path'
 import { chromium } from 'playwright'
 import { sample } from '../utils/sample.ts'
 
-// Exercise the production single-file page over the same postMessage protocol as an MCP Apps host.
-// No dev-server globals or React state injection: every update arrives as a tool-result notification.
 const host = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0">
 <script>
   window.ready = false;
@@ -68,7 +66,6 @@ async function deliver(page, frame, data) {
   await page.evaluate((data) => window.sendResult(data), data)
   await frame.locator('[data-slot="unemployment-growth-chart"]').first().waitFor()
 }
-// Recharts draws the curves in over the entrance (250 ms + 900 ms) and the readout counts up for 1.35 s.
 async function settled(frame) {
   await frame.locator('[data-slot="growth-line"]').first().waitFor({ state: 'attached' })
   await frame.page().waitForTimeout(1600)
@@ -81,7 +78,6 @@ async function layout(frame) {
       index > 0 && el.getBoundingClientRect().left < labels[index - 1].getBoundingClientRect().right + 2),
   }))
 }
-// The focus is drawn by colour alone, so read it as the browser paints it: one lit county in accent-500 over grey ones.
 async function looks(frame) {
   return frame.evaluate(() => ({
     lit: [...new Set([...document.querySelectorAll('[data-slot="growth-focus-line"][data-lit="true"]')].map((p) => p.dataset.series))],
@@ -96,12 +92,10 @@ async function looks(frame) {
   }))
 }
 const ACCENT = 'rgb(251, 41, 14)'
-// Once the cross-fade ends, only the lit copy is painted.
 async function painted(frame) {
   await frame.waitForFunction(() => [...document.querySelectorAll('[data-slot="growth-focus-line"]')].every((p) =>
     getComputedStyle(p.closest('.growth-focus')).opacity === (p.dataset.lit === 'true' ? '1' : '0')))
 }
-// The x of month index on the plot, in page pixels: the rate labels take 52 px and the plot keeps 8 px at each end.
 const monthX = (box, index, months = 24) => box.x + 60 + (box.width - 68) * index / (months - 1)
 
 async function screenshot(page, name) {
@@ -124,7 +118,6 @@ test('production iframe preserves every monthly rate, gaps, provisional segments
     }
     const provisional = frame.locator('[data-slot="growth-line"][data-provisional="true"]')
     assert.ok(await provisional.count() > 0)
-    // Recharts repeats the dash pattern along the drawn length.
     assert.ok((await provisional.evaluateAll((paths) => paths.map((p) => p.getAttribute('stroke-dasharray'))))
       .every((dash) => /^5(px)?,? 4(px)?/.test(dash)))
     assert.equal(await frame.locator('.tile').count(), 3)
@@ -136,7 +129,6 @@ test('production iframe preserves every monthly rate, gaps, provisional segments
 
     const slider = frame.getByRole('slider')
     const box = await slider.boundingBox()
-    // September 2025 has a real gap for Ličko-senjska in the reference fixture.
     await page.mouse.move(monthX(box, 11), box.y + 120)
     await frame.waitForFunction(() => document.querySelector('[role="slider"]').dataset.period === '2025-09-01')
     assert.match(await frame.locator('[data-slot="legend-county"]').nth(2).getAttribute('aria-label'),
@@ -152,7 +144,6 @@ test('production iframe preserves every monthly rate, gaps, provisional segments
     assert.equal(await slider.getAttribute('data-period'), '2024-11-01')
     await page.keyboard.press('End')
     assert.equal(await slider.getAttribute('data-period'), '2026-09-01')
-    // Changing the inspected month must not alter the latest-year comparison cards.
     assert.match(await frame.locator('.tiles').textContent(), /rujan 2026/)
   } finally { await page.close() }
 })
@@ -165,7 +156,6 @@ test('the legend lights one county: hover previews, click and keys select, reado
     await deliver(page, frame, data)
     await settled(frame)
     await painted(frame)
-    // The first county is lit by default; the others are grey at reduced opacity.
     assert.deepEqual(await looks(frame), {
       lit: [first], litColor: [ACCENT], greyColor: ['rgb(205, 205, 205)'], greyOpacity: ['0.5'],
       pressed: ['true', 'false', 'false'], tabbable: [0, -1, -1], tiles: ['true', 'false', 'false'],
@@ -176,7 +166,6 @@ test('the legend lights one county: hover previews, click and keys select, reado
     const chips = frame.locator('[data-slot="legend-county"]')
     assert.equal(await chips.first().evaluate((chip) => getComputedStyle(chip).backgroundColor), 'rgb(25, 25, 25)')
 
-    // Hover previews without selecting; leaving the legend falls back to the selection.
     await chips.nth(1).hover()
     await frame.waitForFunction(() => document.querySelector('.growth-readout-name').textContent.startsWith('Istarska'))
     await frame.waitForFunction(() => document.querySelector('.growth-value').textContent === '1,1\u00a0%')
@@ -186,7 +175,6 @@ test('the legend lights one county: hover previews, click and keys select, reado
     await frame.waitForFunction(() => document.querySelector('.growth-readout-name').textContent.startsWith('Varaždinska'))
     assert.deepEqual((await looks(frame)).lit, [first])
 
-    // Click selects; the roving tab stop moves with it.
     await chips.nth(2).click()
     await page.mouse.move(0, 0)
     state = await looks(frame)
@@ -194,7 +182,6 @@ test('the legend lights one county: hover previews, click and keys select, reado
     await frame.waitForFunction(() => document.querySelector('.growth-value').textContent === '3,4\u00a0%')
     await painted(frame)
 
-    // Arrow keys, Home and End move selection and focus; the focus ring shows on the focused chip.
     await page.keyboard.press('ArrowLeft')
     state = await looks(frame)
     assert.deepEqual([state.lit, state.pressed, state.tabbable], [[second], ['false', 'true', 'false'], [-1, 0, -1]])
@@ -209,7 +196,6 @@ test('the legend lights one county: hover previews, click and keys select, reado
     assert.deepEqual([state.lit, state.tiles], [[third], ['false', 'false', 'true']])
     assert.match(await frame.evaluate(() => document.activeElement.getAttribute('aria-label')), /^Ličko-senjska županija, rujan 2026\.: 3,4/)
 
-    // The month and the county are independent: inspecting another month keeps the lit county.
     await frame.getByRole('slider').focus()
     await page.keyboard.press('Home')
     await frame.waitForFunction(() => document.querySelector('.growth-readout-name').textContent === 'Ličko-senjska županija · listopad 2024.')
@@ -228,7 +214,6 @@ test('two-county dark mobile view supports real touch dragging and reduced motio
     await deliver(page, frame, data)
     await frame.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
     assert.equal(await frame.locator('[data-slot="legend-county"]').count(), 2)
-    // Dark tokens come from the root theme: lit accent-500, grey surface-disable, an inverted pill, no transitions.
     await painted(frame)
     const state = await looks(frame)
     assert.deepEqual([state.lit, state.litColor, state.greyColor], [[data.counties[0].code], [ACCENT], ['rgb(110, 110, 110)']])
@@ -271,7 +256,6 @@ test('new MCP results reset selection and render six series, one lit, at 560 px 
       [[six.counties[0].code], [ACCENT], ['rgb(205, 205, 205)'], 0])
     assert.equal(await frame.getByRole('slider').getAttribute('data-period'), data.last_period)
     assert.deepEqual(await layout(frame), { overflow: false, finite: true, labelsOverlap: false })
-    // Resize in the middle of the next entrance animation, then inspect the final geometry.
     const reordered = { ...data, counties: [...data.counties].reverse() }
     await deliver(page, frame, reordered)
     await page.setViewportSize({ width: 320, height: 1200 })
@@ -310,8 +294,6 @@ test('an initially hidden MCP iframe completes its entrance and renders correctl
   const { page, frame } = await open(900, {}, '?hidden')
   try {
     await page.evaluate((data) => window.sendResult(data), sample())
-    // Hidden iframe animation frames pause; shared finish() settles the readout by its deadline, and Recharts
-    // draws the curves in once the frame shows.
     await page.waitForTimeout(2900)
     await page.evaluate(() => { document.querySelector('iframe').style.display = 'block' })
     await frame.locator('.growth-value').first().waitFor()

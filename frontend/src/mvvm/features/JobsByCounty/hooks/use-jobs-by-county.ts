@@ -1,14 +1,12 @@
 import { useMemo, useState } from 'react'
 import type { JobsByCountyData } from '../types'
 
-/** useJobsByCounty owns the visible ranking and the inspected county. */
 export function useJobsByCounty(data: JobsByCountyData | null, expanded: boolean) {
   const all = data?.counties ?? []
   const counties = useMemo(() => {
     const all = data?.counties ?? []
     return expanded ? all : all.slice(0, data?.top ?? 0)
   }, [data, expanded])
-  // The columns and the numbers over them show this value; the server has ranked the counties by it.
   const metric = data?.metric === 'workers_needed' ? 'workers_needed' : 'jobs'
   const values = counties.map((county) => Math.max(0, county[metric]))
   const n = counties.length

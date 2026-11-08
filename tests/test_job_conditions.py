@@ -6,7 +6,6 @@ from FOIHireloom.dto.job_conditions import JobConditionsDTO, RawJobConditionsDTO
 from FOIHireloom.services.concrete.job_conditions import JobConditionsNormalizer
 from FOIHireloom.services.concrete import job_conditions
 
-# Every distinct experience and working hours value on fetched HZZ pages.
 EXPERIENCE_MONTHS = {
     "1 mjesec": 1, "2 mjeseca": 2, "3 mjeseca": 3, "6 mjeseci": 6,
     "1 godinu": 12, "1 g.": 12, "2 godine": 24, "2 g.": 24, "3 godine": 36, "3 g.": 36, "4 godine": 48,
@@ -20,7 +19,6 @@ WEEKLY_HOURS = {
     **{f"{hours} sata tjedno": hours for hours in (2, 3, 4, 12, 13, 14, 22, 23, 24, 32, 33, 34)},
     **{f"{hours} sati tjedno": hours for hours in (*range(5, 11), *range(15, 21), *range(25, 31), 35, 36, 37, 39, 40)},
 }
-# Every part of the list values on fetched HZZ pages.
 EMPLOYMENT_PARTS = {
     "Na neodređeno": ("permanent", ()),
     "Na određeno": ("fixed_term", ()),
@@ -103,7 +101,6 @@ class JobConditionsNormalizerTests(unittest.TestCase):
         for raw, tag in SCHEDULE_TAGS.items():
             with self.subTest(raw):
                 self.assertEqual(self.normalize(work_schedule=raw).schedule_tags, (tag,))
-        # HZZ once listed weekends before the shifts; a repeated part counts once.
         raw = "Rad vikendom i praznikom; 2 smjene"
         self.assertEqual(self.normalize(work_schedule=raw).schedule_tags, ("two_shifts", "weekends_holidays"))
         raw = "Noćni rad; Smjena - poslijepodne; Smjena - prijepodne; Smjena - prijepodne"
@@ -142,7 +139,6 @@ class JobConditionsNormalizerTests(unittest.TestCase):
         for raw in ("0,5 godina", "godinu", "1 godinu i", "6 mjeseci i 1 godinu"):
             with self.subTest(raw):
                 self.assertEqual(self.normalize(experience=raw), JobConditionsDTO(unrecognised=("experience",)))
-        # One unknown part leaves the whole field unknown instead of dropping the part.
         conditions = self.normalize(employment_type="Na određeno; sezonski; vikendom", accommodation="Nema smještaja")
         self.assertEqual(
             (conditions.contract, conditions.employment_tags, conditions.accommodation, conditions.unrecognised),

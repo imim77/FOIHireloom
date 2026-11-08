@@ -3,8 +3,6 @@ import { cn } from "cn"
 import * as RechartsPrimitive from "recharts"
 import type { TooltipValueType } from "recharts"
 
-// Format: { THEME_NAME: CSS_SELECTOR }
-// The views switch theme with data-theme on the root, not a .dark class.
 const THEMES = { light: "", dark: '[data-theme="dark"]' } as const
 
 const INITIAL_DIMENSION = { width: 320, height: 200 } as const
@@ -189,7 +187,6 @@ function ChartTooltipContent({
   return (
     <div
       className={cn(
-        // Flat, as DESIGN.md asks: a hairline edge on the card colour, no shadow.
         "grid min-w-32 items-start gap-1.5 rounded-[10px] border border-border bg-card px-2.5 py-1.5 mono-label text-fg-soft",
         className
       )}

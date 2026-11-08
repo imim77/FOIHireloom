@@ -1,9 +1,5 @@
 import { cn } from 'cn'
 import { Badge } from '@/components/ui/badge'
-// show_unemployment_history: the counties' monthly registered unemployment rate (DZS) as lines, a legend that picks
-// the county to light up and explains the provisional band and the gaps, and per county the latest rate against the
-// same month a year earlier; the focused county's tile is marked like its curve. The tiles fade in one after another
-// once the lines have drawn in.
 
 import { useRef } from 'react'
 import { Card, Notes, Warning } from '../../../../components/Card'
@@ -15,7 +11,6 @@ import type { CountyHistory, UnemploymentHistoryData } from '../../types'
 import type { useHistoryChart } from '../../hooks/use-history-chart'
 
 const EYEBROW = 'Nezaposlenost'
-// The tiles come in once the curves are half drawn.
 const TILES_AT = MOTION.marks.at + MOTION.marks.duration / 2
 
 export function UnemploymentHistory({ data, chart, onOpenLink }: {
@@ -37,7 +32,6 @@ export function UnemploymentHistory({ data, chart, onOpenLink }: {
   )
 }
 
-/** Mounted once the data is there, so its entrance plays with the data. */
 function History({ data, chart, onOpenLink }: {
   data: UnemploymentHistoryData
   chart: ReturnType<typeof useHistoryChart>
@@ -75,7 +69,7 @@ function Tile({ county, lit }: { county: CountyHistory; lit: boolean }) {
           lit ? 'bg-accent-500' : 'bg-surface-disable')} aria-hidden="true" />{county.name}</p>
       {latest && (
         <div className="tile-latest flex flex-col gap-1.5 [&_.soft]:flex [&_.soft]:items-center [&_.soft]:gap-1.5">
-          {/* The badge keeps its own case, as in the readout; the month never breaks. */}
+          {                                                                              }
           <p className="soft m-0 flex-wrap mono-label text-fg-soft">
             <span className="whitespace-nowrap uppercase">{formatMonth(latest.period)}</span>
             {latest.is_provisional && <Badge variant="provisional" className="provisional">privremeno</Badge>}
@@ -87,7 +81,7 @@ function Tile({ county, lit }: { county: CountyHistory; lit: boolean }) {
       )}
       {before && (
         <p className="tile-before mono-label text-fg-soft">
-          {/* The rate keeps its unit's own case; the month and "nema podatka" are label words. */}
+          {                                                                                       }
           <span className="uppercase">{formatMonth(before.period)}:</span>{' '}
           {before.rate === null ? <span className="uppercase">nema podatka</span> : formatRate(before.rate)}
         </p>

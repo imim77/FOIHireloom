@@ -17,7 +17,6 @@ from FOIHireloom.dto.job_market import (
 from .labels import active_filters, coverage_note, filters_description, short_county_name, unknown_note
 
 DEFAULT_TOP = 7
-# There are 21 counties.
 MAX_TOP = 21
 TITLES: dict[CountyMetric, str] = {
     "jobs": "Broj oglasa po županijama",
@@ -32,7 +31,6 @@ def jobs_by_county(
     return JobsByCountyDTO(
         metric=metric,
         title=TITLES[metric],
-        # The chart shows no chips, so its description names the filters.
         description=filters_description(filters, stats.today),
         today=stats.today,
         total_jobs=stats.jobs,

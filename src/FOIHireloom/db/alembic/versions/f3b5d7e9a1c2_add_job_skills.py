@@ -14,7 +14,6 @@ down_revision = "e2a4c6b8d0f1"
 branch_labels = None
 depends_on = None
 
-# Frozen expression: later catalog edits must not change this migration.
 SKILLS_DOCUMENT = (
     'array_remove(ARRAY['
     "CASE WHEN regexp_replace(lower(translate(coalesce(page_title, title, '') || ' ' || coalesce(page_description_text, description_text, ''), 'ČĆŽŠĐčćžšđ', 'CCZSDcczsd')), '(https?://|www[.])[^\\s<>]+', ' ', 'g') ~ '(^|[^a-z0-9])(c#|c sharp)([^a-z0-9]|$)' THEN 'csharp' END, "

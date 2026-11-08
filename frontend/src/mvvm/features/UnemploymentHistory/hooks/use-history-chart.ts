@@ -5,7 +5,6 @@ import type { CountyHistory } from '../types'
 
 const clamp = (index: number, count: number) => Math.min(Math.max(index, 0), count - 1)
 
-/** useHistoryChart owns adapted rates, the inspected month across all series and the focused county. */
 export function useHistoryChart(counties: CountyHistory[]) {
   const { series, points } = useMemo(() => toGrowthData(counties), [counties])
   const [selected, setSelected] = useState(points.length - 1)
@@ -26,7 +25,6 @@ export function useHistoryChart(counties: CountyHistory[]) {
     return `${s.label}: ${value.rate === null ? 'nema podatka' : formatRate(value.rate)}${value.is_provisional ? ', privremeno' : ''}`
   }).join('; ')}` : ''
 
-  // The county lit red and read out above the chart: the first one until the legend picks another.
   const n = series.length
   const [selectedIndex, setSelectedSeries] = useState(0)
   const [hoveredSeries, setHoveredSeries] = useState<number | null>(null)

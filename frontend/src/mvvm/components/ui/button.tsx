@@ -8,7 +8,6 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/80",
-        // The outline pill for secondary actions: transparent, edged in fg-loud at 40 %.
         outline:
           "border-fg-loud/40 bg-transparent hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground ",
         secondary:

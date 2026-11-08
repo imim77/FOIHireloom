@@ -13,20 +13,14 @@ from .base import ModelConfigBaseModel
 from .county_indicators import SourceDTO, SourceLinkDTO
 from .dzs import DzsSex
 
-# unemployment_rate, unemployed and employed are DZS monthly county values;
-# job_ads counts new HZZ advertisements per publication week.
 type ForecastTarget = Literal["unemployment_rate", "unemployed", "employed", "job_ads"]
 type ForecastFrequency = Literal["month", "week"]
 type ForecastUnit = Literal["percent", "persons", "ads"]
 
-# no_dzs_data: no DZS import has succeeded. no_common_period: no month has a
-# known value for every requested county. no_hzz_data: no HZZ job has been
-# stored yet. not_enough_history: the county has fewer known past values
-# than the model needs for a meaningful forecast.
 type ForecastUnavailableReason = Literal["no_dzs_data", "no_common_period", "no_hzz_data", "not_enough_history"]
 
 QUANTILE_LEVELS = (0.1, 0.5, 0.9)
-INTERVAL = 0.8  # Share of outcomes the model expects between low and high.
+INTERVAL = 0.8
 MAX_FORECAST_COUNTIES = 6
 
 

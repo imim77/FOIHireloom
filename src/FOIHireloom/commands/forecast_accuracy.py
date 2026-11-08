@@ -23,7 +23,6 @@ from FOIHireloom.services.interfaces.lifecycle import ServiceOpener
 
 from .command_line import CommandLine, CommandRun
 
-# Fields of the report printed when the full report goes to --out.
 SUMMARY_FIELDS = {"status", "generated_at", "model", "end_period", "evaluated_windows", "skipped_windows", "metrics"}
 
 

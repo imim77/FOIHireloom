@@ -73,7 +73,6 @@ class CountyComparisonAppTests(unittest.TestCase):
         compared = comparison(county(unemployed_per_worker=ratio(None, "no_known_workers")),
                               county("grad-zagreb", "Grad Zagreb"))
         view = county_comparison(compared)
-        # Without its Croatian fields the view is the comparison, nested values included.
         self.assertEqual(CountyComparisonDTO.model_validate(view.model_dump()), compared)
         self.assertEqual(view.counties[0].unemployed_per_worker.unavailable_label,
                          UNAVAILABLE_REASONS["no_known_workers"])
@@ -88,7 +87,6 @@ class CountyComparisonAppTests(unittest.TestCase):
         self.assertEqual(len(view.view_notes), 2)
         filtered = county_comparison(comparison(filters=JobCountFiltersDTO(query=" kuhar ", include_expired=True)))
         self.assertEqual(filtered.description, "Upit „kuhar” · svi oglasi na dan 02. 11. 2026.")
-        # A provisional DZS value adds the note that 2026 is provisional.
         provisional = county_comparison(comparison(county(active_population=value("active_population", "1", True)),
                                                    county("medimurska", "Međimurska županija")))
         self.assertEqual(provisional.view_notes[-1], "DZS podaci za mjesece 2026. su privremeni i mogu se revidirati.")
@@ -118,7 +116,6 @@ class CountyComparisonAppTests(unittest.TestCase):
             ("DZS podaci nisu uvezeni", "DZS podaci nisu uvezeni", "HZZ oglasi za županiju nisu učitani"),
             (None, "županija nema aktivnih oglasa", None),
         ])
-        # Known values have no label.
         self.assertIsNone(view.counties[2].unemployment_rate.unavailable_label)
 
     def test_every_reason_has_a_croatian_label(self) -> None:

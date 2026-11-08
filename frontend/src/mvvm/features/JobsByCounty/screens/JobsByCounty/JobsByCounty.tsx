@@ -5,7 +5,6 @@ import type { useJobsByCounty } from '../../hooks/use-jobs-by-county'
 
 const EYEBROW = 'Broj oglasa'
 
-/** show_jobs_by_county: the top counties as 3D columns, every county once expanded. */
 export function JobsByCounty({ data, columns, shown, label, canExpand, expanded, toggle }:
   ReturnType<typeof useJobsByCounty> & { expanded: boolean; toggle: () => void }) {
   if (!data) return <Card eyebrow={EYEBROW} title="Broj oglasa po županijama" description="Učitavanje…" loading />

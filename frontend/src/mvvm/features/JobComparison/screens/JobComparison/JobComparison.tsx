@@ -1,8 +1,3 @@
-// show_job_comparison: 2 or 3 jobs side by side in a table, a column per job and a row per aspect. Each cell shows
-// HZZ's own words (or why the value is unknown) and, for a condition the user stated, a verdict chip; the user's
-// condition is named once, in the row's heading. Rows whose values differ are marked, the others are quieter. In a
-// narrow frame the table scrolls sideways under its sticky aspect column. Animated like the job cards: the columns'
-// headings rise in one after another, then the rows.
 
 import { Card, ExpandButton, Notes } from '../../../../components/Card'
 import { ComparisonTable } from '../../components/ComparisonTable'

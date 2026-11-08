@@ -51,9 +51,9 @@ NOTES = (
 class TrainingWindow:
     """TrainingWindow holds one county's training prefix and test months for one forecast origin."""
 
-    values: dict[date, float | None]  # The county's whole series by month.
+    values: dict[date, float | None]
     cutoff: date
-    history: list[float | None]  # From the first known month within the context up to cutoff.
+    history: list[float | None]
     test: list[date]
 
     @property
@@ -63,8 +63,6 @@ class TrainingWindow:
 
 type WindowCheck = Callable[[TrainingWindow, int], bool]
 
-# Why a window is skipped, checked in order; a new reason is one more entry.
-# Each check receives the window and the loader's minimum history.
 WINDOW_CHECKS: tuple[tuple[AccuracyUnavailableReason, WindowCheck], ...] = (
     ("not_enough_history", lambda window, min_history: window.known < min_history),
     ("missing_training_endpoint", lambda window, _: window.values.get(window.cutoff) is None),
@@ -84,7 +82,7 @@ class BacktestSnapshot:
     series: CountySeries
 
 
-type CountyWindows = dict[int, list[ForecastAccuracyWindowDTO]]  # By county ID, oldest origin first.
+type CountyWindows = dict[int, list[ForecastAccuracyWindowDTO]]
 
 
 class ForecastAccuracyService(ForecastAccuracyServiceInterface):
@@ -117,8 +115,6 @@ class ForecastAccuracyService(ForecastAccuracyServiceInterface):
             counties = await self._counties.resolve(work, request.counties)
             generated_at = await work.transaction_time()
             provenance = await work.dzs_imports.get_latest_succeeded()
-            # Earlier origins still receive the full context a live forecast
-            # would have, even when more than ten years of data is stored.
             series = await self._loader.load(
                 work, counties, request.sex, end_period=request.end_period,
                 context_months=MAX_CONTEXT_MONTHS + request.horizon + request.windows - 1,

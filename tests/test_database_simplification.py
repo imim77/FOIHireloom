@@ -132,7 +132,6 @@ class DatabaseSimplificationTests(unittest.IsolatedAsyncioTestCase):
             ids = await work.jobs.create_many(jobs, now)
             feed_id = await self.connection.scalar(select(SourceFeed.id).where(SourceFeed.scope == "county").limit(1))
             await work.job_feed_memberships.create_many(feed_id, list(ids.values()), now)
-            # The page's deadline may override either a future or an expired feed deadline.
             for name, _, page_deadline in cases:
                 await self.connection.execute(update(Job).where(Job.id == ids[f"index-regression-{name}"])
                                               .values(page_valid_until=page_deadline))

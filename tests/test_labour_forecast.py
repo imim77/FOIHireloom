@@ -96,7 +96,7 @@ def service(work: FakeWork, forecaster: FakeForecaster) -> LabourMarketForecastS
 class DzsForecastTests(unittest.IsolatedAsyncioTestCase):
     async def test_forecasts_counties_with_enough_history_and_explains_the_rest(self) -> None:
         series = [rate(VARAZDINSKA, month, "5.0", provisional=month.year == 2026) for month in months_back(36)]
-        series[-3] = rate(VARAZDINSKA, months_back(36)[-3], None)  # A gap stays a gap.
+        series[-3] = rate(VARAZDINSKA, months_back(36)[-3], None)
         series += [rate(MEDIMURSKA, month, "3.0") for month in months_back(10)]
         work = FakeWork(latest=LAST_MONTH, series=series)
         forecaster = FakeForecaster()
@@ -105,7 +105,7 @@ class DzsForecastTests(unittest.IsolatedAsyncioTestCase):
             counties=("Varaždinska županija", "medimurska"), target="unemployment_rate", horizon=3, sex="women"))
 
         (histories, horizon), = forecaster.calls
-        self.assertEqual((len(histories), len(histories[0]), horizon), (1, 36, 3))  # Months before 2020 trimmed.
+        self.assertEqual((len(histories), len(histories[0]), horizon), (1, 36, 3))
         self.assertTrue(math.isnan(histories[0][-3]))
         work.dzs_indicator_values.list_series.assert_awaited_once_with(
             (5, 20), "unemployment_rate", "women", date(2016, 9, 1), LAST_MONTH)
@@ -199,7 +199,7 @@ class PersonsForecastTests(unittest.IsolatedAsyncioTestCase):
             result = await service(self.work(values), forecaster).forecast(
                 CountyForecastRequestDTO(counties=("varazdinska",), target=target, horizon=1))
             (histories, _), = forecaster.calls
-            self.assertEqual(histories[0][-2:], [estimate, exact])  # The exact count wins.
+            self.assertEqual(histories[0][-2:], [estimate, exact])
             county = result.counties[0]
             self.assertEqual([(p.value, p.is_estimated) for p in county.history[-2:]],
                              [(estimate, True), (exact, False)])
@@ -221,7 +221,6 @@ class PersonsForecastTests(unittest.IsolatedAsyncioTestCase):
 
 class JobAdsForecastTests(unittest.IsolatedAsyncioTestCase):
     async def test_counts_full_weeks_since_tracking_began(self) -> None:
-        # Tracking began on Wednesday 2026-08-26; today is Wednesday 2026-11-04.
         weekly = [WeeklyJobAdsRowDTO(county_id=5, week=date(2026, 9, 7), jobs=12),
                   WeeklyJobAdsRowDTO(county_id=5, week=date(2026, 10, 26), jobs=30)]
         work = FakeWork(tracking=datetime(2026, 8, 26, 9, tzinfo=UTC), weekly=weekly)
@@ -261,7 +260,7 @@ class FakePipeline:
 
         self.inputs = inputs
         steps = torch.arange(prediction_length, dtype=torch.float32)
-        one = torch.stack([steps, steps + 10, steps + 20], dim=-1)  # (horizon, quantiles)
+        one = torch.stack([steps, steps + 10, steps + 20], dim=-1)
         if self.chronos2:
             return [one.unsqueeze(0) for _ in inputs], None
         return torch.stack([one for _ in inputs]), None

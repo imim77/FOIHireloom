@@ -12,7 +12,6 @@ from FOIHireloom.dto.job_search import ActiveFilterDTO, CoverageDTO, JobSearchFi
 from FOIHireloom.services.concrete.croatian_counties import CroatianCountyCatalog
 
 CONTRACTS = {"permanent": "na neodređeno", "fixed_term": "na određeno", "other": "drugi oblici rada"}
-# The levels as HZZ names them, made short enough for a chip.
 EDUCATION_LEVELS = {
     "primary_lower": "niži razredi osnovne škole",
     "primary": "osnovna škola",
@@ -21,7 +20,6 @@ EDUCATION_LEVELS = {
     "college": "viša škola ili prvostupnik",
     "university": "fakultet ili akademija",
 }
-# In the order JobConditionsDTO keeps the tags.
 EMPLOYMENT_TAGS = {
     "new_position": "novootvoreno radno mjesto",
     "vacancy": "upražnjeno radno mjesto",
@@ -33,7 +31,6 @@ EMPLOYMENT_TAGS = {
     "retirees": "zapošljavanje umirovljenika",
     "disability": "zapošljavanje osoba s invaliditetom",
 }
-# What a job's unknown value is, by condition filter as count_unknown_conditions names them; ties keep this order.
 UNKNOWN_VALUES = {
     "max_experience_months": "iskustvo",
     "contract": "ugovor",
@@ -43,21 +40,16 @@ UNKNOWN_VALUES = {
     "employment_tags": "vrsta zaposlenja",
     "place": "mjesto rada",
 }
-# A county filter is a code or a name, as the tools accept it; the chip names the county.
 COUNTIES = CroatianCountyCatalog()
 COUNTY_NAMES = {county.code: county.name for county in COUNTIES.definitions}
-# Counties named in a coverage note before the rest are only counted.
 NOTE_REGION_LIMIT = 3
 MONTHS = ("siječanj", "veljača", "ožujak", "travanj", "svibanj", "lipanj", "srpanj", "kolovoz", "rujan", "listopad",
           "studeni", "prosinac")
-# The sources by the names CountyIndicatorService gives them.
 SOURCE_NAMES = {
     "HZZ": "HZZ, burza rada (oglasi)",
     "DZS release table T1": "DZS, priopćenje o zaposlenosti (tablica T1)",
     "DZS county workbook": "DZS, pregled po županijama (listovi 9.4.13 i 9.4.14)",
 }
-# Why a DZS value, an indicator or a change is unavailable, by its unavailable_reason; the views and county_comparison
-# word dzs_value_missing and zero_denominator more precisely when they know the month or the indicator.
 UNAVAILABLE_REASONS: dict[UnavailableReason, str] = {
     "no_dzs_data": "DZS podaci nisu uvezeni",
     "no_common_period": "nijedan mjesec nema DZS podatak za sve odabrane županije",
@@ -197,8 +189,6 @@ def unknown_note(unknown_conditions: dict[str, int], unknown_total: int) -> str 
                      key=lambda item: (-item[1], order.index(item[0])))
     values = ", ".join(f"{UNKNOWN_VALUES[name]} ({integer(count)})" for name, count in unknown)
     ads = plural(unknown_total, "oglas", "oglasa", "oglasa")
-    # The verb agrees with the number as the noun does: "2 oglasa odgovaraju", "5 oglasa odgovara". "Im" refers
-    # to the ads, so only a single ad is "mu".
     verb = plural(unknown_total, "odgovara", "odgovaraju", "odgovara")
     them = "mu" if unknown_total == 1 else "im"
     return f"Još {integer(unknown_total)} {ads} možda {verb}, ali {them} nije poznato: {values}."
@@ -210,7 +200,6 @@ def coverage_note(coverage: CoverageDTO) -> str | None:
     County names stay in the nominative, as the data has them, so no sentence inflects them.
     """
     if coverage.data_status == "unavailable" and not coverage.affected_regions:
-        # Only a search over no counties at all is unavailable without an affected county.
         return "Nijedna županija nije registrirana, pa nema podataka o oglasima."
     regions = coverage.affected_regions
     if not regions:

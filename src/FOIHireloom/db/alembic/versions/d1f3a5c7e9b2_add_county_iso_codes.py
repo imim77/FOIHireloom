@@ -15,7 +15,6 @@ down_revision: str | Sequence[str] | None = '0bd648598d5c'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# ISO 3166-2:HR codes of CroatianCountyCatalog at this revision, as (code, name, ISO code).
 COUNTIES = (
     ('zagrebacka', 'Zagrebačka županija', 'HR-01'),
     ('krapinsko-zagorska', 'Krapinsko-zagorska županija', 'HR-02'),
@@ -48,8 +47,6 @@ def upgrade() -> None:
     ).data(COUNTIES)
     counties = sa.table('counties', sa.column('code'), sa.column('name'), sa.column('iso_code'))
     assigned = counties.alias('assigned')
-    # Match by application code first, then by official name for rows with an
-    # older code, without reusing a code already assigned.
     for column in ('code', 'name'):
         op.execute(
             counties.update()
@@ -60,7 +57,6 @@ def upgrade() -> None:
             )
             .values(iso_code=catalog.c.iso_code)
         )
-    # Fail with the unmatched codes instead of a bare NOT NULL violation; works in offline SQL too.
     op.execute(
         "DO $$ BEGIN IF EXISTS (SELECT FROM counties WHERE iso_code IS NULL) THEN "
         "RAISE EXCEPTION 'Counties without an ISO 3166-2:HR code: %', "

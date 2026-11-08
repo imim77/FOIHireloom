@@ -1,8 +1,3 @@
-// One job on a tile of the Performance chart, laid out after the reference job row (without the company logo): labels
-// for how long ago it was published and its category, the title, the employer in capitals over a slash and its
-// county, then the details on a sunken tile, each with its icon, like Dalco's spec panels, and the pill to the ad. Picking the job for a
-// comparison is the card's only red. Animated with GSAP on the DESIGN.md timings: the tile rises in after the
-// ones before it, its labels come in, then the details one after another.
 
 import { cn } from 'cn'
 import { useId, useRef } from 'react'
@@ -18,26 +13,20 @@ import { FEED_CATEGORY, sentenceCase } from '../../../utils/text'
 import { age, type DetailKind, details } from '../utils/job-format'
 import type { JobCard } from '../types'
 
-// Within a tile's entrance: when its labels and its details start after the tile itself.
 const LABELS_AT = 150
 const DETAILS_AT = 250
 
 export interface CardActions {
-  // Open the advertisement on the HZZ site.
   open: (job: JobCard) => void
-  // Ask about the job in the conversation; null outside a host.
   ask: ((job: JobCard) => void) | null
 }
 
-// Picking the card for a comparison; null when the host takes no messages from the view.
 export interface CardCompare {
   checked: boolean
-  // Already as many cards picked as a comparison takes.
   disabled: boolean
   onChange: () => void
 }
 
-// 24px outline icons, one per kind of detail.
 const DETAIL_ICONS: Record<DetailKind, string[]> = {
   place: ['M12 21s-7-6.1-7-11.5a7 7 0 0 1 14 0C19 14.9 12 21 12 21Z', 'M12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z'],
   hours: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 7v5l3 2'],
@@ -50,7 +39,6 @@ const DETAIL_ICONS: Record<DetailKind, string[]> = {
   accommodation: ['M3 10.5 12 3l9 7.5', 'M5 9v11h14V9', 'M10 20v-6h4v6'],
 }
 
-// Mono for the short values (the conditions, the age); values keep their own case, only label words go uppercase.
 const MONO_LABEL = 'font-mono text-[12px] font-normal tracking-[0.04em]'
 
 function Icon({ paths }: { paths: string[] }) {
@@ -62,7 +50,6 @@ function Icon({ paths }: { paths: string[] }) {
   )
 }
 
-/** An icon action at the end of the label row: its icon pops when pressed. */
 function Action({ label, icon: IconComponent, onClick }: { label: string; icon: LucideIcon; onClick: () => void }) {
   return (
     <Button className="icon-button" variant="outline" size="icon" type="button" title={label} aria-label={label} onClick={(event) => {
@@ -74,10 +61,6 @@ function Action({ label, icon: IconComponent, onClick }: { label: string; icon: 
   )
 }
 
-/**
- * OpenAd opens the advertisement on the HZZ site: DESIGN.md's outline pill for a secondary action, its label rolling
- * on hover. The accessible name keeps saying where the ad opens, and starts with the visible words.
- */
 function OpenAd({ onClick }: { onClick: () => void }) {
   return (
     <Button className="open-ad self-start" variant="outline" type="button" title="Otvori oglas na HZZ-u"
@@ -91,7 +74,6 @@ function OpenAd({ onClick }: { onClick: () => void }) {
   )
 }
 
-/** order is the card's place among the cards that came in together, which delays its entrance. */
 export function JobCardView({ job, today, order, actions, compare }: {
   job: JobCard
   today: string
@@ -101,7 +83,6 @@ export function JobCardView({ job, today, order, actions, compare }: {
 }) {
   const published = age(job, today)
   const items = details(job)
-  // Employers are written in capitals, as HZZ writes most of them; the placeholder is not a name and stays as it is.
   const employer = job.employer_name?.toLocaleUpperCase('hr-HR') ?? 'Poslodavac nije naveden'
   const title = sentenceCase(job.display_title)
   const root = useRef<HTMLDivElement>(null)
@@ -169,7 +150,7 @@ export function JobCardView({ job, today, order, actions, compare }: {
             ))}
           </ul>
         )}
-        {/* Under the text, like Dalco's "Details ›", so the card reads title, facts, then the way to the ad. */}
+        {                                                                                                       }
         <OpenAd onClick={() => actions.open(job)} />
       </CardContent>
     </SurfaceCard>

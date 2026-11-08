@@ -4,7 +4,6 @@ export interface AccommodationGroup {
   key: 'offered' | 'not_offered' | 'unknown'
   label: string
   jobs: number
-  // Original share of all matching ads; hiding a slice never changes this value.
   share: number
 }
 

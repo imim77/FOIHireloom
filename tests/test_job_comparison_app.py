@@ -59,7 +59,6 @@ class JobComparisonAppTests(unittest.TestCase):
                          "(3 god.) · uz smještaj")
         self.assertEqual(job_comparison(comparison(jobs, (), JobComparisonConditionsDTO(
             max_experience_months=24))).description, "Vaši uvjeti: iskustvo do 2 godine")
-        # Conditions without a value are none.
         self.assertEqual(job_comparison(comparison(jobs, (), JobComparisonConditionsDTO())).description,
                          "Bez zadanih uvjeta")
 
@@ -105,7 +104,6 @@ class JobComparisonAppTests(unittest.TestCase):
             ("1 godinu", None, "ne odgovara"), ("Nije važno", None, "odgovara"),
             ("stranica oglasa još nije pročitana", None, "nije poznato"),
         ])
-        # Without a condition there is no verdict, and no label for it.
         plain = row.model_copy(update={"condition": None, "cells": tuple(
             item.model_copy(update={"verdict": None, "reason": None}) for item in row.cells)})
         self.assertEqual({item.verdict_label for item in
@@ -126,7 +124,6 @@ class JobComparisonAppTests(unittest.TestCase):
             "contract_not_stated": "oglas navodi vrstu zaposlenja, ali ne i ugovor",
         })
         self.assertEqual(set(UNKNOWN_REASONS), set(get_args(UnknownReason.__value__)))
-        # With the page's own words, the reason goes under them.
         row = ComparisonRowDTO(aspect="contract", differs=True, condition="permanent", cells=(
             cell(1, None, "Novootvoreni poslovi", "unknown", "contract_not_stated"),
             cell(2, None, "Po dogovoru", None, "unreadable")))

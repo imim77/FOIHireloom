@@ -16,9 +16,6 @@ export interface GrowthData {
   points: GrowthPoint[]
 }
 
-/** Adapt the existing MCP result without changing rates, provenance or the county order.
- * Join by month, not array position: a missing row must never shift another month's value.
- */
 export function toGrowthData(counties: CountyHistory[]): GrowthData {
   const periods = [...new Set(counties.flatMap((county) => county.series.map((point) => point.period)))].sort()
   const lookup = counties.map((county) => new Map(county.series.map((point) => [point.period, point])))
@@ -38,7 +35,6 @@ export interface GrowthRun {
   indices: number[]
 }
 
-/** Split at missing values and at changes of segment status, retaining isolated known points. */
 export function seriesRuns(points: GrowthPoint[], id: string): GrowthRun[] {
   const runs: GrowthRun[] = []
   points.forEach((point, index) => {
@@ -58,7 +54,6 @@ export function seriesRuns(points: GrowthPoint[], id: string): GrowthRun[] {
   return runs
 }
 
-/** Mark only months flagged provisional, including disjoint ranges. */
 export function provisionalBands(points: GrowthPoint[]) {
   const bands: { first: number; last: number }[] = []
   points.forEach((point, index) => {
@@ -70,14 +65,12 @@ export function provisionalBands(points: GrowthPoint[]) {
   return bands
 }
 
-/** GrowthRow is one month on the chart's x axis: each county's rate under s<i>, and each of its runs under s<i>r<n>. */
 export interface GrowthRow {
   index: number
   period: string
   [key: string]: number | string | null
 }
 
-/** A county's run as the chart draws it: the run's key in GrowthRow, dashed when provisional. */
 export interface ChartRun {
   key: string
   provisional: boolean
@@ -85,11 +78,6 @@ export interface ChartRun {
   to: string
 }
 
-/**
- * growthRows lays the months out for the chart. Every run gets its own key, set only on its own months, so a
- * provisional (dashed) run is never drawn over a published one and a gap is never bridged; neighbouring runs share
- * their joining month. Single-month runs get no key: a line needs two months, so their dot stands alone.
- */
 export function growthRows({ series, points }: GrowthData): { rows: GrowthRow[]; runs: ChartRun[][] } {
   const rows: GrowthRow[] = points.map((point, index) => ({ index, period: point.period,
     ...Object.fromEntries(series.map((s, i) => [`s${i}`, point.values[s.id].rate])) }))

@@ -31,16 +31,8 @@ def _number(value: Decimal) -> int | float:
     return int(value) if value == value.to_integral_value() else float(value)
 
 
-# A Decimal that tool results carry as a JSON number.
 Number = Annotated[Decimal, PlainSerializer(_number, return_type=int | float, when_used="json")]
 
-# no_dzs_data: no DZS import has succeeded, or none stored this indicator for
-# the counties. no_common_period: no month has a known value for every
-# compared county. dzs_value_missing: the county has no known value for the
-# reference month (missing_reason then says how DZS marked it, if it did).
-# no_hzz_data: none of the county's HZZ feeds has ever been loaded.
-# no_known_workers: the county has active ads, but none states how many
-# workers it seeks. zero_denominator: the denominator is a known 0.
 type UnavailableReason = Literal[
     "no_dzs_data", "no_common_period", "dzs_value_missing", "no_hzz_data", "no_known_workers", "zero_denominator",
 ]

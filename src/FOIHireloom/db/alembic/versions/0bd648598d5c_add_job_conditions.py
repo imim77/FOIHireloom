@@ -16,7 +16,6 @@ down_revision: str | Sequence[str] | None = 'c4e8a2f6b1d3'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# Rows stay unknown until foihireloom-normalize-job-conditions fills them in.
 CONDITION_COLUMNS = (
     ('experience_months', sa.Integer()), ('trainee', sa.Boolean()), ('contract', sa.Text()),
     ('employment_tags', postgresql.ARRAY(sa.Text())), ('full_time', sa.Boolean()), ('weekly_hours', sa.Integer()),

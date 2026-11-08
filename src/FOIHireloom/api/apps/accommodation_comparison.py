@@ -14,7 +14,6 @@ NOTE_CATEGORY = "Odabrana kategorija obuhvaća samo oglase kojima je kategorija 
 
 
 def accommodation_comparison(stats: JobMarketStatsDTO, filters: JobMarketFiltersDTO) -> AccommodationComparisonDTO:
-    # Filtering the dimension being compared would discard both other groups and bias the result.
     if filters.accommodation is not None:
         raise ValueError("Accommodation comparison must include all accommodation statuses")
     counts = _known_counts(stats)

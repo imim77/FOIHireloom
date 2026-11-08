@@ -31,7 +31,6 @@ class DzsClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.last_modified, datetime(2026, 10, 28, 10, 0, 47, tzinfo=timezone.utc))
         self.assertEqual([r.url.scheme for r in requests], ["http", "https"])
         self.assertEqual(requests[0].extensions["timeout"]["read"], 3)
-        # The file is always downloaded in full.
         self.assertNotIn("if-none-match", requests[-1].headers)
         self.assertNotIn("if-modified-since", requests[-1].headers)
 

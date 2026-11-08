@@ -2,14 +2,11 @@ import { gsap } from 'gsap'
 import { useLayoutEffect, useRef } from 'react'
 import { EASE, finish, MOTION, s, useReducedMotion } from '../../../hooks/chart-motion'
 
-// Expanding or collapsing moves every tile; each slides over from where it was, as the charts' bars morph.
 const MOVE_STAGGER = 30
 
-/** useJobGridMotion animates tiles between their collapsed and expanded positions. */
 export function useJobGridMotion(expanded: boolean) {
   const list = useRef<HTMLDivElement>(null)
   const reduced = useReducedMotion()
-  // Where each tile was after the last render, by job id, and whether the view was expanded then.
   const placed = useRef<{ expanded: boolean; rects: Map<string, DOMRect> }>({ expanded, rects: new Map() })
   useLayoutEffect(() => {
     const tiles = [...list.current?.querySelectorAll<HTMLElement>('[data-slot="job"]') ?? []]

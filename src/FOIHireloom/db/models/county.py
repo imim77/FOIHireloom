@@ -19,7 +19,6 @@ class County(Base):
 
     id: Mapped[int] = mapped_column("id", SmallInteger, Identity(), primary_key=True, key="id")
     code: Mapped[str] = mapped_column("sifra", Text, unique=True, key="code")
-    # ISO 3166-2:HR, HR-01 … HR-21; links DZS tables to the county.
     iso_code: Mapped[str] = mapped_column("iso_sifra", Text, unique=True, key="iso_code")
     name: Mapped[str] = mapped_column("naziv", Text, unique=True, key="name")
 

@@ -41,7 +41,6 @@ class JobCardsAppTests(unittest.TestCase):
                                                                                        date(2026, 10, 30)))
         self.assertEqual((cards.unknown_conditions, cards.unknown_total), ({"contract": 2}, 2))
         self.assertEqual((cards.jobs[0].workers_needed, cards.jobs[0].accommodation), (3, "Zajednički smještaj"))
-        # The view passes next_cursor back with these filters, so the cursor that found this page is left out.
         self.assertEqual(cards.filters, JobSearchFiltersDTO(query="kuhar", limit=4, **conditions))
         self.assertEqual([chip.argument for chip in cards.active_filters], list(conditions))
 
@@ -57,7 +56,6 @@ class JobCardsAppTests(unittest.TestCase):
         self.assertEqual(cards.coverage_note,
                          "Istarska županija: podaci su stariji od 6 sati, pa rezultat možda nije potpun.")
         self.assertEqual(cards.unknown_note, "Još 2 oglasa možda odgovaraju, ali im nije poznato: ugovor (2).")
-        # The LLM still gets the service's warning.
         self.assertEqual(cards.coverage.warning, "Job data for the requested county …")
 
     def test_built_page_shows_the_filters_the_notes_and_the_normalised_conditions(self) -> None:

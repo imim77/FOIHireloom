@@ -11,7 +11,6 @@ interface FilterChipsProps {
   onRemove?: (filter: ActiveFilter) => void
 }
 
-/** FilterChips shows active filters, with removal when the host allows it. */
 export function FilterChips({ filters, label = 'Filtri', disabled = false, onRemove }: FilterChipsProps) {
   if (!filters.length) return null
   return <ul data-enter className="filters m-0 flex list-none flex-wrap gap-1.5 p-0" aria-label={label}>

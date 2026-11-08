@@ -150,7 +150,6 @@ def _known_accommodation(conditions: JobConditionsDTO) -> str | None:
     return None if conditions.accommodation is None else ACCOMMODATION[conditions.accommodation]
 
 
-# A deadline has neither: its cell words the date, and a person states no deadline.
 CONDITION_LABELS: dict[ComparisonAspect, Callable[[bool | int | str], str]] = {
     "experience": lambda months: experience(int(months)),
     "education": lambda level: EDUCATION_LEVELS[str(level)],
@@ -182,7 +181,6 @@ def _cell(aspect: ComparisonAspect, cell: ComparisonCellDTO, job: ComparedJobDTO
     if aspect == "deadline":
         text, note = deadline(job, today), None
     elif cell.evidence:
-        # An unknown value says why under the page's words, e.g. a type of employment without a contract.
         text, note = cell.evidence, reason
     elif reason is not None:
         text, note = reason, None

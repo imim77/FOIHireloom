@@ -34,7 +34,6 @@ Skills = Annotated[tuple[Skill, ...] | None, Field(
                 "Keep the user's location and other conditions, and distinguish related jobs from direct matches. "
                 "An empty list applies no skill filter.",
 )]
-# The condition filters, shared by the tools that choose jobs as search_jobs does.
 MaxExperienceMonths = Annotated[int | None, Field(
     ge=0, le=MAX_EXPERIENCE_MONTHS,
     description="Most experience in months the job may ask for; 0 finds jobs that need none ('Nije važno') and "

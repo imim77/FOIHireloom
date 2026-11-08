@@ -23,7 +23,6 @@ from .job_filters import (
 )
 from .tool_provider import DATA_ONLY, ServiceToolGroup, tool_arguments
 
-# Key of the search service in the server's lifespan context.
 JOB_SEARCH_SERVICE = "job_search_service"
 
 JobId = Annotated[int, Field(ge=1, le=2**63 - 1)]

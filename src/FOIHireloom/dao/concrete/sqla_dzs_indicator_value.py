@@ -79,7 +79,6 @@ class SqlAlchemyDzsIndicatorValueRepository(SqlAlchemyRepository, DzsIndicatorVa
         counties = set(county_ids)
         if not (counties and indicators):
             return {}
-        # The months in which every county has a known value, per indicator.
         common = (
             select(DzsIndicatorValue.indicator, DzsIndicatorValue.period)
             .where(DzsIndicatorValue.county_id.in_(counties), DzsIndicatorValue.indicator.in_(indicators),

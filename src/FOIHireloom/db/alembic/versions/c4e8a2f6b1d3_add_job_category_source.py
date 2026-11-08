@@ -24,7 +24,6 @@ def upgrade() -> None:
         ['category_feed_id'], ['id'], ondelete='RESTRICT',
     )
     op.create_index(op.f('ix_jobs_category_feed_id'), 'jobs', ['category_feed_id'])
-    # Every stored category so far was parsed from the job's description.
     op.execute("UPDATE jobs SET category_source = 'description' WHERE category IS NOT NULL")
     op.create_check_constraint(
         op.f('ck_jobs_category_source_recorded'), 'jobs',
@@ -36,7 +35,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_constraint(op.f('ck_jobs_category_source_recorded'), 'jobs', type_='check')
-    # The old schema cannot tell a filled-in category from a parsed one.
     op.execute("UPDATE jobs SET category = NULL WHERE category_source = 'feed'")
     op.drop_index(op.f('ix_jobs_category_feed_id'), table_name='jobs')
     op.drop_constraint(op.f('fk_jobs_category_feed_id_source_feeds'), 'jobs', type_='foreignkey')

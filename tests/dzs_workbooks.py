@@ -12,7 +12,6 @@ from typing import Any
 
 from openpyxl import Workbook
 
-# DZS row labels in ISO 3166-2:HR order, HR-01 … HR-21.
 COUNTY_LABELS = (
     "Zagrebačka", "Krapinsko-zagorska", "Sisačko-moslavačka", "Karlovačka", "Varaždinska",
     "Koprivničko-križevačka", "Bjelovarsko-bilogorska", "Primorsko-goranska", "Ličko-senjska",
@@ -23,7 +22,6 @@ COUNTY_LABELS = (
 CROATIA = "Republika Hrvatska"
 ROMAN = ("I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII")
 T1_YEAR, T1_MONTHS = 2026, (7, 8, 9)
-# Workbook months: November 2025 to September 2026, after one annual average.
 SERIES_MONTHS = tuple((2025, month) for month in (11, 12)) + tuple((2026, month) for month in range(1, 10))
 NON_RESIDENTS = 500
 T1_GROUPS = ("active_population", "employed", "unemployed", "unemployment_rate")
@@ -71,7 +69,6 @@ class DzsFiles:
         self.t1 = self._t1()
         self.sheets = {"9.4.13.": self._series("active_population"), "9.4.14.": self._series("unemployment_rate")}
 
-    # T1: title, two header rows, then each area's total row followed by its "Žene" row.
     @staticmethod
     def _t1() -> list[list[Any]]:
         groups = ["Aktivno stanovništvo1)", "Ukupno zaposleni1)2)", "Nezaposleni", "Stopa registrirane nezaposlenosti, %1)"]
@@ -105,7 +102,6 @@ class DzsFiles:
                       "aktivnom stanovništvu."], ["2) Podaci od 2026. privremeni su."], [],
                      ["2) Since 2026, the data have been provisional."]]
         header = ["Županija", "County of"] + [f"Ø 2025.  {SEX_HEADERS[sex]}" for sex in sexes]
-        # Spacing and line breaks as in the real headers.
         header += [f"{ROMAN[month - 1]}. {year}. {'' if sex == 'total' else chr(10)}{SEX_HEADERS[sex]}\n"
                    for year, month in SERIES_MONTHS for sex in sexes]
         rows = top + [header]

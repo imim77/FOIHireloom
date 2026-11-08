@@ -17,7 +17,6 @@ TITLES: dict[ForecastTarget, str] = {
     "employed": "Prognoza broja zaposlenih",
     "job_ads": "Prognoza broja oglasa",
 }
-# job_ads has no sex, and a total needs no word.
 WHOSE: dict[DzsSex | None, str] = {None: "", "total": "", "women": " · žene", "men": " · muškarci"}
 FREQUENCIES: dict[ForecastFrequency, str] = {"month": "po mjesecima", "week": "po tjednima"}
 UNAVAILABLE = {

@@ -81,7 +81,6 @@ County-wide ratios never use only one occupation's ads. Use canonical_url to
 read the original advertisement or apply; do not invent facts or promise employment.
 """
 
-# Every group the server registers, in the order clients list their tools and pages.
 TOOL_GROUPS: tuple[ToolGroup, ...] = (
     JobSearchTools(), JobMarketTools(), JobDetailTools(), JobComparisonTools(), JobReferenceTools(),
     CountyComparisonTools(), UnemploymentHistoryTools(), ForecastTools(), AppViews(),
@@ -111,7 +110,6 @@ class McpServer:
         self._job_search_service = job_search_service
         self._county_indicator_service = county_indicator_service
         self._labour_forecast_service = labour_forecast_service
-        # Unexpected errors reach the client without details; tools raise ToolError for the rest.
         self._server = FastMCP("FOIHireloom", instructions=INSTRUCTIONS, lifespan=self._lifespan,
                                mask_error_details=True)
         for group in TOOL_GROUPS:
@@ -151,9 +149,6 @@ class McpServer:
                                          sockets=sockets, **self._http_options())
 
     def _http_options(self) -> dict[str, Any]:
-        # "auto" checks the Host and Origin headers of a server reachable via
-        # localhost, which blocks DNS rebinding from web pages. Listed hosts
-        # are allowed in addition to localhost and are then always checked.
         return {
             "path": self._settings.MCP_PATH,
             "host_origin_protection": "auto",

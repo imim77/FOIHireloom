@@ -64,8 +64,8 @@ class ComparisonSnapshot:
     now: datetime
     today: date
     counties: list[CountyDTO]
-    filtered: Sequence[CountyJobCountsRowDTO]  # Ad counts for the job filters.
-    everything: Sequence[CountyJobCountsRowDTO]  # Every active ad.
+    filtered: Sequence[CountyJobCountsRowDTO]
+    everything: Sequence[CountyJobCountsRowDTO]
     checks: Sequence[CountyFeedCheckDTO]
     provenance: DzsImportProvenanceDTO | None
     periods: dict[DzsIndicator, DzsReferencePeriodDTO]
@@ -133,7 +133,6 @@ class CountyIndicatorService(CountyIndicatorServiceInterface):
                 terms=terms, category=(filters.category or "").strip() or None,
                 open_on=None if filters.include_expired else today, **conditions, county_ids=ids, today=today,
             ))
-            # The indicators describe the county as a whole: every active ad, whatever the filters.
             everything = await work.jobs.county_job_counts(CountyJobCriteriaDTO(
                 open_on=today, county_ids=ids, today=today))
             checks = await work.counties.list_feed_checks()

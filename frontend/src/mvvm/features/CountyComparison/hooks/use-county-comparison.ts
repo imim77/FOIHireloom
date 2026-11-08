@@ -4,7 +4,6 @@ import type { ActiveFilter } from '../../../types'
 import { useServerTool } from '../../../hooks/use-server-tool'
 import type { CountyComparisonData, CountyFilters } from '../types'
 
-/** The compare_counties arguments of a result without one filter: unset, or false for include_expired. */
 function argumentsWithout(data: CountyComparisonData, argument: string) {
   const filters: CountyFilters = { ...data.filters, [argument]: argument === 'include_expired' ? false : null }
   return {
@@ -14,7 +13,6 @@ function argumentsWithout(data: CountyComparisonData, argument: string) {
   }
 }
 
-/** useCountyComparison owns filter requests for one host result. */
 export function useCountyComparison(app: App | null, initial: CountyComparisonData) {
   const [data, setData] = useState(initial)
   const { call, loading, error } = useServerTool<CountyComparisonData>(app, 'show_county_comparison',

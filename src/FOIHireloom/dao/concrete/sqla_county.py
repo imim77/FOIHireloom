@@ -21,7 +21,6 @@ class SqlAlchemyCountyRepository(SqlAlchemyRepository, CountyRepository):
         return result.scalar_one_or_none()
 
     async def list_regions(self, open_on: date) -> list[RegionDTO]:
-        # A job listed in two feeds of the same county is counted once.
         open_jobs = (
             select(func.count(func.distinct(JobFeedMembership.job_id)))
             .select_from(JobFeedMembership)

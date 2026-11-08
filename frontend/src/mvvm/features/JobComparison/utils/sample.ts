@@ -1,11 +1,5 @@
 import type { JobComparisonData } from '../types'
 
-/**
- * Shown outside a host, e.g. on the dev server: show_job_comparison's result for three jobs on 1. 11. 2026., made by
- * the server's own comparison code. The first job's page is read and states no accommodation; the second's category
- * comes from an HZZ occupation feed, its deadline has passed, it states a type of employment but no contract and an
- * accommodation that is not recognised; the third's page has not been read, so all its values are unknown.
- */
 export function sample(): JobComparisonData {
   return {
     "today": "2026-11-01",

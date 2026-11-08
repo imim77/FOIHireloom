@@ -44,7 +44,6 @@ class AppView:
 
     @cached_property
     def uri(self) -> str:
-        # Hosts cache a page by its URI (Claude did not reread a changed page), so the URI names the page's version.
         return f"ui://foihireloom/{self._name}-{hashlib.sha256(self.page().encode()).hexdigest()[:12]}.html"
 
     @property

@@ -4,7 +4,6 @@ import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 
-// The host holds tool replies so tests can deliver a replacement result first.
 const host = `<!doctype html><html><body style="margin:0"><script>
 window.ready=false;window.requests=[];window.messages=[];window.links=[];window.failMessage=false;
 const options=new URLSearchParams(location.search);

@@ -29,11 +29,11 @@ ERROR_SUMMARY_LIMIT = 500
 class LinkedJobs:
     """LinkedJobs holds the stored jobs a feed response lists and how linking them changed the jobs."""
 
-    job_ids: dict[str, int]  # Database ID by HZZ source job ID.
+    job_ids: dict[str, int]
     added: int = 0
     changed: int = 0
     unchanged: int = 0
-    unlinked: int = 0  # Listed jobs no county feed has imported.
+    unlinked: int = 0
     mapping: FeedCategoryMappingDTO | None = None
 
 
@@ -52,7 +52,7 @@ class MembershipChanges:
 
     joined: int
     missing: int
-    returned: int  # Jobs listed again after being missing.
+    returned: int
 
 
 class FeedScopeSync(ABC):
@@ -128,7 +128,6 @@ class OccupationFeedSync(FeedScopeSync):
         self._verifier = verifier
 
     def validators(self, feed: SourceFeedDTO) -> tuple[str | None, datetime | None]:
-        # An unchanged response carries no jobs to verify a mapping on.
         if feed.mapping_verified_at is None:
             return None, None
         return super().validators(feed)
@@ -231,7 +230,6 @@ class JobSyncService(JobSyncServiceInterface):
         http_status = None
         try:
             scope = self._scopes[feed.scope]
-            # No transaction is open while the feed downloads.
             response = await self._client.fetch(feed.feed_url, *scope.validators(feed))
             if response.not_modified:
                 return await self._confirm_unchanged(scope, feed, run_id, response)

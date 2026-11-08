@@ -47,7 +47,6 @@ test('nulls break both the curve and its fill; actual zero and isolated known mo
   assert.deepEqual(runs.map((run) => run.indices), [[0, 1], [3], [5, 6]])
   assert.equal(data.points[0].values[data.series[0].id].rate, 0)
   const { rows, runs: drawn } = growthRows(data)
-  // Each drawn run holds only its own months, so no line or fill bridges a gap; the isolated month is a dot alone.
   assert.deepEqual(drawn[0].map((run) => rows.flatMap((row) => typeof row[run.key] === 'number' ? [row.index] : [])),
     [[0, 1], [5, 6]])
   assert.deepEqual(rows.map((row) => row.s0), [0, 1, null, 2, null, 3, 4])

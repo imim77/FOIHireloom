@@ -11,7 +11,6 @@ test('rows keep every value, leave gaps open and split history into solid and da
   const { rows, runs } = forecastRows(county)
   assert.equal(rows.length, county.history.length + county.forecast.length)
   assert.deepEqual(rows.slice(0, county.history.length).map((row) => row.value), county.history.map((p) => p.value))
-  // The gap at 3 ends one run and starts the next; the first provisional month starts a dashed run.
   assert.deepEqual(runs.map((run) => [run.flagged, run.from, run.to]), [
     [false, county.history[0].period, county.history[2].period],
     [false, county.history[4].period, county.history[14].period],
@@ -21,7 +20,6 @@ test('rows keep every value, leave gaps open and split history into solid and da
     const months = rows.flatMap((row, index) => typeof row[run.key] === 'number' ? [index] : [])
     for (let i = 1; i < months.length; i++) assert.equal(months[i] - months[i - 1], 1, 'a run never bridges a gap')
   }
-  // The forecast joins the last known history value; its rows carry the model's medians and intervals unchanged.
   const anchor = rows[county.history.length - 1]
   assert.deepEqual([anchor.median, anchor.range], [county.history.at(-1).value, [county.history.at(-1).value, county.history.at(-1).value]])
   assert.deepEqual(rows.slice(county.history.length).map((row) => [row.median, ...row.range]),

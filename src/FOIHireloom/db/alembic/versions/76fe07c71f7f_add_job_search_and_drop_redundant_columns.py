@@ -11,9 +11,6 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-# Frozen copy of Job.search_vector's expression at this revision. translate()
-# folds Croatian letters to ASCII and splits words joined by "/" or ".";
-# unaccent() is not immutable, so it cannot appear in a generated column.
 SEARCH_DOCUMENT = (
     "to_tsvector('simple'::regconfig, translate("
     "coalesce(title, '') || ' ' || coalesce(description_text, ''), "
@@ -28,7 +25,6 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.add_column('jobs', sa.Column('municipality', sa.Text(), nullable=True))
-    # Existing rows keep their content hash, so sync would never rewrite them.
     op.execute(
         "UPDATE jobs SET municipality = "
         "nullif(btrim(substring(description_raw FROM ', Općina: (.*?), Županija: ')), '')"

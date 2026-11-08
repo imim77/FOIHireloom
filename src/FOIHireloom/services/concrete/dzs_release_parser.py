@@ -21,7 +21,6 @@ from .croatian_counties import CroatianCountyCatalog
 ROMAN_MONTHS = {
     "I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10, "XI": 11, "XII": 12,
 }
-# Croatian sex label -> (stored sex, the English label that must follow it).
 SEXES = {"ukupno": ("total", "Total"), "muškarci": ("men", "Men"), "žene": ("women", "Women")}
 MARKERS = {"-": "no_occurrence", "…": "not_available", "...": "not_available", "": "empty"}
 CROATIA = "Republika Hrvatska"
@@ -73,7 +72,6 @@ SERIES_SHEETS = (
                 "unemployment_rate", frozenset({"total", "men", "women"})),
 )
 SOURCE_ORDER = ("t1", *(sheet.source for sheet in SERIES_SHEETS))
-# The sheets read from each file, by file role.
 SHEETS = {"t1": (T1_SHEET,), "workbook": tuple(sheet.name for sheet in SERIES_SHEETS)}
 
 
@@ -113,7 +111,6 @@ class PersonCountCell(CellNumber):
         return f"{raw!r} is not a whole number of persons."
 
 
-# Indicators not listed count persons.
 CELL_NUMBERS: dict[str, CellNumber] = {"unemployment_rate": PercentageCell()}
 PERSON_COUNT = PersonCountCell()
 
@@ -207,9 +204,6 @@ class DzsReleaseParser:
         if (problem := self._archive_problem(content, label)) is not None:
             problems.append(problem)
             return None
-        # openpyxl parses the XML with defusedxml, which the project depends on.
-        # It raises many unrelated types for a malformed package, so any error
-        # while reading is a problem with the file.
         try:
             workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True, keep_links=False)
         except Exception as error:
@@ -246,7 +240,6 @@ class DzsReleaseParser:
         sheets = {}
         for name in sheet_names:
             worksheet = workbook[names[name]]
-            # The stored dimension can be wrong; read every cell that is present.
             worksheet.reset_dimensions()
             sheets[name] = Sheet(name, [list(row) for row in worksheet.iter_rows(values_only=True)], problems)
         return sheets
@@ -464,7 +457,7 @@ class DzsReleaseParser:
         reader = CELL_NUMBERS.get(indicator, PERSON_COUNT)
         try:
             value = reader.value(number)
-        except InvalidOperation:  # Too many digits to quantize.
+        except InvalidOperation:
             value = None
         if value is None:
             sheet.problem(reader.problem(raw), row, column)
@@ -517,7 +510,6 @@ class DzsReleaseParser:
     @staticmethod
     def _release(t1: list[DzsValueDTO], series: dict[str, list[DzsValueDTO]]) -> DzsReleaseDTO:
         merged = {value.key: value for values in series.values() for value in values}
-        # T1 is the source of record for the keys both files have.
         merged |= {value.key: value for value in t1}
         values = sorted((value for value in merged.values() if value.county_iso is not None),
                         key=lambda value: (value.county_iso, value.indicator, value.period, value.sex))

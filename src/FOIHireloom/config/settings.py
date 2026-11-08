@@ -35,8 +35,6 @@ class Settings(BaseSettings):
     HZZ_FEED_TIMEOUT: float = Field(default=15.0, gt=0, allow_inf_nan=False)
     HZZ_FEED_MAX_BYTES: int = Field(default=5 * 1024 * 1024, gt=0)
     HZZ_MIN_RETAINED_RATIO: float = Field(default=0.5, ge=0, le=1)
-    # Explicit job categories that must agree before an occupation feed's
-    # category may fill in jobs without one.
     HZZ_OCCUPATION_MIN_EXAMPLES: int = Field(default=3, ge=1)
     HZZ_STALE_AFTER_HOURS: float = Field(default=6.0, gt=0, allow_inf_nan=False)
 
@@ -47,8 +45,6 @@ class Settings(BaseSettings):
     HZZ_PAGE_RETRY_HOURS: float = Field(default=24.0, gt=0, allow_inf_nan=False)
     HZZ_PAGE_MAX_CONSECUTIVE_FAILURES: int = Field(default=5, ge=1)
 
-    # DZS release RAD-2026-2-6/3 (table T1) and the county workbook it links;
-    # the workbook is rewritten at the same URL for each release.
     DZS_T1_URL: str = Field(
         default="https://podaci.dzs.hr/media/ulbjlyex/rad-2026-2-6_3_tablice-hr.xlsx", min_length=1
     )
@@ -58,17 +54,13 @@ class Settings(BaseSettings):
     DZS_TIMEOUT: float = Field(default=30.0, gt=0, allow_inf_nan=False)
     DZS_MAX_BYTES: int = Field(default=20 * 1024 * 1024, gt=0)
 
-    # Hugging Face ID of the Chronos model behind the forecast tools; it is
-    # downloaded on the first forecast and needs the forecast extra installed.
     CHRONOS_MODEL: str = Field(default="amazon/chronos-2", min_length=1)
-    CHRONOS_DEVICE: str = Field(default="cpu", min_length=1)  # A torch device, e.g. "cuda".
+    CHRONOS_DEVICE: str = Field(default="cpu", min_length=1)
 
     MCP_TRANSPORT: Literal["stdio", "http"] = "stdio"
     MCP_HOST: str = Field(default="127.0.0.1", min_length=1)
     MCP_PORT: int = Field(default=8000, ge=1, le=65535)
     MCP_PATH: str = Field(default="/mcp", pattern=r"^/[^\s]*$")
-    # Host names, besides localhost, that clients may use to reach the HTTP
-    # server, e.g. a tunnel or proxy domain.
     MCP_ALLOWED_HOSTS: Annotated[list[str], NoDecode] = []
 
     @field_validator("MCP_ALLOWED_HOSTS", mode="before")

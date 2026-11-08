@@ -2,11 +2,9 @@ import { useState } from 'react'
 import { formatPeriod, formatValue } from '../utils/forecast-chart'
 import type { CountyForecast, ForecastData } from '../types'
 
-/** useForecast owns the selected and hovered periods and display values for one result. */
 export function useForecast(data: ForecastData, county: CountyForecast) {
   const [selected, setSelected] = useState(Math.max(0, county.forecast.length - 1))
   const [hovered, setHovered] = useState<number | null>(null)
-  // Hover previews a period; leaving the plot falls back to the selection.
   const active = hovered ?? selected
   const point = county.forecast[active]
   const last = county.last_observed
@@ -15,7 +13,7 @@ export function useForecast(data: ForecastData, county: CountyForecast) {
   const interval = `${Math.round(data.interval * 100)}% interval`
 
   function selectPeriod(index: number) {
-    setHovered(null) // a committed choice must show even while the pointer rests on another period
+    setHovered(null)
     setSelected(index)
   }
 

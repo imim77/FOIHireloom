@@ -26,7 +26,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # The old constraint has no occupation scope, so their feeds and history go.
     occupation_feeds = "SELECT id FROM source_feeds WHERE scope = 'occupation'"
     op.execute(f"DELETE FROM job_feed_memberships WHERE feed_id IN ({occupation_feeds})")
     op.execute(f"DELETE FROM sync_runs WHERE feed_id IN ({occupation_feeds})")

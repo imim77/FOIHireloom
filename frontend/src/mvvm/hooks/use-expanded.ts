@@ -1,10 +1,6 @@
 import { useState } from 'react'
 import type { McpApp } from './use-mcp-app'
 
-/**
- * Whether a view shows everything: full screen when the host offers it, otherwise inline.
- * Leaving full screen from the host's own controls collapses the view again.
- */
 export function useExpanded({ app, hostContext }: Pick<McpApp<unknown>, 'app' | 'hostContext'>) {
   const [inline, setInline] = useState(false)
   const expanded = hostContext.displayMode === 'fullscreen' || inline
@@ -17,7 +13,6 @@ export function useExpanded({ app, hostContext }: Pick<McpApp<unknown>, 'app' | 
         await app.requestDisplayMode({ mode })
         return
       } catch {
-        // The host refused; fall back to showing everything inline.
       }
     }
     setInline(!expanded)

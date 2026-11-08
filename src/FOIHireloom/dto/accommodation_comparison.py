@@ -14,7 +14,6 @@ class AccommodationGroupDTO(ModelConfigBaseModel):
     key: AccommodationGroup
     label: str
     jobs: int = Field(ge=0)
-    # Percentage of all matching ads, including ads whose accommodation is unknown.
     share: float = Field(ge=0, le=100)
 
 

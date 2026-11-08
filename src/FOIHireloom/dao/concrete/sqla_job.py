@@ -35,13 +35,11 @@ from .job_predicates import (
 )
 from .sqla_base import SqlAlchemyRepository
 
-# Columns by JobConditionsDTO field, and the page columns by RawJobConditionsDTO field.
 STORED_CONDITIONS = {
     name: getattr(Job, "conditions_unrecognised" if name == "unrecognised" else name)
     for name in JobConditionsDTO.model_fields
 }
 PAGE_CONDITIONS = {name: getattr(Job, f"page_{name}") for name in RawJobConditionsDTO.model_fields}
-# When a job's value for each JobConditionFiltersDTO filter is unknown.
 UNKNOWN_CONDITIONS = {name: condition.unknown for name, condition in CONDITION_FILTERS.items()}
 LISTED_MEMBERSHIP = JobFeedMembership.presence_status == "present"
 
@@ -71,7 +69,7 @@ class SqlAlchemyJobRepository(SqlAlchemyRepository, JobRepository):
         """The descending sort keys of search, each paired with the cursor's value at that key."""
         def after(field: str) -> object:
             value = getattr(criteria.after, field) if criteria.after is not None else None
-            return int(value) if isinstance(value, bool) else value  # title_match sorts as an integer.
+            return int(value) if isinstance(value, bool) else value
 
         keys: list[tuple[ColumnElement, object]] = []
         if title_match is not None:
@@ -88,14 +86,12 @@ class SqlAlchemyJobRepository(SqlAlchemyRepository, JobRepository):
         conditions = condition_filters(criteria)
         if not conditions:
             return UnknownConditionsDTO()
-        # A job could match a filter when it matches it or its value is unknown.
         possible = {name: or_(condition, UNKNOWN_CONDITIONS[name]) for name, condition in conditions.items()}
         counts = [
             func.count().filter(UNKNOWN_CONDITIONS[name], *(other for key, other in possible.items() if key != name))
             for name in conditions
         ]
         total = func.count().filter(*possible.values(), or_(*(UNKNOWN_CONDITIONS[name] for name in conditions)))
-        # Every criterion but the condition filters, as search applies it.
         others = filter_conditions(criteria.model_copy(update=dict.fromkeys(conditions)))
         *by_filter, total = (await self._session.execute(select(*counts, total).select_from(Job).where(*others))).one()
         return UnknownConditionsDTO(by_filter=dict(zip(conditions, by_filter)), total=total)
@@ -137,7 +133,6 @@ class SqlAlchemyJobRepository(SqlAlchemyRepository, JobRepository):
 
     async def _market_breakdowns(self, found: CTE, top: int) -> dict[str, tuple[MarketCountDTO, ...]]:
         """Counts per value for each breakdown field of JobMarketAggregatesDTO."""
-        # Without an else, an unknown value stays NULL and is left out.
         working_time = case((found.c.full_time, "full_time"), (not_(found.c.full_time), "part_time"))
         experience_band = case(
             (found.c.experience_months == 0, "none"),
@@ -157,7 +152,7 @@ class SqlAlchemyJobRepository(SqlAlchemyRepository, JobRepository):
             "schedule_tags": func.unnest(found.c.schedule_tags),
             "transport_allowance": found.c.transport_allowance,
         }
-        limits = {"employers": top}  # The other breakdowns have few values.
+        limits = {"employers": top}
         return {name: await self._value_counts(found, value, limits.get(name)) for name, value in values.items()}
 
     async def _county_counts(self, found: CTE) -> tuple[CountyMarketCountDTO, ...]:
@@ -229,9 +224,8 @@ class SqlAlchemyJobRepository(SqlAlchemyRepository, JobRepository):
     ) -> list[WeeklyJobAdsRowDTO]:
         if not county_ids:
             return []
-        # Expired ads count too: a forecast of demand needs every ad published.
         placed = county_placements(SourceFeed.county_id.in_(county_ids))
-        week = func.date_trunc("week", Job.published_on).cast(Date).label("week")  # ISO weeks start on Monday.
+        week = func.date_trunc("week", Job.published_on).cast(Date).label("week")
         statement = (
             select(placed.c.county_id, week, func.count().label("jobs"))
             .select_from(placed)
@@ -273,8 +267,6 @@ class SqlAlchemyJobRepository(SqlAlchemyRepository, JobRepository):
         return {entity.source_job_id: entity.id for entity in entities}
 
     async def update_content(self, jobs: Mapping[int, ParsedJobDTO], seen_at: datetime) -> None:
-        # Rows that keep their category have fewer columns, so each kind is
-        # sent as its own batch.
         for has_category in (True, False):
             rows = [
                 {"id": job_id, **self._content(job), "last_seen_at": seen_at, "content_changed_at": seen_at}
@@ -314,7 +306,6 @@ class SqlAlchemyJobRepository(SqlAlchemyRepository, JobRepository):
         return list(evidence.values())
 
     async def list_category_inputs(self) -> list[CategoryInputDTO]:
-        # ARRAY(subquery) gives jobs without occupation feeds an empty array.
         feed_ids = func.array(
             select(JobFeedMembership.feed_id)
             .join(SourceFeed)
@@ -340,7 +331,6 @@ class SqlAlchemyJobRepository(SqlAlchemyRepository, JobRepository):
             for job_id, filled in categories.items()
         ]
         if rows:
-            # A Core update, so the extra WHERE works for every row of the batch.
             jobs = Job.__table__
             await self._session.execute(
                 update(jobs)

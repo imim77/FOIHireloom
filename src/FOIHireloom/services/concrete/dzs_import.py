@@ -67,7 +67,6 @@ class DzsImportService(DzsImportServiceInterface):
             await work.commit()
         files: list[DzsFileDTO] = []
         try:
-            # No transaction is open while the files download and are checked.
             release = self._parser.parse(*await self._obtain(t1, workbook, files))
             return await self._apply(import_id, release, files)
         except DzsValidationError as error:

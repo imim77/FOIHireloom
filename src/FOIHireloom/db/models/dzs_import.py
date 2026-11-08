@@ -89,7 +89,6 @@ class DzsImportFile(Base):
         "id_uvoza", BigInteger, ForeignKey("uvozi_dzs.id", ondelete="CASCADE"), key="import_id",
     )
     role: Mapped[str] = mapped_column("uloga", Text, key="role")
-    # The download URL, or the path of a local file as given to the command.
     location: Mapped[str] = mapped_column("lokacija", Text, key="location")
     sheets: Mapped[list[str]] = mapped_column("listovi", ARRAY(Text), key="sheets")
     sha256: Mapped[str] = mapped_column("sha256", Text, key="sha256")

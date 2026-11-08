@@ -11,7 +11,6 @@ from FOIHireloom.dto.dzs import DzsIndicator, DzsStoredValueDTO
 from FOIHireloom.dto.job_market import CountyJobCountsRowDTO
 from FOIHireloom.dto.job_search import RegionFreshnessDTO
 
-# The DZS values a comparison shows, each in its own reference month.
 COMPARED_INDICATORS: tuple[DzsIndicator, ...] = ("unemployed", "active_population", "unemployment_rate")
 ONE_DECIMAL = Decimal("0.1")
 
@@ -35,7 +34,6 @@ class CountyIndicatorCalculator:
         dzs = {indicator: self._dzs_value(periods[indicator], values.get((county.id, indicator)))
                for indicator in COMPARED_INDICATORS}
         all_active = self._job_counts(everything, county.id)
-        # A county none of whose feeds was ever loaded has no known ads, not zero ads.
         hzz_known = region is not None and region.last_success_at is not None
         workers, workers_reason = self._workers_needed(all_active, hzz_known)
         return ComparedCountyDTO(
@@ -61,7 +59,7 @@ class CountyIndicatorCalculator:
         if not hzz_known:
             return None, "no_hzz_data"
         if not all_active.jobs:
-            return 0, None  # No active ads: the county seeks no workers through HZZ.
+            return 0, None
         if not all_active.workers_needed_coverage.part:
             return None, "no_known_workers"
         return all_active.workers_needed, None

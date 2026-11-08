@@ -26,10 +26,6 @@ from FOIHireloom.domain.skill_catalog import SKILL_FOLD_FROM, SKILL_FOLD_TO, SKI
 
 from .base import Base
 
-# Title words get weight A, so a query restricted to it (kuhar:*A) tells
-# whether the title matched; everything else keeps the default weight D. The
-# job page's values replace the feed's truncated title and description once
-# read, and add the employer, place of work and education.
 SEARCH_TITLE_WEIGHT = "A"
 SEARCH_DOCUMENT = (
     "setweight(to_tsvector('simple'::regconfig, translate("
@@ -39,7 +35,6 @@ SEARCH_DOCUMENT = (
     "coalesce(mjesto_rada_stranice, '') || ' ' || coalesce(obrazovanje_stranice, ''), "
     f"'{SEARCH_FOLD_FROM}', '{SEARCH_FOLD_TO}'))"
 )
-# URLs must be removed before punctuation-sensitive skills are matched.
 _SKILL_TEXT = (
     "regexp_replace(lower(translate("
     "coalesce(naslov_stranice, naslov, '') || ' ' || coalesce(tekst_opisa_stranice, tekst_opisa, ''), "
@@ -50,8 +45,6 @@ SKILLS_DOCUMENT = "array_remove(ARRAY[" + ", ".join(
     for code, pattern in SKILL_PATTERNS.items()
 ) + "], NULL)"
 
-# Codes JobConditionsNormalizer stores, by column; a new code needs a
-# migration. conditions_unrecognised names RawJobConditionsDTO fields.
 CONDITION_CODES = {
     "contract": ("permanent", "fixed_term", "other"),
     "employment_tags": ("new_position", "vacancy", "replacement", "increased_workload", "seasonal", "reappointment",
@@ -112,8 +105,6 @@ class Job(Base):
         ),
         Index("ix_oglasi_vektor_pretrage", "search_vector", postgresql_using="gin"),
         Index("ix_oglasi_vjestine", "skills", postgresql_using="gin"),
-        # Filters use these expressions (job_predicates.py); expression indexes
-        # let the planner narrow matches before loading job content.
         Index("ix_oglasi_velika_kategorija", text("upper(kategorija)")),
         Index("ix_oglasi_rok_prijave", text("coalesce(rok_prijave_stranice, rok_prijave)")),
         CheckConstraint(
@@ -146,9 +137,6 @@ class Job(Base):
     published_on: Mapped[date | None] = mapped_column("datum_objave", Date, index=True, key="published_on")
     deadline_on: Mapped[date | None] = mapped_column("rok_prijave", Date, key="deadline_on")
     category: Mapped[str | None] = mapped_column("kategorija", Text, key="category")
-    # 'description' when the job's own description names the category, 'feed'
-    # when it was filled in from category_feed_id's confirmed mapping. A
-    # description category always replaces a filled-in one.
     category_source: Mapped[str | None] = mapped_column("izvor_kategorije", Text, key="category_source")
     category_feed_id: Mapped[int | None] = mapped_column(
         "id_kanala_kategorije", BigInteger, ForeignKey("izvorni_kanali.id", ondelete="RESTRICT"),
@@ -168,9 +156,6 @@ class Job(Base):
     skills: Mapped[list[str]] = mapped_column(
         "vjestine", ARRAY(Text), Computed(SKILLS_DOCUMENT, persisted=True), key="skills",
     )
-    # Fields from the job's HZZ detail page, kept apart from the feed's values.
-    # A later failed check keeps the last fetched values; page_source_hash is
-    # the feed content hash they were fetched for.
     page_status: Mapped[str] = mapped_column(
         "stanje_stranice", Text, default="pending", server_default="pending", key="page_status",
     )
@@ -218,9 +203,6 @@ class Job(Base):
     page_employer_name: Mapped[str | None] = mapped_column(
         "naziv_poslodavca_stranice", Text, key="page_employer_name",
     )
-    # The page's conditions as JobConditionsNormalizer codes, stored with the
-    # page; None is unknown. conditions_unrecognised names the page fields
-    # whose value was not recognised.
     experience_months: Mapped[int | None] = mapped_column(
         "mjeseci_iskustva", Integer, key="experience_months",
     )

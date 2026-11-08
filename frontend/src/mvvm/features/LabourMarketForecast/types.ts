@@ -30,7 +30,6 @@ export interface CountyForecast {
   unavailable_reason: UnavailableReason | null
 }
 
-// CountyForecastViewDTO keeps the source forecast alongside Croatian display labels.
 export interface ForecastData {
   target: ForecastTarget
   frequency: ForecastFrequency

@@ -2,13 +2,11 @@ import { formatDecimal, formatInteger, formatRate, formatShare, plural }
   from '../../../utils/format'
 import type { ComparedCounty, CountyComparisonData, DzsValue, Indicator } from '../types'
 
-// What a cell shows: its value, or a dash with the reason kept for a tooltip.
 interface CellView {
   text: string
   reason?: string | null
   unavailable?: boolean
   provisional?: boolean
-  // For the highest and lowest of a row; null when unavailable.
   value?: number | null
 }
 
@@ -16,7 +14,6 @@ interface RowView {
   key: string
   name: (data: CountyComparisonData) => string
   cell: (county: ComparedCounty) => CellView
-  // Mark the highest and the lowest value of the row.
   extremes?: boolean
 }
 
@@ -26,7 +23,6 @@ interface Section {
   rows: RowView[]
 }
 
-// A county none of whose HZZ feeds was ever loaded: its 0 ads are not known to be 0.
 export const noHzz = (county: ComparedCounty) => county.hzz_last_success_at === null
 const UNKNOWN = '–'
 const NO_HZZ: CellView = { text: UNKNOWN, reason: 'HZZ oglasi za županiju nisu učitani', unavailable: true }
@@ -90,5 +86,4 @@ export const SECTIONS: Section[] = [
   },
 ]
 
-// Each section's place among the table's rows, its heading counted, for the rows' entrance delays.
 export const FIRST_ROWS = SECTIONS.map((_, k) => SECTIONS.slice(0, k).reduce((sum, section) => sum + section.rows.length + 1, 0))

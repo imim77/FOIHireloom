@@ -17,7 +17,6 @@ from .job_filters import Accommodation, ContractFilter, Education, FullTime, Max
 from .job_tools import JobId, JobToolGroup
 from .tool_provider import DATA_ONLY, tool_arguments
 
-# The arguments of the tools that compare jobs: the jobs and the conditions the user states about themselves.
 ComparedJobIds = Annotated[list[JobId], Field(
     min_length=MIN_COMPARED_JOBS, max_length=MAX_COMPARED_JOBS,
     description="ids of the 2 or 3 jobs to compare, each once, from earlier search_jobs or show_jobs results, in the "
@@ -120,6 +119,5 @@ class JobComparisonTools(JobToolGroup):
     async def _compare(
         self, ctx: Context, job_ids: list[int], conditions: JobComparisonConditionsDTO,
     ) -> JobComparisonDTO:
-        # The service compares without conditions when none is set; pass that as None.
         stated = conditions if conditions.model_dump(exclude_none=True) else None
         return await self._call(self._service(ctx).compare_jobs(job_ids, stated))

@@ -4,14 +4,11 @@ import { embedded } from '../utils/mcp'
 
 export interface McpApp<T> {
   app: App | null
-  // The tool's structuredContent; null until the host sends it.
   data: T | null
-  // Each host result starts a fresh interaction session, even with equal data.
   revision: number
   hostContext: McpUiHostContext
 }
 
-/** Connect to the host once, follow its theme and hold the latest tool result. */
 export function useMcpApp<T>(name: string, sample: () => T): McpApp<T> {
   const [result, setResult] = useState(() => ({ data: embedded ? null : sample(), revision: 0 }))
   const [hostContext, setHostContext] = useState<McpUiHostContext>({})

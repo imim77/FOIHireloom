@@ -21,7 +21,6 @@ class FeedCategoryVerifier:
 
     def verify(self, jobs: tuple[ParsedJobDTO, ...]) -> FeedCategoryMappingDTO:
         counts = Counter(job.category for job in jobs if job.category)
-        # Ties are contradicted anyway; the name only makes the choice repeatable.
         category, matching = min(counts.items(), key=lambda item: (-item[1], item[0]), default=(None, 0))
         contradicting = counts.total() - matching
         if contradicting:

@@ -33,7 +33,6 @@ class RegistrationPlannerTests(unittest.TestCase):
     def test_catalog_has_one_iso_code_per_county(self) -> None:
         definitions = self.planner.catalog.definitions
         self.assertEqual(sorted(d.iso_code for d in definitions), [f"HR-{number:02d}" for number in range(1, 22)])
-        # DZS's English "Zagreb" is the county around the city; ISO puts the city last.
         self.assertEqual(self.planner.catalog.match("Zagrebačka").iso_code, "HR-01")
         self.assertEqual(self.planner.catalog.match("Grad Zagreb").iso_code, "HR-21")
         self.assertEqual(self.planner.catalog.match("Međimurska ").iso_code, "HR-20")

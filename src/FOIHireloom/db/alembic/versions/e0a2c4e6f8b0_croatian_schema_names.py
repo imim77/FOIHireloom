@@ -15,7 +15,6 @@ down_revision = "d9f1b3c5e7a9"
 branch_labels = None
 depends_on = None
 
-# Names, not application data: statuses and source codes keep their meaning.
 SCHEMA = {'counties': {'name': 'zupanije',
               'columns': {'id': 'identifikator', 'code': 'sifra', 'iso_code': 'iso_sifra', 'name': 'naziv'},
               'constraints': [['ck_counties_code_not_blank', 'ck_zupanije_code_not_blank'],

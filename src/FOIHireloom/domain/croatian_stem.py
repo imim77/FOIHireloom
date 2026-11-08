@@ -6,13 +6,10 @@ Only the query is stemmed; stored text is indexed whole. Sound changes such
 as Rijeka/Rijeci are not undone.
 """
 
-# Case endings, then the feminine -ica forms. -ka is left out: it would turn
-# "osijeku" into "osije" and "vozacka" (licence) into "vozac" (driver).
 ENDINGS = (
     "a", "e", "i", "o", "u", "eg", "em", "ih", "im", "og", "oj", "om", "ama", "ega", "emu", "ima", "oga", "ome",
     "omu", "evima", "ijama", "ovima", "ica", "ice", "ici", "icu", "icom", "icama",
 )
-# Shorter stems match unrelated words: "zadru" would become "zadr", as in "zadrzava".
 MIN_STEM_LENGTH = 5
 _LONGEST_FIRST = sorted(ENDINGS, key=len, reverse=True)
 

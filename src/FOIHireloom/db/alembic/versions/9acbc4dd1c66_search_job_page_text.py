@@ -16,9 +16,6 @@ down_revision: str | Sequence[str] | None = 'adc0c83dfede'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# Frozen copies of Job.search_vector's expression after and before this
-# revision. Title words get weight A, so a query restricted to them tells
-# whether the title matched.
 SEARCH_DOCUMENT = (
     "setweight(to_tsvector('simple'::regconfig, translate("
     "coalesce(page_title, title, ''), 'ČĆŽŠĐčćžšđ/.', 'CCZSDcczsd  ')), 'A') || "
@@ -35,7 +32,6 @@ PREVIOUS_SEARCH_DOCUMENT = (
 
 
 def _replace_search_vector(expression: str) -> None:
-    # SET EXPRESSION needs PostgreSQL 17, so the column is rebuilt instead.
     op.drop_index('ix_jobs_search_vector', table_name='jobs', postgresql_using='gin')
     op.drop_column('jobs', 'search_vector')
     op.add_column('jobs', sa.Column(

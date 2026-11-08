@@ -6,7 +6,6 @@ import { join } from 'node:path'
 import { chromium } from 'playwright'
 import { sample } from '../utils/sample.ts'
 
-// A minimal MCP Apps host sends actual protocol messages into the built page; no app-state injection.
 const host = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0">
 <script>
 window.ready=false;
@@ -61,8 +60,6 @@ async function checkLayout(frame) {
   assert.equal(await frame.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
   assert.ok(await frame.locator('svg path').evaluateAll((paths) => paths.every((p) => !/NaN|Infinity/.test(p.getAttribute('d') ?? ''))))
 }
-// A point inside segment index's painted shape, in page coordinates: the segments are Recharts sectors, so ask the
-// browser which points of the ring fall in the segment's fill.
 async function pointOn(frame, index) {
   const frameBox = await frame.page().locator('iframe').boundingBox()
   const point = await frame.evaluate((index) => {
@@ -89,7 +86,6 @@ const context = (frame) => frame.locator('.allocation-context').textContent()
 async function amountIs(frame, text) {
   await frame.waitForFunction((text) => document.querySelector('.allocation-amount')?.textContent === text, text)
 }
-// Each group's fill and the ink of its share, as the theme resolves the tokens.
 async function ramp(frame) {
   await frame.locator('[data-slot="allocation-share"]').nth(2).waitFor()
   return frame.evaluate(() => ['offered', 'not_offered', 'unknown'].map((key) => [
@@ -139,10 +135,8 @@ test('real sample renders counts, percentages, source, filters and freshness wit
     assert.deepEqual(await frame.locator('.allocation-legend-count').allTextContents(), ['2', '7', '1'])
     assert.deepEqual(await frame.locator('[data-slot="allocation-share"]').allTextContents(), ['20 %', '70 %', '10 %'])
     assert.equal(await frame.locator('[data-slot="allocation-slice-button"]').count(), 3)
-    // accent-500 / surface-disable / surface-subdued; shares in fg-soft on card-coloured discs.
     assert.deepEqual(await ramp(frame), [['rgb(251, 41, 14)', 'rgb(110, 110, 110)'],
       ['rgb(205, 205, 205)', 'rgb(110, 110, 110)'], ['rgb(238, 238, 238)', 'rgb(110, 110, 110)']])
-    // Flat: no filters, gradients or shadows on the ring or its share discs.
     assert.equal(await frame.locator('.allocation-ring filter, .allocation-ring [filter], .allocation-ring linearGradient').count(), 0)
     assert.ok(await frame.locator('.allocation-ring path, .allocation-disc').evaluateAll((nodes) =>
       nodes.every((node) => getComputedStyle(node).filter === 'none')))
@@ -156,7 +150,6 @@ test('real sample renders counts, percentages, source, filters and freshness wit
     await amountIs(frame, '10 oglasa')
     assert.equal(await context(frame), 'Ukupno oglasa · u odabranom skupu')
 
-    // Hover previews: the readout follows the segment under the pointer and counts to its ads.
     const point = await pointOn(frame, 0)
     await page.mouse.move(point.x, point.y)
     assert.equal(await context(frame), 'Nudi smještaj · 20,0\u00a0% svih oglasa')
@@ -164,15 +157,12 @@ test('real sample renders counts, percentages, source, filters and freshness wit
     const shape = (key) => frame.locator(`[data-key="${key}"] .allocation-shape`)
     assert.equal(await shape('offered').getAttribute('fill-opacity'), '1')
     assert.equal(await shape('not_offered').getAttribute('fill-opacity'), '0.32')
-    // A dimmed slice keeps a surface-disable edge, so the lightest one does not fade into the card.
     assert.equal(await shape('unknown').evaluate((el) => getComputedStyle(el).stroke), 'rgb(205, 205, 205)')
-    // Click selects; leaving the ring keeps the selection.
     await page.mouse.click(point.x, point.y)
     await page.mouse.move(0, 0)
     assert.match(await context(frame), /^Nudi smještaj · /)
     assert.equal(await segment(frame, 'Nudi smještaj').getAttribute('aria-pressed'), 'true')
     assert.match(await segment(frame, 'Nudi smještaj').getAttribute('aria-label'), /Nudi smještaj: 2 oglasa, 20,0.*svih oglasa/)
-    // Roving tab stop on the selection; the arrow keys and Home/End move the selection and the focus with it.
     assert.deepEqual(await frame.locator('[data-slot="allocation-slice-button"]').evaluateAll((nodes) =>
       nodes.map((node) => node.getAttribute('tabindex'))), ['0', '-1', '-1'])
     await segment(frame, 'Nudi smještaj').focus()
@@ -180,7 +170,6 @@ test('real sample renders counts, percentages, source, filters and freshness wit
     assert.match(await context(frame), /^Podatak nije poznat · /)
     await amountIs(frame, '1 oglas')
     assert.equal(await segment(frame, 'Podatak nije poznat').getAttribute('aria-pressed'), 'true')
-    // Focus follows the selection once Recharts has redrawn the segments.
     await frame.waitForFunction(() => document.activeElement?.dataset?.key === 'unknown')
     assert.equal(await segment(frame, 'Podatak nije poznat').evaluate((node) => getComputedStyle(node.querySelector('path')).stroke),
       'rgb(251, 41, 14)', 'the focused segment is ringed in red')
@@ -241,7 +230,6 @@ test('320px dark mobile supports touch selection, second-tap clearing and reduce
     await deliver(page, frame, sample())
     await page.evaluate(() => window.setTheme('dark'))
     await frame.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
-    // The same ramp in dark tokens (accent-500 is one red in both), with dark fg-soft shares.
     assert.deepEqual(await ramp(frame), [['rgb(251, 41, 14)', 'rgb(154, 154, 154)'],
       ['rgb(110, 110, 110)', 'rgb(154, 154, 154)'], ['rgb(58, 58, 58)', 'rgb(154, 154, 154)']])
     await frame.locator('.allocation-ring').scrollIntoViewIfNeeded()
@@ -251,7 +239,6 @@ test('320px dark mobile supports touch selection, second-tap clearing and reduce
     assert.equal(await frame.locator('.allocation-amount').textContent(), '1 oglas')
     await page.touchscreen.tap(point.x, point.y)
     assert.equal(await context(frame), 'Ukupno oglasa · u odabranom skupu')
-    // A tap in the hole clears a selection, as on the ring before segments were buttons.
     await page.touchscreen.tap(point.x, point.y)
     const box = await frame.locator('.allocation-ring').boundingBox()
     await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2)
@@ -268,7 +255,6 @@ test('all-unknown and single-known groups render complete rings; an empty result
       await deliver(page, frame, withCounts(counts))
       const index = counts.findIndex((n) => n > 0)
       assert.equal(await frame.locator('.allocation-legend-item:disabled').count(), 2)
-      // Empty groups have no segment; the one positive group is the whole ring.
       const key = ['offered', 'not_offered', 'unknown'][index]
       assert.deepEqual(await frame.locator('[data-slot="allocation-slice-button"]').evaluateAll((nodes) =>
         nodes.map((node) => node.dataset.key)), [key])
@@ -303,7 +289,6 @@ test('hidden iframe animations finish by deadline and keep final percentages whe
     await page.waitForTimeout(3100)
     await page.evaluate(() => { document.querySelector('iframe').style.display = 'block' })
     await frame.locator('.allocation-ring').waitFor()
-    // Recharts sweeps the ring in once the frame paints and adds the share labels when it ends.
     await frame.locator('[data-slot="allocation-share"]').nth(2).waitFor()
     assert.deepEqual(await frame.locator('[data-slot="allocation-share"]').allTextContents(), ['20 %', '70 %', '10 %'])
     assert.equal(await frame.locator('.allocation-amount').textContent(), '10 oglasa')

@@ -2,8 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* Geist and Geist Mono, latin and latin-ext only (Croatian needs č ć đ š ž): the build inlines each woff2 into the
-   view, so the page needs no font request and other subsets would only add weight. */
+
+
 @font-face {
   font-family: 'Geist';
   font-style: normal;
@@ -37,7 +37,7 @@
   unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
 }
 
-/* MCP hosts set data-theme; Tailwind variants follow that host setting. */
+
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme inline {
@@ -88,8 +88,8 @@
   --shadow-focus: var(--focus);
 }
 
-/* The DESIGN.md mono steps every view shares. Labels leave case and colour to the caller: short labels add
-   uppercase and fg-soft, names keep their own case. */
+
+
 @utility mono-label {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -105,7 +105,7 @@
   letter-spacing: -0.02em;
 }
 
-/* Semantic tokens also feed SVG gradients and data-driven chart geometry. */
+
 :root {
   --radius: 0.625rem;
   --destructive: #b42318;
@@ -139,13 +139,13 @@
   --accent-100: #ffd5ce;
   --accent-300: #ff7a66;
   --accent-500: #fb290e;
-  /* Translucent fill for ranges and areas; dark mode mixes the saturated red, since a pale one turns muddy. */
+
   --accent-wash: color-mix(in srgb, var(--accent-100) 70%, transparent);
   --warning-bg: #fff4e5;
   --warning-fg: #9a4d00;
   --focus: 0 0 0 2px color-mix(in srgb, var(--accent-500) 40%, transparent);
-  /* How strongly grey (inactive) data marks show: in full on the white card, toned down on the dark one, where the
-     greys stand out more. */
+
+
   --grey-look-opacity: 1;
   color-scheme: light;
 }

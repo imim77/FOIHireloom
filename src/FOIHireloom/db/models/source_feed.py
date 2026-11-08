@@ -24,8 +24,6 @@ if TYPE_CHECKING:
     from .job_feed_membership import JobFeedMembership
     from .sync_run import SyncRun
 
-# County feeds place a job in a county; occupation feeds only add an HZZ
-# occupation group to jobs already known from county feeds.
 SYNCED_SCOPES = ("county", "occupation")
 
 
@@ -89,9 +87,6 @@ class SourceFeed(Base):
     last_content_change_at: Mapped[datetime | None] = mapped_column(
         "vrijeme_zadnje_promjene_sadrzaja", DateTime(timezone=True), key="last_content_change_at",
     )
-    # An occupation feed's category, checked against the explicit categories of
-    # its own jobs because CKAN labels name the wrong group. Only a confirmed
-    # mapping may fill in categories that job descriptions leave out.
     mapped_category: Mapped[str | None] = mapped_column("pridruzena_kategorija", Text, key="mapped_category")
     mapping_status: Mapped[str | None] = mapped_column("stanje_pridruzivanja", Text, key="mapping_status")
     mapping_matching_examples: Mapped[int | None] = mapped_column(

@@ -10,7 +10,6 @@ from mcp.types import ToolAnnotations
 from FOIHireloom.exceptions import FOIHireloomException, PersistenceError
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False)
-# Keep data-only counterparts callable by apps without competing for model routing.
 DATA_ONLY = AppConfig(visibility=["app"])
 
 
@@ -27,7 +26,6 @@ class ToolGroup(ABC):
 
     @staticmethod
     def _add_tool(server: FastMCP, tool: Callable[..., Any], app: AppConfig | None = None) -> None:
-        # Every tool reads stored data only, so none chooses its own annotations.
         server.tool(app=app, annotations=READ_ONLY)(tool)
 
 

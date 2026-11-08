@@ -53,9 +53,7 @@ test('comparison keeps selection order, enforces three ads and sends a host mess
     const picks = frame.getByRole('checkbox')
     for (const index of [2, 0, 1]) await picks.nth(index).check()
     assert.equal(await picks.nth(3).isDisabled(), true)
-    // Picked cards are the view's only red: accent-500, #fb290e.
     assert.equal(await frame.locator('.job.compared').count(), 3)
-    // After the checkbox's colour transition, which reduced motion does not skip.
     assert.equal(await picks.first().evaluate(async (box) => {
       await Promise.all(box.getAnimations().map((animation) => animation.finished))
       return getComputedStyle(box).backgroundColor
@@ -85,7 +83,6 @@ test('replacement host results ignore pending job replies and reset request and 
     assert.equal(await frame.locator('.compare-bar').count(), 0)
     assert.equal(await frame.getByRole('button', { name: 'Prikaži još oglasa' }).isEnabled(), true)
     await reply(page, 0, { ...data, jobs: [{ ...data.jobs[0], id: 999 }] })
-    // A following request/reply round trip also flushes the earlier reply.
     await frame.getByRole('button', { name: 'Prikaži još oglasa' }).click()
     await request(page, 2)
     await reply(page, 1, { ...replacement, jobs: [], next_cursor: null })

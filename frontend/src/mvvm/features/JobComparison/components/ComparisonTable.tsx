@@ -9,7 +9,6 @@ import { capitalise, FEED_CATEGORY, sentenceCase, titleCase } from '../../../uti
 import type { ComparedJob, ComparisonCell, ComparisonRow, JobComparisonData } from '../types'
 
 const ROW_STAGGER = 60
-/** "Rovinj-Rovigno · Istarska županija": the town of work and the county, each when known. */
 function where(job: ComparedJob): string | null {
   const known = !/mjesto rada nije navedeno/i.test(job.display_location)
   const first = known ? job.display_location.split(',')[0].trim() : ''
@@ -18,12 +17,9 @@ function where(job: ComparedJob): string | null {
   return parts.length ? [...new Set(parts)].join(' · ') : null
 }
 
-/** Mounted once the data is there, so its entrance plays with the data. */
 export function ComparisonTable({ data, onOpenLink, expanded }: { data: JobComparisonData; onOpenLink: (url: string) => void; expanded: boolean }) {
   const root = useComparisonEntrance('job', ROW_STAGGER)
 
-  // The narrow aspect column (112px) still fits the longest aspect name, a mono "OBRAZOVANJE" (85px), beside its
-  // 24px padding, so no name breaks mid-word.
   return (
     <div className={`compare-scroll [--aspect:132px] [--column:168px] @container overflow-x-auto [overscroll-behavior-x:contain]
       max-w-full rounded-[10px]
@@ -60,7 +56,6 @@ export function ComparisonTable({ data, onOpenLink, expanded }: { data: JobCompa
 
 function JobHead({ job, onOpenLink }: { job: ComparedJob; onOpenLink: (url: string) => void }) {
   const title = sentenceCase(job.display_title)
-  // Employers in capitals, as on the cards; the placeholder is not a name and stays as it is.
   const employer = job.employer_name?.toLocaleUpperCase('hr-HR') ?? 'Poslodavac nije naveden'
   const place = where(job)
   return (
@@ -78,10 +73,10 @@ function JobHead({ job, onOpenLink }: { job: ComparedJob; onOpenLink: (url: stri
             <ExternalLinkIcon data-icon="inline-start" aria-hidden="true" />
           </Button>
         </div>
-        {/* "Kuhar/kuharica" may break after the slash in a narrow column. */}
+        {                                                                    }
         <span className="job-name text-[14px] font-medium leading-[1.4]">{title.replaceAll('/', '/​')}</span>
         <span className="job-employer text-[12px] font-medium">{employer}</span>
-        {/* Mono like the other short labels; the town and county keep their own case. */}
+        {                                                                                }
         {place && <span className="job-where mono-label text-fg-soft hyphens-manual">{place}</span>}
       </div>
     </TableHead>

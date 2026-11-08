@@ -18,7 +18,6 @@ from .apps.labour_market_forecast import labour_market_forecast
 from .apps.views import LABOUR_MARKET_FORECAST
 from .tool_provider import DATA_ONLY, ServiceToolGroup
 
-# Key of the forecast service in the server's lifespan context.
 LABOUR_FORECAST_SERVICE = "labour_forecast_service"
 
 ForecastCounties = Annotated[list[Annotated[str, Field(min_length=1, max_length=100)]], Field(

@@ -17,7 +17,6 @@ down_revision = "e0a2c4e6f8b0"
 branch_labels = None
 depends_on = None
 
-# Tables whose primary key column was identifikator; their identity sequence follows the column.
 TABLES = ['zupanije',
  'oglasi',
  'uvozi_dzs',
@@ -27,7 +26,6 @@ TABLES = ['zupanije',
  'sinkronizacije']
 APPLICATION_TABLES = [*TABLES, "pripadnosti_oglasa_kanalima"]
 
-# [table, English name, Croatian name]; frozen so downgrade does not depend on current models.
 CHECKS = [['zupanije', 'ck_zupanije_code_not_blank', 'ck_zupanije_sifra_nije_prazna'],
  ['zupanije', 'ck_zupanije_name_not_blank', 'ck_zupanije_naziv_nije_prazan'],
  ['zupanije', 'ck_zupanije_iso_code_valid', 'ck_zupanije_iso_sifra_ispravna'],
@@ -120,7 +118,6 @@ def _rename_primary_keys(before: str, after: str) -> None:
 
 
 def _name_not_null_constraints() -> None:
-    # PostgreSQL 18 names NOT NULL constraints when a column is created and keeps that name across renames.
     tables = ", ".join(f"'{table}'" for table in APPLICATION_TABLES)
     op.execute(f"""
         DO $$ DECLARE r record; BEGIN

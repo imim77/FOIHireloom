@@ -36,7 +36,6 @@ DISCLAIMER = ("Pokazatelji opisuju HZZ oglase i registriranu nezaposlenost, a ne
 NOTE_WORKERS = ("Traženi radnici zbrajaju se samo iz oglasa koji navode njihov broj, pa je broj nezaposlenih na "
                 "jednog traženog radnika veći kad manje oglasa navodi broj.")
 NOTE_MOMENTS = "HZZ oglasi su stanje u trenutku provjere, a DZS podaci za prošli referentni mjesec."
-# What a DZS value is about, in "DZS nema podatak o … za rujan 2026.".
 ABOUT: dict[DzsIndicator, str] = {
     "unemployed": "nezaposlenima",
     "active_population": "aktivnom stanovništvu",
@@ -87,7 +86,6 @@ def indicator_reason(indicator: CountyIndicatorDTO, dzs: DzsCountyValueDTO, per_
     if reason == dzs.unavailable_reason:
         return value_reason(dzs, about=True)
     if reason == "zero_denominator":
-        # A county without active ads seeks no workers through HZZ; a known 0 active population is a DZS value.
         return "županija nema aktivnih oglasa" if per_worker else "aktivno stanovništvo je 0"
     return UNAVAILABLE_REASONS[reason]
 

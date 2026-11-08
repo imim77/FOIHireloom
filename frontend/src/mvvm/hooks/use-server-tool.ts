@@ -1,7 +1,6 @@
 import type { App } from '@modelcontextprotocol/ext-apps'
 import { useEffect, useRef, useState } from 'react'
 
-/** useServerTool runs one request at a time and discards replies after unmount. */
 export function useServerTool<T>(app: App | null, name: string, failureMessage: string) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

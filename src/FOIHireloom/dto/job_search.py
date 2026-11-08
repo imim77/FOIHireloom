@@ -12,14 +12,10 @@ from .job_skills import Skill
 
 MAX_PAGE_SIZE = 20
 MAX_QUERY_LENGTH = 200
-# 50 years, well within the integer column.
 MAX_EXPERIENCE_MONTHS = 600
 PLACE_WORDS = re.compile(r"[^\W_]+(?: [^\W_]+)*")
 
-# fresh: every feed succeeded recently; stale: a feed's last success is too
-# old; unavailable: there is no enabled feed or one has never succeeded.
 type DataStatus = Literal["fresh", "stale", "unavailable"]
-# Whether the job's HZZ detail page was read; see Job.page_status.
 type DetailsStatus = Literal["pending", "fetched", "unavailable", "failed"]
 
 
@@ -105,7 +101,6 @@ class JobFilterCriteriaDTO(JobConditionFiltersDTO):
     @field_validator("terms")
     @classmethod
     def terms_are_single_words(cls, terms: tuple[str, ...]) -> tuple[str, ...]:
-        # Terms are joined into a to_tsquery() expression, so operators must not get through.
         if not all(SEARCH_TERM.fullmatch(term) for term in terms):
             raise ValueError("Search terms must be single words without punctuation.")
         return terms
@@ -113,7 +108,6 @@ class JobFilterCriteriaDTO(JobConditionFiltersDTO):
     @field_validator("place")
     @classmethod
     def place_is_words(cls, place: str | None) -> str | None:
-        # The place goes into a LIKE pattern, so wildcards must not get through.
         if place is not None and not PLACE_WORDS.fullmatch(place):
             raise ValueError("The place must be words separated by single spaces.")
         return place
@@ -178,7 +172,6 @@ class JobSummaryDTO(ModelConfigBaseModel):
         """The place of work with its county; says so when HZZ gave only the county."""
         if self.work_place:
             county = self.county_name
-            # The page usually names the county already: "PULA-POLA, ISTARSKA ŽUPANIJA".
             return f"{self.work_place}, {county}" if county and county.upper() not in self.work_place else self.work_place
         place = self.location_text or self.municipality
         if place and self.county_name:

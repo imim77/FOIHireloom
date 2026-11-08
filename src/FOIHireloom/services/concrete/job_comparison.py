@@ -55,15 +55,12 @@ ACCOMMODATION_NAMES = {
     "single": "single accommodation",
     "family": "a family flat",
 }
-# Why every condition of a job is unknown while its page is not read, by its details_status.
 UNREAD_REASONS = {
     "pending": "the job's HZZ page has not been read yet",
     "unavailable": "HZZ did not return the job's page, so its conditions are unknown",
     "failed": "reading the job's HZZ page failed, so its conditions are unknown",
     "fetched": "the job's conditions are unknown",
 }
-# The unknown_reason code of every condition of a job whose page is not read, by its details_status. A fetched job
-# without stored conditions has not had its page read either.
 UNREAD_CODES: dict[str, UnknownReason] = {
     "pending": "page_not_read",
     "unavailable": "page_unavailable",
@@ -205,7 +202,6 @@ class ContractRow(ConditionAspectRow):
         contract = None if conditions is None else conditions.contract
         value = None if contract is None else CONTRACT_NAMES[contract]
         evidence = self._evidence(job, "employment_type")
-        # The page states a type of employment it recognised, but no contract among it.
         types_only = conditions is not None and bool(evidence) and "employment_type" not in conditions.unrecognised
 
         def reasons(verdict: ConditionVerdict) -> str:
@@ -282,7 +278,6 @@ class DeadlineRow(ComparisonAspectRow):
         return ComparisonCellDTO(job_id=job.summary.id, value=value, evidence=evidence, verdict=None, reason=None)
 
 
-# The comparison's rows, in order.
 ASPECT_ROWS: tuple[ComparisonAspectRow, ...] = (
     ExperienceRow(), EducationRow(), ContractRow(), WorkingTimeRow(), AccommodationRow(), DeadlineRow(),
 )

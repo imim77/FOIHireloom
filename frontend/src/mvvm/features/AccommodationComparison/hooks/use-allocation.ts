@@ -4,7 +4,6 @@ import type { AccommodationGroup } from '../types'
 
 const mod = (value: number, size: number) => ((value % size) + size) % size
 
-/** useAllocation owns visible groups, the denominator, segment selection and the readout over the ring. */
 export function useAllocation(groups: AccommodationGroup[], total: number) {
   const [hidden, setHidden] = useState<string[]>([])
   const [selected, setSelected] = useState<number | null>(null)
@@ -16,7 +15,6 @@ export function useAllocation(groups: AccommodationGroup[], total: number) {
   const shares = values.map((value) => visibleTotal ? value / visibleTotal * 100 : 0)
   const pick = (index: number | null) => index !== null && values[index] > 0 ? index : null
   const active = pick(hovered) ?? pick(previewed) ?? pick(selected)
-  // Roving tab stop: the selected segment, else the first one drawn.
   const tabStop = pick(selected) ?? shown[0] ?? null
   function showGroups(keys: string[]) {
     const visible = groups.filter((group) => group.jobs > 0 && keys.includes(group.key))
@@ -29,10 +27,8 @@ export function useAllocation(groups: AccommodationGroup[], total: number) {
     setSelected(selected === index ? null : index)
   }
 
-  /** Handles a key on the segment at index; returns the segment to focus, or null when the key is not ours. */
   function navigate(key: string, index: number): number | null {
     if (key === 'Escape') { setHovered(null); setPreviewed(null); setSelected(null); return index }
-    // Segments are SVG paths, which have no native button activation.
     if (key === 'Enter' || key === ' ') { selectGroup(index); return index }
     const at = shown.indexOf(index)
     const next = ({ ArrowRight: at + 1, ArrowDown: at + 1, ArrowLeft: at - 1, ArrowUp: at - 1,
@@ -46,8 +42,6 @@ export function useAllocation(groups: AccommodationGroup[], total: number) {
 
   const filtered = visibleTotal !== total
   const denominator = filtered ? 'prikazanih oglasa' : 'svih oglasa'
-  // Over the ring: the active segment's name and share, then its ad count; every visible ad without one. Name and
-  // share are apart from the detail so the view sets only the detail's label words in uppercase.
   const readout = active === null
     ? { name: null, share: null, detail: `Ukupno oglasa · ${filtered ? 'u prikazanim skupinama' : 'u odabranom skupu'}`,
       amount: visibleTotal }

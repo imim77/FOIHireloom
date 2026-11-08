@@ -8,7 +8,6 @@ import type { CountyComparisonData } from '../types'
 
 const ROW_STAGGER = 45
 
-/** When the HZZ ads were checked and which month the DZS values are for, in one muted line: they are different moments. */
 export function Moments({ data }: { data: CountyComparisonData }) {
   const months = [...new Set(data.dzs_periods.flatMap((reference) => reference.period ?? []))]
   const provisional = data.counties.some((county) => [county.unemployed, county.active_population,
@@ -20,15 +19,12 @@ export function Moments({ data }: { data: CountyComparisonData }) {
   return parts.length ? <p data-enter className="moments m-0 text-[12px] text-fg-soft">{parts.join(' · ')}</p> : null
 }
 
-// Extreme marks a row's highest or lowest value. Grey, not red: two marks share a row, and DESIGN.md allows one red
-// datum per view.
 function Extreme({ children }: { children: string }) {
   return <span className="extreme inline-flex items-center gap-1.5 mono-label uppercase not-italic text-fg-soft
     whitespace-nowrap [&::before]:[content:''] [&::before]:flex-none [&::before]:size-1.5 [&::before]:rounded-full
     [&::before]:bg-fg-soft">{children}</span>
 }
 
-/** Mounted once the data is there, so its entrance plays with the data. */
 export function ComparisonTable({ data, expanded }: { data: CountyComparisonData; expanded: boolean }) {
   const root = useComparisonEntrance('county', ROW_STAGGER)
 
@@ -39,7 +35,7 @@ export function ComparisonTable({ data, expanded }: { data: CountyComparisonData
       [&:focus-visible]:[outline:none] [&:focus-visible]:shadow-focus [&.expanded]:[--aspect:200px]
       [&.expanded]:[--column:200px] ${expanded ? ' expanded' : ''}`} ref={root} role="region" tabIndex={0}
       aria-label="Usporedba županija po oglasima i nezaposlenosti">
-      {/* Groups are set apart by space over a hairline, as Dalco divides its lists; no filled bands. */}
+      {                                                                                                 }
       <Table variant="comparison" containerClassName="contents" className="compare [@container(max-width:_520px)]:[--aspect:108px] [@container(max-width:_520px)]:[--column:120px]
         hyphens-auto [overflow-wrap:break-word] w-full
         [min-width:calc(var(--aspect)_+_var(--counties)_*_var(--column))] table-fixed border-separate

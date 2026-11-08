@@ -57,10 +57,8 @@ class DzsIndicatorValue(Base):
         "id_zupanije", SmallInteger, ForeignKey("zupanije.id", ondelete="RESTRICT"), key="county_id",
     )
     indicator: Mapped[str] = mapped_column("pokazatelj", Text, key="indicator")
-    # First day of the reference month.
     period: Mapped[date] = mapped_column("razdoblje", Date, key="period")
     sex: Mapped[str] = mapped_column("spol", Text, key="sex")
-    # Persons as whole numbers; the rate in percent with one decimal.
     value: Mapped[Decimal | None] = mapped_column("vrijednost", Numeric, key="value")
     missing_reason: Mapped[str | None] = mapped_column("razlog_nedostupnosti", Text, key="missing_reason")
     is_provisional: Mapped[bool] = mapped_column("privremeni_podatak", Boolean, key="is_provisional")

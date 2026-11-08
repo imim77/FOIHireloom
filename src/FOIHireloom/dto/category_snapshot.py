@@ -3,9 +3,6 @@ from uuid import UUID
 
 from .base import ModelConfigBaseModel
 
-# A snapshot's job row: source job ID, description category, occupation feed
-# IDs, stored category, its source and its feed ID. Categories are indices
-# into CategorySnapshotDTO.categories.
 CategorySnapshotRow = tuple[str | None, int | None, tuple[int, ...], int | None, str | None, int | None]
 JOB_COLUMNS = (
     "source_job_id", "description_category", "occupation_feed_ids", "category", "category_source", "category_feed_id",

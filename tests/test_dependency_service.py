@@ -29,7 +29,6 @@ class DependencyServiceTests(unittest.IsolatedAsyncioTestCase):
                 dzs_imports=SimpleNamespace(get_latest_succeeded=AsyncMock(return_value=None)),
             )
             self.contexts.append(work)
-            # Overlap contexts to prove services do not share a transaction.
             await asyncio.sleep(0)
             try:
                 yield work
@@ -120,7 +119,7 @@ class DependencyServiceTests(unittest.IsolatedAsyncioTestCase):
         @asynccontextmanager
         async def broken_indicators():
             raise RuntimeError("startup failed")
-            yield  # This opener fails before yielding a service.
+            yield
 
         with self.assertRaisesRegex(RuntimeError, "startup failed"):
             async with self.dependencies.read_services(job_search=search, county_indicators=broken_indicators,

@@ -39,10 +39,8 @@ from .feed_coverage import FeedCoverage
 from .job_comparison import JobComparator
 from .job_presentation import JobPresenter
 
-# Job IDs are bigint identities.
 MAX_JOB_ID = 2**63 - 1
 
-# JobResult makes a page entry from a job, today, its county, its title match and the skills searched for.
 type JobResult[T: JobSummaryDTO] = Callable[[Job, date, JobCountyDTO | None, bool | None, tuple[Skill, ...]], T]
 
 
@@ -113,7 +111,6 @@ class JobSearchService(JobSearchServiceInterface):
                 open_on=None if filters.include_expired else today,
                 **conditions,
                 after=after,
-                # One extra row tells whether another page exists.
                 limit=filters.limit + 1,
             )
             found = await work.jobs.search(criteria)
@@ -189,7 +186,6 @@ class JobSearchService(JobSearchServiceInterface):
             conditions = None
         async with self._uow_factory() as work:
             today = local_date(await work.transaction_time())
-            # An ID outside the identity column's range cannot name a job.
             found = await work.jobs.list_by_ids([job_id for job_id in ids if 1 <= job_id <= MAX_JOB_ID])
             jobs = {job.id: job for job in found}
             if missing := [str(job_id) for job_id in ids if job_id not in jobs]:

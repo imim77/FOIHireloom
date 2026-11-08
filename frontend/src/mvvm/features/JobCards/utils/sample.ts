@@ -15,7 +15,6 @@ const conditions = (fields: Partial<JobConditions>): JobConditions => ({
   ...fields,
 })
 
-/** Shown outside a host, e.g. on the dev server; dates count from 31. 10. 2026. */
 export function sample(): JobCardsData {
   return {
     title: 'Oglasi za „kuhar”',
@@ -61,7 +60,6 @@ export function sample(): JobCardsData {
       }),
       job(3, {
         display_title: 'KUHAR/KUHARICA U RESTORANU', employer_name: 'LOTTA, obrt za ugostiteljstvo, vl. Ana Horvat',
-        // Filled in from the occupation feed, and with experience the normaliser did not recognise.
         category: 'UGOSTITELJI, RADNICI U TURIZMU', category_source: 'feed', county_name: 'Grad Zagreb',
         work_place: 'ZAGREB', published_on: '2026-10-20', deadline_on: '2026-11-19', deadline_passed: false,
         workers_needed: 2, employment_type: 'Na neodređeno; novootvoreni poslovi', working_hours: 'Puno radno vrijeme',

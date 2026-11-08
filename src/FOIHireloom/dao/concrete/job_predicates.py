@@ -56,7 +56,6 @@ def filter_conditions(criteria: JobFilterCriteriaDTO) -> list[ColumnElement[bool
     if criteria.open_on is not None:
         conditions.append(open_condition(criteria.open_on))
     if criteria.skills:
-        # An unmentioned skill does not count as an unknown working condition.
         conditions.append(Job.skills.overlap(list(criteria.skills)))
     return [*conditions, *condition_filters(criteria).values()]
 
@@ -91,13 +90,10 @@ def _offers_accommodation(offered: bool) -> ColumnElement[bool]:
 
 def _works_in(place: str) -> ColumnElement[bool]:
     pattern = f"% {place} %"
-    # The page names the county after a comma: "VARAŽDIN, VARAŽDINSKA ŽUPANIJA".
     return or_(place_words(func.split_part(Job.page_work_place, ",", 1)).like(pattern),
                place_words(Job.municipality).like(pattern))
 
 
-# Condition filters by JobConditionFiltersDTO field; a new filter needs only
-# an entry here for search, statistics and unknown-value counts to apply it.
 CONDITION_FILTERS: dict[str, ConditionFilter] = {
     "max_experience_months": ConditionFilter(
         lambda months: Job.experience_months <= months, Job.experience_months.is_(None)),

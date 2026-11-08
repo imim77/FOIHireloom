@@ -10,7 +10,6 @@ from FOIHireloom.exceptions import InvalidJobSearchError
 from .croatian_stem import stem
 from .search_text import SEARCH_FOLD
 
-# HZZ deadlines are Croatian calendar days and stay open until the end of the day.
 LOCAL_TIME_ZONE = ZoneInfo("Europe/Zagreb")
 INVALID_CURSOR = "The cursor is not valid; start the search again without it."
 
@@ -41,7 +40,6 @@ def search_terms(query: str | None) -> tuple[str, ...]:
     """The query's words, folded and stemmed as the search vector is; raise InvalidJobSearchError without any."""
     if query is None or not query.strip():
         return ()
-    # Stemmed, so "medicinske sestre" also finds "MEDICINSKA SESTRA".
     words = SEARCH_TERM.findall(query.translate(SEARCH_FOLD).casefold())
     terms = tuple(dict.fromkeys(stem(word) for word in words))
     if not terms:
@@ -53,7 +51,6 @@ def condition_criteria(filters: JobConditionFiltersDTO) -> dict[str, object]:
     """The condition filters as criteria; empty tags, skills or a blank place is no filter."""
     place = None
     if filters.place and filters.place.strip():
-        # Folded as query words are, but not stemmed: a place name matches as whole words.
         if not (words := SEARCH_TERM.findall(filters.place.translate(SEARCH_FOLD).casefold())):
             raise InvalidJobSearchError("The place contains no words.")
         place = " ".join(words)

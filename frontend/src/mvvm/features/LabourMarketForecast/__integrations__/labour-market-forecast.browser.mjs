@@ -10,14 +10,12 @@ test('Chronos displays exact medians and intervals, preserves gaps and supports 
   county.history[4].is_estimated = true
   const { page, frame } = await open('labour-market-forecast', data)
   try {
-    // Exact values, sources and notes wait behind one details control, so the chart is the focus.
     assert.equal(await frame.locator('[data-slot="forecast-row"], .sources, .notes').count(), 0)
     await frame.getByRole('button', { name: 'Detalji, izvori i napomene' }).click()
     assert.equal(await frame.locator('[data-slot="forecast-row"]').count(), county.forecast.length)
     assert.equal(await frame.locator('.sources').count(), 1)
     assert.equal(await frame.locator('.forecast-band .recharts-area-area').count(), 1)
     assert.equal(await frame.locator('[data-slot="history-node"]').count(), county.history.length - 1)
-    // No history line crosses the missing month; the estimated month starts a dashed run.
     const runs = await frame.locator('[data-slot="history-run"]').evaluateAll((paths) =>
       paths.map((p) => ({ from: p.dataset.from, to: p.dataset.to, flagged: p.dataset.flagged === 'true' })))
     const gap = county.history[3].period
@@ -29,12 +27,10 @@ test('Chronos displays exact medians and intervals, preserves gaps and supports 
     await frame.waitForFunction(() => document.querySelector('[data-slot="forecast-cursor"]').dataset.period === '2026-10-01')
     assert.match(await frame.locator('[data-slot="forecast-median"]').textContent(), /2,6.*%/)
     assert.match(await frame.locator('[data-slot="forecast-interval"]').textContent(), /2,3.*2,9.*80%/)
-    // One sentence carries the interval and the change against the last observed value.
     assert.match(await frame.locator('[data-slot="forecast-summary"]').textContent(),
       /\+0,1\s?p\.\s?b\. u odnosu na rujan 2026\. \(privremeno\)/)
     await slider.press('ArrowRight')
     await frame.waitForFunction(() => document.querySelector('[data-slot="forecast-cursor"]').dataset.period === '2026-11-01')
-    // Hover previews the last period, leaving falls back to the selection, a click selects.
     const cursor = (period) => frame.waitForFunction((period) =>
       document.querySelector('[data-slot="forecast-cursor"]').dataset.period === period, period)
     const plot = await frame.locator('.forecast-plot').boundingBox()
@@ -50,7 +46,6 @@ test('Chronos displays exact medians and intervals, preserves gaps and supports 
     await cursor('2027-03-01')
     assert.match(await slider.getAttribute('aria-valuetext'), /ožujak 2027/)
     assert.ok(await frame.getByRole('region', { name: 'Povijesne vrijednosti' }).getByText('procijenjeno', { exact: true }).count())
-    // Grey history, dashed red projection, in both themes.
     const strokes = () => frame.evaluate(() => ({
       history: getComputedStyle(document.querySelector('.forecast-observed .recharts-curve')).stroke,
       forecast: getComputedStyle(document.querySelector('.forecast-predicted .recharts-curve')).stroke,
@@ -60,7 +55,6 @@ test('Chronos displays exact medians and intervals, preserves gaps and supports 
     await page.evaluate(() => window.setTheme('dark'))
     await frame.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
     assert.deepEqual(await strokes(), { history: 'rgb(154, 154, 154)', forecast: 'rgb(251, 41, 14)', dashed: true })
-    // The dark wash mixes the saturated red, so the interval reads red rather than muddy on the dark card.
     assert.match(await frame.evaluate(() => getComputedStyle(document.querySelector('.forecast-band .recharts-area-area')).fill),
       /0\.984314 0\.160784 0\.054902 \/ 0\.4\)$/)
     const replacement = { ...data, title: 'Prognoza nije dostupna', unavailable_label: 'Potrebna su 24 mjeseca podataka.',

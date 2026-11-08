@@ -7,7 +7,6 @@ from typing import Any, ClassVar, NoReturn
 
 from FOIHireloom.exceptions import PersistenceError
 
-# CommandRun is a started command, for asyncio.run() to drive to its result.
 type CommandRun[Result] = Coroutine[Any, Any, Result]
 
 

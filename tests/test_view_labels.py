@@ -73,7 +73,6 @@ class ActiveFiltersTests(unittest.TestCase):
             ("max_experience_months", "bez iskustva"), ("contract", "na neodređeno"),
             ("full_time", "puno radno vrijeme"), ("education", "obrazovanje: viša škola ili prvostupnik"),
             ("accommodation", "bez smještaja"),
-            # Tags keep their fixed order.
             ("employment_tags", "vrsta zaposlenja: sezonski posao i pripravnik"),
             ("place", "mjesto rada Pula"), ("include_expired", "uključujući istekle oglase"),
         ])
@@ -89,7 +88,6 @@ class ActiveFiltersTests(unittest.TestCase):
     def test_unset_and_blank_filters_have_no_label(self) -> None:
         self.assertEqual(labels(), [])
         self.assertEqual(labels(query="kuhar", county=" ", category="", place="  ", employment_tags=()), [])
-        # The chart's filters have no county or page but are labelled the same.
         self.assertEqual([chip.label for chip in active_filters(JobMarketFiltersDTO(full_time=False, top=3))],
                          ["nepuno radno vrijeme"])
 
@@ -100,7 +98,6 @@ class UnknownNoteTests(unittest.TestCase):
 
     def test_counts_the_jobs_and_names_the_unknown_values_most_often_unknown_first(self) -> None:
         note = unknown_note({"full_time": 27, "contract": 27, "max_experience_months": 30, "place": 0}, 30)
-        # Ties keep the order of the filters; a filter with no unknown values is left out.
         self.assertEqual(note, "Još 30 oglasa možda odgovara, ali im nije poznato: iskustvo (30), ugovor (27), "
                                "radno vrijeme (27).")
 

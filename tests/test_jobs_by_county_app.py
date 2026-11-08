@@ -52,7 +52,6 @@ class JobsByCountyAppTests(unittest.TestCase):
         self.assertEqual((by_workers.metric, by_workers.title),
                          ("workers_needed", "Broj traženih radnika po županijama"))
         self.assertEqual([county.code for county in by_workers.counties], ["b", "a", "c"])
-        # Ties keep name order.
         self.assertEqual([county.code for county in jobs_by_county(stats_, 7, ALL).counties], ["a", "b", "c"])
 
     def test_description_names_the_query_the_filters_and_the_day(self) -> None:
@@ -60,7 +59,6 @@ class JobsByCountyAppTests(unittest.TestCase):
                          "Aktivni oglasi na dan 30. 10. 2026.")
         filters = JobMarketFiltersDTO(query="kuhar", category="UGOSTITELJI", full_time=True, include_expired=True)
         chart = jobs_by_county(stats(), 8, filters)
-        # The day says that expired jobs count, so the description does not name that filter again.
         self.assertEqual(chart.description,
                          "Upit „kuhar” · kategorija UGOSTITELJI · puno radno vrijeme · svi oglasi na dan 30. 10. 2026.")
         self.assertEqual([chip.argument for chip in chart.active_filters], ["category", "full_time", "include_expired"])
@@ -100,7 +98,6 @@ class JobsByCountyAppTests(unittest.TestCase):
     def test_built_page_inlines_the_sdk_and_draws_shadcn_bar_chart(self) -> None:
         html = JOBS_BY_COUNTY.page()
         self.assertTrue(html.startswith("<!doctype html>"))
-        # Built by frontend/ into one file: nothing loads from the web.
         for absent in ("unpkg", 'src="http', "<link"):
             with self.subTest(absent=absent):
                 self.assertNotIn(absent, html)
@@ -138,7 +135,6 @@ class BuiltPagesTests(unittest.TestCase):
             (frontend / "dist").mkdir()
             (frontend / "dist" / "sources.json").write_text(
                 json.dumps({"sources": ["src", "package.json"], "files": files}))
-            # Dotfiles such as .DS_Store do not count.
             (frontend / "src" / ".DS_Store").write_text("x")
             self.assertEqual(stale_sources(frontend), [])
 

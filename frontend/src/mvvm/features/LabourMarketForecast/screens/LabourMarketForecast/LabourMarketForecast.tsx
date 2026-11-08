@@ -8,10 +8,6 @@ import type { ForecastData } from '../../types'
 
 const EYEBROW = 'Prognoza'
 
-/**
- * LabourMarketForecast frames the forecast: the reason when there is none, the view itself, and one details
- * control that keeps the exact values (details), sources and methodology notes out of the way until asked for.
- */
 export function LabourMarketForecast({ data, onOpenLink, details, children }: {
   data: ForecastData | null
   onOpenLink: (url: string) => void

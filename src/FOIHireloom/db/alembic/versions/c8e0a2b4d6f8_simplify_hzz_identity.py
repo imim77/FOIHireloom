@@ -14,7 +14,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Hold writers out until the preconditions and new constraints agree.
     op.execute("LOCK TABLE jobs, source_feeds IN ACCESS EXCLUSIVE MODE")
     op.execute("""
         DO $$ BEGIN

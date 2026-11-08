@@ -3,7 +3,6 @@ import { test } from 'node:test'
 import { createServer } from 'vite'
 import { chromium } from 'playwright'
 
-// Production bundles cannot catch module URLs that fail only at the page root.
 test('Vite serves every preview URL and its MVVM modules', async () => {
   const server = await createServer({
     logLevel: 'error',

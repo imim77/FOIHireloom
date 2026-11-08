@@ -14,7 +14,6 @@ const COUNTIES: [string, string, number, number][] = [
   ['Ličko-senjska županija', 'Ličko-senjska', 91, 170],
 ]
 
-/** Shown outside a host, e.g. on the dev server; "?metric=workers_needed" ranks by workers sought. */
 export function sample(): JobsByCountyData {
   const counties = COUNTIES.map(([name, short_name, jobs, workers_needed]) => ({
     name, short_name, jobs, workers_needed, share: Math.round((1000 * jobs) / 7676) / 10,

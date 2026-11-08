@@ -18,7 +18,7 @@ from FOIHireloom.domain.job_search import local_date
 
 from .county_indicators import HZZ_SOURCE, add_months, sources
 
-MAX_CONTEXT_MONTHS = 120  # DZS county series start in 2020; older months add little for the model.
+MAX_CONTEXT_MONTHS = 120
 MAX_CONTEXT_WEEKS = 156
 
 NOTE_DZS_PERIOD = ("The forecast starts in the month after the latest DZS month known for every requested county. "
@@ -43,7 +43,7 @@ class CountySeries:
     """Past values of one target on a shared timeline, oldest first; None marks a missing value."""
 
     periods: tuple[date, ...]
-    values: dict[int, list[float | None]] = field(default_factory=dict)  # By county ID, aligned with periods.
+    values: dict[int, list[float | None]] = field(default_factory=dict)
     provisional: dict[int, list[bool | None]] = field(default_factory=dict)
     estimated: dict[int, list[bool | None]] = field(default_factory=dict)
     unavailable_reason: ForecastUnavailableReason | None = None
@@ -62,8 +62,8 @@ class CountySeriesLoader(ABC):
     frequency: ForecastFrequency
     default_horizon: int
     max_horizon: int
-    min_history: int  # Known past values a county needs for a forecast.
-    shown_history: int  # Past periods reported next to the forecast.
+    min_history: int
+    shown_history: int
     uses_sex: bool
 
     @property
@@ -102,7 +102,7 @@ class MonthValue:
     is_estimated: bool = False
 
 
-type MonthValues = dict[tuple[int, date], MonthValue]  # By county ID and month.
+type MonthValues = dict[tuple[int, date], MonthValue]
 
 
 class DzsSeriesLoader(CountySeriesLoader):
@@ -111,7 +111,7 @@ class DzsSeriesLoader(CountySeriesLoader):
     frequency = "month"
     default_horizon = 12
     max_horizon = 24
-    min_history = 24  # Two years, so the model can see the seasonal pattern at least twice.
+    min_history = 24
     shown_history = 24
     uses_sex = True
 
@@ -266,14 +266,13 @@ class HzzJobAdsSeriesLoader(CountySeriesLoader):
         if started is None:
             return CountySeries(periods=(), unavailable_reason="no_hzz_data", sources=(HZZ_SOURCE,))
         today = local_date(await work.transaction_time())
-        last = monday(today) - timedelta(weeks=1)  # The current week is not over yet.
+        last = monday(today) - timedelta(weeks=1)
         first = max(monday(local_date(started)) + timedelta(weeks=1), last - timedelta(weeks=MAX_CONTEXT_WEEKS - 1))
         weeks = max(0, (last - first).days // 7 + 1)
         periods = tuple(first + timedelta(weeks=offset) for offset in range(weeks))
         ids = tuple(county.id for county in counties)
         rows = await work.jobs.weekly_published_counts(ids, first, last) if periods else []
         counts = {(row.county_id, row.week): row.jobs for row in rows}
-        # A week without ads is a known 0: the feeds were read, nothing was published.
         values: dict[int, list[float | None]] = {
             county_id: [float(counts.get((county_id, week), 0)) for week in periods] for county_id in ids}
         return CountySeries(periods=periods, values=values, sources=(HZZ_SOURCE,))

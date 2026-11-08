@@ -8,16 +8,8 @@ from .job_search import CandidateConditionsDTO, DetailsStatus, JobSummaryDTO
 MIN_COMPARED_JOBS = 2
 MAX_COMPARED_JOBS = 3
 
-# The aspects a comparison shows, in its order.
 type ComparisonAspect = Literal["experience", "education", "contract", "working_time", "accommodation", "deadline"]
-# match: the job's own value meets the person's condition; no_match: it is known and does not; unknown: the job's
-# value is not known. A verdict is about what the job page states, never about whether the employer would accept
-# the person.
 type ConditionVerdict = Literal["match", "no_match", "unknown"]
-# Why a job's value for a condition aspect is unknown. page_not_read, page_unavailable and page_failed: the job page
-# was never read, because it is still pending, HZZ returned an error page, or fetching it failed; not_stated: the read
-# page does not state it; unreadable: the page states it in words that were not recognised; contract_not_stated: the
-# page states the type of employment (e.g. "Novootvoreni poslovi") but not the contract.
 type UnknownReason = Literal[
     "page_not_read", "page_unavailable", "page_failed", "not_stated", "unreadable", "contract_not_stated",
 ]

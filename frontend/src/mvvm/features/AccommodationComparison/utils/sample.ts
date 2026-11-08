@@ -1,6 +1,5 @@
 import type { AccommodationComparisonData } from '../types'
 
-// Preview outside a host: the server's real local data for Varaždinska and query kuhar, 2 November 2026.
 export function sample(): AccommodationComparisonData {
   return {
   "title": "Smještaj u oglasima za posao",

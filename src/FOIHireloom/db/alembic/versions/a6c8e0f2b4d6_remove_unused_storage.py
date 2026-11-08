@@ -17,8 +17,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Stop if another installation used the legacy storage outside this app.
-    # Lock first so a concurrent writer cannot bypass the check.
     op.execute(
         "LOCK TABLE jobs, employers, web_documents, employer_web_documents, "
         "job_web_documents IN ACCESS EXCLUSIVE MODE"

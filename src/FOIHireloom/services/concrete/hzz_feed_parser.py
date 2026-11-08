@@ -16,7 +16,6 @@ DESCRIPTION_PREFIX = "Opis posla:"
 SUFFIX_START = ", Kategorija: "
 SUFFIX_LABEL = re.compile(r", (Kategorija|Rok za prijavu|Mjesto rada|Općina|Županija): ")
 DEADLINE = re.compile(r"(\d{2})\.(\d{2})\.(\d{4})")
-# HZZ cuts descriptions at 512 characters before its last escaping pass.
 TRUNCATION_LENGTH = 500
 TITLE_LIMIT = 150
 

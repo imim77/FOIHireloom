@@ -1,6 +1,5 @@
 const round = (value: number) => Math.round(value * 1000) / 1000
 
-/** Six or so round percentage ticks, with a visible baseline and a nonzero range even for all-zero data. */
 export function rateAxis(values: number[]) {
   const known = values.filter(Number.isFinite)
   const low = Math.min(0, ...known)
@@ -14,7 +13,6 @@ export function rateAxis(values: number[]) {
   return { low: ticks[0], high: ticks.at(-1)!, ticks }
 }
 
-/** Keep the first and last month and reserve room for year labels at both edges. */
 export function monthTicks(count: number, width: number) {
   if (!count) return []
   let labels = Math.min(count, Math.max(1, Math.floor(width / 120) + 1))

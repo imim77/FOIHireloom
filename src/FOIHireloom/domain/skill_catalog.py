@@ -8,7 +8,6 @@ SKILL_FOLD_FROM = "ČĆŽŠĐčćžšđ"
 SKILL_FOLD_TO = "CCZSDcczsd"
 URL_PATTERN = r"(https?://|www[.])[^\s<>]+"
 
-# Explicit ASCII boundaries work in both Python re and PostgreSQL ARE.
 SKILL_PATTERNS = {
     "csharp": r"(^|[^a-z0-9])(c#|c sharp)([^a-z0-9]|$)",
     "dotnet": r"(^|[^a-z0-9])(asp[.]net|[.]net)([^a-z0-9]|$)",

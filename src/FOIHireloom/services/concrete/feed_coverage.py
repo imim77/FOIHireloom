@@ -3,7 +3,6 @@ from datetime import UTC, datetime, timedelta
 
 from FOIHireloom.dto.job_search import CountyFeedCheckDTO, CoverageDTO, DataStatus, RegionFreshnessDTO
 
-# Counties named in a coverage warning before the rest are only counted.
 WARNING_REGION_LIMIT = 5
 
 

@@ -1,6 +1,5 @@
 import type { ForecastData } from '../types'
 
-/** Synthetic values for the standalone preview only; hosted results always come from the tool. */
 export function sample(): ForecastData {
   const history = [3.2, 3.3, 3.1, 2.9, 2.7, 2.5, 2.4, 2.4, 2.3, 2.5, 2.7, 2.8,
     2.9, 3, 2.8, 2.6, 2.4, 2.2, 2.1, 2, 2.1, 2.3, 2.4, 2.5].map((value, index) => ({

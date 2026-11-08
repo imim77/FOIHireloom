@@ -6,7 +6,6 @@ from FOIHireloom.db.uow.base import UnitOfWorkFactory
 from FOIHireloom.dto.job_conditions import JobConditionsDTO, JobConditionsRunDTO, RawJobConditionsDTO
 from FOIHireloom.services.interfaces.job_conditions import JobConditionsServiceInterface
 
-# Keys are casefolded HZZ wording; tag and level codes keep the order given here.
 EXPERIENCE = re.compile(r"(?:(\d+) (?:godin[aeu]|g\.)(?: i |$))?(?:(\d+) mjesec[ai]?)?")
 WEEKLY_HOURS = re.compile(r"(\d+) sat[ai]? tjedno")
 CONTRACTS = {
@@ -63,7 +62,6 @@ class JobConditionsNormalizer:
     """
 
     def __init__(self) -> None:
-        # The parser of each page field, by its RawJobConditionsDTO name; None means unrecognised.
         self._parsers: dict[str, Callable[[Parts], dict[str, Any] | None]] = {
             "experience": self._experience,
             "employment_type": self._employment_type,

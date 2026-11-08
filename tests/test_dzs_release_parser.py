@@ -35,7 +35,6 @@ class DzsReleaseParserTests(unittest.TestCase):
     def test_release_keeps_t1_for_shared_keys_and_the_workbook_series_for_the_rest(self) -> None:
         release = self.parse()
         counts = Counter(value.source for value in release.values)
-        # 21 counties: T1 4 indicators x 3 months x 2 sexes; workbook 11 months minus the 3 T1 months.
         self.assertEqual(counts, {"t1": 504, "workbook_9_4_13": 21 * 2 * 8, "workbook_9_4_14": 21 * (3 * 11 - 2 * 3)})
         self.assertEqual(len(release.values), len({value.key for value in release.values}))
         self.assertNotIn(None, {value.county_iso for value in release.values})
@@ -53,7 +52,6 @@ class DzsReleaseParserTests(unittest.TestCase):
         self.assertNotIn(("HR-05", "active_population", september, "men"), values)
         self.assertFalse(values[("HR-05", "active_population", date(2025, 12, 1), "total")].is_provisional)
         self.assertTrue(values[("HR-05", "active_population", date(2026, 1, 1), "women")].is_provisional)
-        # Annual averages are not stored as months.
         self.assertEqual(min(value.period for value in release.values), date(2025, 11, 1))
         self.assertEqual(
             [(s.source, s.values, s.first_period, s.last_period) for s in release.series],
@@ -66,7 +64,6 @@ class DzsReleaseParserTests(unittest.TestCase):
     def test_markers_and_empty_cells_are_missing_values_and_zero_is_a_value(self) -> None:
         for month, value in ((11, "-"), (12, "…"), (1, None), (2, " "), (3, 0), (4, "..."), (5, " - ")):
             self.files.set_series("9.4.14.", "Istarska", 2025 + (month < 7), month, "men", value)
-        # A marker in both files agrees; T1's identity check cannot apply to it.
         self.files.set_t1("Istarska", "women", "unemployed", 7, "-")
         self.files.set_t1("Istarska", "women", "unemployment_rate", 7, "-")
         self.files.set_series("9.4.14.", "Istarska", 2026, 7, "women", "-")
@@ -85,7 +82,6 @@ class DzsReleaseParserTests(unittest.TestCase):
         self.assertEqual(stored(2026, 5), (None, "no_occurrence"))
         self.assertEqual(stored(2026, 7, "women"), (None, "no_occurrence"))
         self.assertEqual(stored(2026, 7, "women", "unemployed"), (None, "no_occurrence"))
-        # Six workbook cells and two T1 cells; T1 replaces the workbook's marker for the shared key.
         self.assertEqual([s.missing for s in self.parse().series], [2, 0, 6])
 
     def test_rates_accept_int_and_float_cells_with_one_decimal(self) -> None:
@@ -174,7 +170,6 @@ class DzsReleaseParserTests(unittest.TestCase):
         problems = self.assert_problem(
             f"T1: Ličko-senjska županija 2026-08 women: active population {active + 1} is not employed"
         )
-        # The workbook still has the old figure.
         self.assertTrue(any("T1 and 9.4.13. differ for Ličko-senjska županija 2026-08 women" in p for p in problems))
 
         self.files = DzsFiles()

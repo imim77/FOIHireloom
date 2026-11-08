@@ -40,7 +40,7 @@ class ChronosForecaster(TimeSeriesForecasterInterface):
         pipeline = await self._loaded()
         try:
             return await asyncio.to_thread(self._predict, pipeline, histories, horizon)
-        except Exception as error:  # Any model failure is the same to the caller: no forecast.
+        except Exception as error:
             logger.exception("Chronos forecast failed")
             raise ForecastUnavailableError("The forecasting model failed to produce a forecast.") from error
 
@@ -57,7 +57,7 @@ class ChronosForecaster(TimeSeriesForecasterInterface):
             raise ForecastUnavailableError(f"Forecasting needs Amazon Chronos; {INSTALL_HINT}.") from error
         try:
             return BaseChronosPipeline.from_pretrained(self._model, device_map=self._device)
-        except Exception as error:  # Download, file and device errors alike leave no model.
+        except Exception as error:
             logger.exception("Loading Chronos model %s failed", self._model)
             raise ForecastUnavailableError(f"The forecasting model {self._model} could not be loaded.") from error
 
@@ -68,8 +68,6 @@ class ChronosForecaster(TimeSeriesForecasterInterface):
         inputs = [torch.tensor(list(history), dtype=torch.float32) for history in histories]
         quantiles, _ = pipeline.predict_quantiles(
             inputs, prediction_length=horizon, quantile_levels=list(QUANTILE_LEVELS))
-        # Chronos-2 returns a list of (variates, horizon, quantiles) tensors,
-        # Bolt and T5 one (series, horizon, quantiles) tensor; both iterate per series.
         forecasts = []
         for series in quantiles:
             steps = series.reshape(horizon, len(QUANTILE_LEVELS)).tolist()

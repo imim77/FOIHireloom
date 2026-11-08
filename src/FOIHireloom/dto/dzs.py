@@ -7,7 +7,6 @@ from .base import ModelConfigBaseModel
 DzsIndicator = Literal["active_population", "employed", "unemployed", "unemployment_rate"]
 DzsSex = Literal["total", "women", "men"]
 DzsValueSource = Literal["t1", "workbook_9_4_13", "workbook_9_4_14"]
-# "-" means no occurrence, "…" that DZS does not have the figure; neither is a zero.
 DzsMissingReason = Literal["no_occurrence", "not_available", "empty"]
 DzsFileRole = Literal["t1", "workbook"]
 DzsImportStatus = Literal["succeeded", "failed", "rejected", "validated"]

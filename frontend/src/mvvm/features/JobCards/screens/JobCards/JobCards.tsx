@@ -10,7 +10,6 @@ import { useJobGridMotion } from '../../hooks/use-job-grid-motion'
 
 export const EYEBROW = 'Oglasi'
 
-/** show_jobs: the found jobs as cards, with more on request; expanded (full screen) they fill several columns. */
 export function JobCards({ data, cards, loading, error, actions, comparison,
   loadMore, removeFilter, expanded, toggle }:
   ReturnType<typeof useJobCards> & { expanded: boolean; toggle: () => void }) {
@@ -55,7 +54,7 @@ export function JobCards({ data, cards, loading, error, actions, comparison,
               pop(event.currentTarget, 0.94)
               void loadMore()
             }}>
-              {/* DESIGN.md's secondary action: an outline pill whose label rolls on hover, with a chevron. */}
+              {                                                                                               }
               <RollLabel>{loading ? 'Učitavanje…' : 'Prikaži još oglasa'}</RollLabel>
               <span aria-hidden="true">›</span>
             </Button>

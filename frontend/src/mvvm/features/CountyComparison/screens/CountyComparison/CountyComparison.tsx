@@ -1,9 +1,3 @@
-// show_county_comparison: 2 to 6 counties side by side in a table, a column per county and three groups of rows: the
-// HZZ ads matching the filters, the DZS values with their reference months, and the two indicators, which describe
-// each county as a whole. Groups are set apart by space over a hairline. An unavailable value says why, never 0 or ∞.
-// Over the table the filters (removable when the host lets the view call tools) and the two moments the data refers
-// to; under it the coverage warning, the sources and the notes. In a narrow frame the table scrolls sideways under its
-// sticky row names. Animated like the job comparison: the counties' headings rise in one after another, then the rows.
 
 import { Card, ExpandButton, Warning } from '../../../../components/Card'
 import { FilterChips } from '../../../../components/FilterChips'

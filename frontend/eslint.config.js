@@ -25,4 +25,16 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    files: ['src/mvvm/hooks/use-expanded.ts'],
+    rules: {
+      'no-empty': ['error', { allowEmptyCatch: true }],
+    },
+  },
+  {
+    files: ['src/mvvm/hooks/chart-motion.ts'],
+    rules: {
+      'react-hooks/exhaustive-deps': 'off',
+    },
+  },
 ])

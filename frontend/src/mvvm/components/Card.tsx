@@ -8,36 +8,24 @@ import { Empty, EmptyDescription, EmptyHeader } from './ui/empty'
 import { Skeleton } from './ui/skeleton'
 import { clearEntrance, enter, MOTION, useChartEntrance } from '../hooks/chart-motion'
 
-// The card's own parts around the view's chart, readout and rows: notes, warnings, sources, footers and anything a
-// view marks with data-enter.
 const FRAME = '.notes, .warning, .sources, .footer, [data-enter]'
 
 interface CardProps {
-  // The kind of view, e.g. "Broj oglasa", as a red-dotted mono label over the title; not for data.
   eyebrow?: string
   title: string
   description: string
-  // Buttons at the end of the header, e.g. <ExpandButton>.
   actions?: ReactNode
   children?: ReactNode
   loading?: boolean
 }
 
-/**
- * Card frames every view. Once its content is there it plays the frame's entrance, so every view moves the same
- * way: the header (eyebrow, title, description, actions) rises in first, the notes with the view's readout, and the
- * sources, footers and other marked parts once the view's own marks have drawn. Views animate their content.
- */
 export function Card({ eyebrow, title, description, actions, children, loading = false }: CardProps) {
   const root = useRef<HTMLDivElement>(null)
   useChartEntrance(root, (timeline) => {
     const card = root.current!
     const header = [...card.querySelectorAll('[data-slot="eyebrow"], [data-slot="card-title"], '
       + '[data-slot="card-description"], [data-slot="card-action"]')]
-    // A part inside another part comes in with it.
     const parts = [...card.querySelectorAll(FRAME)].filter((el) => !el.parentElement?.closest(FRAME))
-    // Parts above the view's own content (filters, coverage warnings) come in with the readout; parts under it, once
-    // the marks have drawn. The content starts at the first element that neither is, holds nor sits in a part.
     const body = card.querySelector('[data-slot="card-content"]')
     const content = [...body?.querySelectorAll('*') ?? []].find((el) =>
       !el.closest(FRAME) && !el.querySelector(FRAME))
@@ -52,7 +40,7 @@ export function Card({ eyebrow, title, description, actions, children, loading =
   return (
     <SurfaceCard className="card min-w-0" role="group" aria-label={title} aria-busy={loading}
       ref={root}>
-      {/* With an eyebrow, actions sit beside the eyebrow line rather than centred on three lines. */}
+      {                                                                                              }
       <CardHeader className={cn('header flex min-w-0 gap-3', eyebrow ? 'items-start' : 'items-center')}>
         <div className="titles flex min-w-0 flex-1 flex-col gap-1.5">
           {eyebrow && <Eyebrow text={eyebrow} />}
@@ -73,7 +61,6 @@ export function Card({ eyebrow, title, description, actions, children, loading =
   )
 }
 
-// Uppercase comes from CSS, so screen readers read words rather than letters.
 function Eyebrow({ text }: { text: string }) {
   return <p className="eyebrow m-0 mb-1 flex items-center gap-2 mono-label uppercase text-fg-soft" data-slot="eyebrow">
     <span className="size-1.5 flex-none rounded-full bg-accent-500" aria-hidden="true" />{text}
@@ -95,7 +82,6 @@ export function EmptyState({ children }: { children: ReactNode }) {
 
 type Text = string | null | undefined
 
-/** How current the data is, as a warning, and under it one or more quieter notes; nothing when all are empty. */
 export function Notes({ warning, note }: { warning: Text; note: Text | Text[] }) {
   const notes = (Array.isArray(note) ? note : [note]).filter((text): text is string => Boolean(text))
   if (!warning && !notes.length) return null
@@ -112,7 +98,6 @@ export function ExpandButton({ expanded, label, onClick }: { expanded: boolean; 
   </Button>
 }
 
-// A failure shows in the card instead of leaving it empty.
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null }
 
