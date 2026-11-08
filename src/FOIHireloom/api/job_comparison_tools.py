@@ -96,6 +96,13 @@ class JobComparisonTools(JobToolGroup):
         comparison and also returns the data. If the selected ads cannot be
         identified from the conversation, ask which ads to compare; never invent IDs.
 
+        On MCP Apps hosts, the app is the detailed comparison. After success,
+        write only 1-3 short sentences about the key difference for the user's
+        stated priorities, any urgent deadline or material unknown. Do not
+        reproduce the comparison as a Markdown table, bullet list or field-by-field
+        text. Provide a full text comparison only if explicitly requested or the
+        host cannot render MCP Apps. If the tool fails, explain the error.
+
         Pass only the user's stated conditions, never guessed or inferred ones.
         Returns rows for experience, education, contract, working time,
         accommodation and deadline, with evidence and per-condition verdicts.

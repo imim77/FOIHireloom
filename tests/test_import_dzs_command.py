@@ -68,8 +68,8 @@ class ImportDzsCommandTests(unittest.TestCase):
         service = FakeDzsImportService()
         code, out, _, databases = self.run_main(service)
         self.assertEqual((code, databases), (0, [True]))
-        self.assertEqual(service.calls, [("import", DzsSourceDTO(location="https://example.com/t1.xlsx"),
-                                          DzsSourceDTO(location="https://example.com/workbook.xlsx"))])
+        self.assertEqual(service.calls, [("import", DzsSourceDTO(location=Settings().DZS_T1_URL),
+                                          DzsSourceDTO(location=Settings().DZS_WORKBOOK_URL))])
         summary = json.loads(out)
         self.assertEqual((summary["import_id"], summary["status"], summary["values_inserted"]), (7, "succeeded", 504))
         self.assertEqual(summary["series"][0]["first_period"], "2026-07-01")
@@ -83,7 +83,7 @@ class ImportDzsCommandTests(unittest.TestCase):
                                           DzsSourceDTO(location="raw/workbook.xlsx", local=True))])
         self.run_main(service, "--t1-file", "raw/t1.xlsx")
         self.assertEqual(service.calls[-1][1:], (DzsSourceDTO(location="raw/t1.xlsx", local=True),
-                                                 DzsSourceDTO(location="https://example.com/workbook.xlsx")))
+                                                 DzsSourceDTO(location=Settings().DZS_WORKBOOK_URL)))
 
     def test_exits_1_when_the_import_fails_is_rejected_or_the_database_fails(self) -> None:
         for status in ("failed", "rejected"):

@@ -50,8 +50,8 @@ class DatabaseConfigurationTests(unittest.IsolatedAsyncioTestCase):
                 settings = Settings(_env_file=env_file)
 
         self.assertEqual(settings.DATABASE_URL, "postgresql+asyncpg://example/db")
-        self.assertEqual(settings.DATABASE_POOL_SIZE, 3)
-        self.assertEqual(settings.DATABASE_MAX_OVERFLOW, 2)
+        self.assertEqual(settings.DATABASE_POOL_SIZE, 5)
+        self.assertEqual(settings.DATABASE_MAX_OVERFLOW, 10)
 
     def test_dotenv_loads_database_settings_and_ignores_unrelated_values(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -66,7 +66,7 @@ class DatabaseConfigurationTests(unittest.IsolatedAsyncioTestCase):
                 settings = Settings(_env_file=env_file)
 
         self.assertEqual(settings.DATABASE_URL, "postgresql+asyncpg://file/db")
-        self.assertEqual(settings.DATABASE_POOL_SIZE, 8)
+        self.assertEqual(settings.DATABASE_POOL_SIZE, 5)
 
     def test_pool_limits_reject_invalid_values(self) -> None:
         with self.assertRaises(ValidationError):

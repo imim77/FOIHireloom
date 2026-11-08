@@ -177,3 +177,6 @@ postman/
 
 # Claude Code local settings
 .claude/
+
+# Local setup marker
+.setup-done

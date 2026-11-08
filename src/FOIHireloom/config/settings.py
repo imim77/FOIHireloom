@@ -12,6 +12,13 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    @classmethod
+    def settings_customise_sources(cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings):
+        def database_only(source):
+            return lambda: {key: value for key, value in source().items() if key == "DATABASE_URL"}
+
+        return init_settings, database_only(env_settings), database_only(dotenv_settings)
+
     DATABASE_URL: str = (
         "postgresql+asyncpg://myuser:mypassword@localhost:5432/myapp"
     )
@@ -61,7 +68,7 @@ class Settings(BaseSettings):
     MCP_PORT: int = Field(default=8000, ge=1, le=65535)
     MCP_PATH: str = Field(default="/mcp", pattern=r"^/[^\s]*$")
     # Host names, besides localhost, that clients may use to reach the HTTP
-    # server, e.g. a tunnel or proxy domain. Comma-separated in the environment.
+    # server, e.g. a tunnel or proxy domain.
     MCP_ALLOWED_HOSTS: Annotated[list[str], NoDecode] = []
 
     @field_validator("MCP_ALLOWED_HOSTS", mode="before")

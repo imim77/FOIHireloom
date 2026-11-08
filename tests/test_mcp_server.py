@@ -563,15 +563,15 @@ class McpSettingsTests(unittest.TestCase):
             with self.subTest(values=values), self.assertRaises(ValidationError):
                 Settings(_env_file=None, **values)
 
-    def test_allowed_hosts_are_comma_separated_in_the_environment(self) -> None:
+    def test_allowed_hosts_in_the_environment_are_ignored(self) -> None:
         with mock.patch.dict(os.environ, {"MCP_ALLOWED_HOSTS": "a.ngrok-free.app, b.example.com,"}):
-            self.assertEqual(Settings(_env_file=None).MCP_ALLOWED_HOSTS, ["a.ngrok-free.app", "b.example.com"])
+            self.assertEqual(Settings(_env_file=None).MCP_ALLOWED_HOSTS, [])
 
     def test_command_line_options_override_settings(self) -> None:
         with mock.patch.dict(os.environ, {"MCP_TRANSPORT": "stdio", "MCP_PORT": "9000"}):
             settings = settings_from_args(["--transport", "http", "--host", "0.0.0.0", "--path", "/x"])
         self.assertEqual((settings.MCP_TRANSPORT, settings.MCP_HOST, settings.MCP_PORT, settings.MCP_PATH),
-                         ("http", "0.0.0.0", 9000, "/x"))
+                         ("http", "0.0.0.0", 8000, "/x"))
         with self.assertRaises(SystemExit), mock.patch("sys.stderr"):
             settings_from_args(["--transport", "sse"])
 

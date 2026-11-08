@@ -1,61 +1,23 @@
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties } from 'react'
 import { useComparisonEntrance } from '../../../hooks/use-comparison-entrance'
-import { formatDay, formatInteger, formatMoment, formatMonth } from '../../../utils/format'
+import { formatMoment, formatMonth } from '../../../utils/format'
 import { Sources } from '../../../components/Sources'
-import { FIRST_ROWS, noHzz, SECTIONS } from '../utils/county-rows'
-import type { CountyComparisonData, DzsIndicator } from '../types'
+import { FIRST_ROWS, SECTIONS } from '../utils/county-rows'
+import type { CountyComparisonData } from '../types'
 
 const ROW_STAGGER = 45
 
-const DZS_NAMES: Record<DzsIndicator, string> = {
-  unemployed: 'nezaposleni',
-  active_population: 'aktivno stanovništvo',
-  unemployment_rate: 'stopa',
-  employed: 'zaposleni',
-}
-
-/** When the HZZ ads were checked and which month the DZS values are for, side by side: they are different moments. */
+/** When the HZZ ads were checked and which month the DZS values are for, in one muted line: they are different moments. */
 export function Moments({ data }: { data: CountyComparisonData }) {
-  const periods = data.dzs_periods.filter((reference) => reference.period !== null)
-  const months = [...new Set(periods.map((reference) => reference.period!))]
+  const months = [...new Set(data.dzs_periods.flatMap((reference) => reference.period ?? []))]
   const provisional = data.counties.some((county) => [county.unemployed, county.active_population,
     county.unemployment_rate].some((value) => value.is_provisional))
-  return (
-    <dl data-enter className="moments grid [grid-template-columns:repeat(auto-fit,_minmax(180px,_1fr))] gap-2 m-0">
-      <Moment label="HZZ oglasi provjereni" note="posljednja uspješna provjera svih uspoređenih županija">
-        {data.hzz_coverage.data_as_of ? formatMoment(data.hzz_coverage.data_as_of) : 'nije poznato'}
-      </Moment>
-      <Moment label="DZS referentni mjesec"
-        note={data.requested_period ? 'zadani mjesec' : 'posljednji mjesec s podatkom za sve uspoređene županije'}>
-        {!months.length ? 'nije dostupan' : months.length === 1 ? formatMonth(months[0])
-          : periods.map((reference) => `${DZS_NAMES[reference.indicator]}: ${formatMonth(reference.period!)}`)
-            .join(' · ')}
-        {provisional && <Provisional />}
-      </Moment>
-    </dl>
-  )
-}
-
-// Moment is a dense fact on a sunken tile, like Dalco's spec panels: mono label and value, a sans note under them.
-function Moment({ label, note, children }: { label: string; note: string; children: ReactNode }) {
-  return (
-    <div className="moment flex flex-col gap-1.5 min-w-0 p-3 rounded-[10px] bg-surface-sunken">
-      <dt className="mono-label uppercase text-fg-soft">{label}</dt>
-      <dd className="moment-value m-0 flex flex-wrap items-center gap-1.5 font-mono text-[14px] font-medium leading-[1.3]">
-        {children}
-      </dd>
-      <dd className="soft m-0 text-[12px] leading-[1.35] text-fg-soft">{note}</dd>
-    </div>
-  )
-}
-
-// Provisional marks a value DZS may still revise, in mono like the other short labels.
-function Provisional() {
-  return <Badge variant="provisional" className="provisional font-mono font-normal uppercase tracking-[0.04em]">
-    privremeno
-  </Badge>
+  const parts = [
+    data.hzz_coverage.data_as_of && `Oglasi: ${formatMoment(data.hzz_coverage.data_as_of)}`,
+    months.length && `Nezaposlenost: ${months.map(formatMonth).join(', ')}${provisional ? ' (privremeno)' : ''}`,
+  ].filter(Boolean)
+  return parts.length ? <p data-enter className="moments m-0 text-[12px] text-fg-soft">{parts.join(' · ')}</p> : null
 }
 
 // Extreme marks a row's highest or lowest value. Grey, not red: two marks share a row, and DESIGN.md allows one red
@@ -83,20 +45,14 @@ export function ComparisonTable({ data, expanded }: { data: CountyComparisonData
         [min-width:calc(var(--aspect)_+_var(--counties)_*_var(--column))] table-fixed border-separate
         border-spacing-0 [&_th]:[padding:10px_12px] [&_th]:text-left [&_th]:align-top [&_td]:[padding:10px_12px]
         [&_td]:text-left [&_td]:align-top [&_tbody_tr:not(.section)_>_*]:[border-top:1px_solid_var(--border)]
-        [&_.section_>_th]:[padding:24px_0_8px]" style={{ '--counties': data.counties.length } as CSSProperties}>
+        [&_.section_>_th]:[padding:20px_0_8px] [&_thead_th]:[border-bottom:2px_solid_var(--fg-loud)]" style={{ '--counties': data.counties.length } as CSSProperties}>
         <TableHeader>
           <TableRow>
-            <TableCell sticky className="corner w-(--aspect)" />
+            <TableCell sticky className="corner w-(--aspect) bg-surface-sunken" />
             {data.counties.map((county) => (
               <TableHead key={county.code} scope="col" className="county-head">
-                <div className="county-head-inner flex flex-col gap-1 min-w-0" data-slot="county">
-                  <span className="county-name text-[14px] font-medium leading-[1.4]">{county.short_name}</span>
-                  {/* The label is uppercase, the number keeps its own case. */}
-                  <span className="county-total mono-label text-fg-soft hyphens-manual">
-                    {noHzz(county) ? <span className="uppercase">HZZ oglasi nisu učitani</span> : <>
-                      <span className="uppercase">svih aktivnih oglasa:</span> {formatInteger(county.all_active_jobs.jobs)}
-                    </>}
-                  </span>
+                <div className="county-head-inner min-w-0" data-slot="county">
+                  <span className="county-name text-[16px] font-semibold leading-[1.3]">{county.short_name}</span>
                 </div>
               </TableHead>
             ))}
@@ -108,42 +64,32 @@ export function ComparisonTable({ data, expanded }: { data: CountyComparisonData
             <TableBody key={section.key} className={section.key}>
               <TableRow className="section">
                 <TableHead scope="colgroup" colSpan={data.counties.length + 1}>
-                  <div className="section-inner sticky left-0 flex flex-wrap items-baseline [gap:2px_8px] [width:max-content]
-                    [max-width:min(100cqw,_100%)] [padding:0_12px]" data-row={sectionRow}>
+                  <div className="section-inner sticky left-0 [width:max-content] [padding:0_12px]" data-row={sectionRow}>
                     <span className="section-name mono-label font-medium uppercase text-fg-loud">{section.name}</span>
-                    <span className="section-hint text-[12px] font-normal text-fg-soft">{section.hint}</span>
                   </div>
                 </TableHead>
               </TableRow>
               {section.rows.map((row, r) => {
                 const rowIndex = sectionRow + 1 + r
-                const cells = data.counties.map((county) => row.cell(county, data))
+                const cells = data.counties.map((county) => row.cell(county))
                 const known = cells.flatMap((cell) => cell.value ?? [])
                 const high = Math.max(...known)
                 const low = Math.min(...known)
                 const marked = row.extremes && known.length > 1 && high !== low
                 return (
                   <TableRow key={row.key}>
-                    <TableHead scope="row" sticky="column" className="aspect w-(--aspect)">
-                      <div className="aspect-inner font-medium leading-[1.4] min-w-0" data-row={rowIndex}>{row.name}</div>
+                    <TableHead scope="row" sticky="column" className="aspect w-(--aspect) bg-surface-sunken text-fg-soft">
+                      <div className="aspect-inner font-medium leading-[1.4] min-w-0" data-row={rowIndex}>{row.name(data)}</div>
                     </TableHead>
                     {cells.map((cell, j) => (
-                      <TableCell key={data.counties[j].code} className={`cell [&.unavailable_.cell-text]:font-sans
-                        [&.unavailable_.cell-text]:text-[12px] [&.unavailable_.cell-text]:font-normal
-                        [&.unavailable_.cell-text]:italic [&.unavailable_.cell-text]:text-fg-soft
-                        [&.unavailable_.cell-note]:text-warning-fg ${cell.unavailable ? ' unavailable' : ''}`}>
-                        <div className="cell-inner flex flex-col items-start gap-1 min-w-0" data-row={rowIndex}>
-                          <span className="cell-text flex flex-wrap items-center [gap:4px_8px] font-mono text-[14px] font-medium">
-                            {cell.text}
+                      <TableCell key={data.counties[j].code} title={cell.reason ?? undefined}
+                        className={`cell ${cell.unavailable ? ' unavailable text-fg-soft' : ''}`}>
+                        <div className="cell-inner min-w-0" data-row={rowIndex}>
+                          <span className="cell-text flex flex-wrap items-center [gap:4px_8px] font-mono text-[15px] font-medium">
+                            {cell.text}{cell.provisional && <span aria-label="privremeno" className="text-fg-soft">*</span>}
                             {marked && cell.value === high && <Extreme>najviše</Extreme>}
                             {marked && cell.value === low && <Extreme>najmanje</Extreme>}
                           </span>
-                          {(cell.note || cell.provisional) && (
-                            <span className="cell-note flex flex-wrap items-center [gap:4px_6px] text-[12px] text-fg-soft tabular-nums hyphens-manual">
-                              {cell.note}
-                              {cell.provisional && <Provisional />}
-                            </span>
-                          )}
                         </div>
                       </TableCell>
                     ))}
@@ -160,8 +106,6 @@ export function ComparisonTable({ data, expanded }: { data: CountyComparisonData
 
 export function Footer({ data, onOpenLink }: { data: CountyComparisonData; onOpenLink: (url: string) => void }) {
   return (
-    <Sources onOpenLink={onOpenLink} links={data.source_links}>
-      {data.dzs && <span>DZS podaci uvezeni {formatDay(data.dzs.finished_at)}</span>}
-    </Sources>
+    <Sources onOpenLink={onOpenLink} links={data.source_links} />
   )
 }

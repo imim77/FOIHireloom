@@ -31,6 +31,16 @@ AND automatically present the appropriate cards, ranking, comparison or history
 on MCP Apps hosts. Use them even for ordinary questions. Never ask the user to
 say "kao graf", "kao kartice", "chart", "table" or choose a display format first.
 
+On MCP Apps hosts, let the show_ tool's UI present the detailed results.
+After a successful show_ call, add only 1-3 short sentences with the main
+takeaway and any material warning. Do not repeat the app's rows, cards or
+chart values as a Markdown table, list or full textual comparison.
+For job comparisons, briefly explain the decisive difference for the user's
+stated priorities and highlight an urgent deadline or unknown condition when
+relevant. Preserve required coverage notes in this short commentary.
+Provide a full text version only if the user explicitly requests it or the
+host cannot render MCP Apps. If the tool fails, explain the error instead.
+
 Route by intent:
 - Find or browse individual vacancies, including jobs with accommodation or no
   experience -> show_jobs. Example: "Tražim posao kuhara sa smještajem" means
@@ -62,6 +72,10 @@ or insert filter words into query. Omit expired ads unless requested. For missin
 required counties or selected job IDs ask for that information, not for a format.
 The server reads stored data, never live HZZ/DZS. Preserve freshness warnings,
 unknown values, sources, provisional flags and distinct HZZ/DZS reference dates.
+When a result reports stored ads absent from every county feed, mention their
+count and exclusion in your answer, even if the chart also shows the note.
+That count covers the entire database, not the user's filters; absence from
+feeds alone does not prove expiry. Never equate stored ads with available jobs.
 Unknown accommodation is not "no accommodation"; missing values are not zero.
 County-wide ratios never use only one occupation's ads. Use canonical_url to
 read the original advertisement or apply; do not invent facts or promise employment.

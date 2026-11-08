@@ -36,6 +36,7 @@ def jobs_by_county(
         description=filters_description(filters, stats.today),
         today=stats.today,
         total_jobs=stats.jobs,
+        unlisted_jobs=stats.unlisted_jobs,
         total_workers_needed=stats.workers_needed,
         top=top,
         counties=tuple(_share(county, stats.jobs) for county in counties),

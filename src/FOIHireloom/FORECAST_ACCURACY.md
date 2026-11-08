@@ -18,7 +18,7 @@ uv run --locked --extra forecast foihireloom-forecast-accuracy \
 
 Repeat `--county` for several counties, using codes or names from `list_regions`.
 `--sex total|women|men` selects the DZS series. The model and device come from
-`CHRONOS_MODEL` and `CHRONOS_DEVICE`, just as for live forecasts. The first run
+the built-in `CHRONOS_MODEL` and `CHRONOS_DEVICE` settings, just as for live forecasts. The first run
 downloads the model. Keeping the `forecast` extra enabled in `uv run` retains
 Chronos and PyTorch in the environment.
 

@@ -71,6 +71,10 @@ class JobMarketTools(JobToolGroup):
         in several groups. Shares must name their denominator. published_recently
         and closing_soon use window_days relative to today. Report unknown_total
         and coverage.warning. Null or unreported conditions are never negative answers.
+        When unlisted_jobs is positive, tell the user that this many stored ads
+        across the entire database are absent from every current county feed and
+        excluded from the totals. This count ignores search filters and deadlines;
+        absence from feeds alone does not prove that an ad has expired.
         """
         filters = JobMarketFiltersDTO(**tool_arguments(locals()))
         return await self._call(self._service(ctx).market_stats(filters))
@@ -155,6 +159,16 @@ class JobMarketTools(JobToolGroup):
         select the occupation and requirements. top limits initially visible
         counties, not the counted population. share is a percentage of total_jobs.
         Report coverage_note and unknown_note; missing conditions stay unknown.
+        On MCP Apps hosts, let the chart present the ranking. After success,
+        write only 1-3 short sentences with the leading county or key takeaway
+        and material caveats. Do not repeat county counts as a Markdown table,
+        bullet list or full textual ranking. Provide a full text ranking only
+        if explicitly requested or the host cannot render MCP Apps.
+        When unlisted_jobs is positive, mention in this accompanying text that
+        this many stored ads across the entire database are absent from every
+        current county feed and excluded from displayed counts. This global
+        count ignores search filters and deadlines; absence alone does not prove
+        expiry. This explanation belongs in the LLM's text, not a UI warning.
 
         For a comparison of named counties including DZS unemployment use
         show_county_comparison. For actual job vacancies use show_jobs; for

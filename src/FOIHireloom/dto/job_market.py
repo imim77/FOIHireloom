@@ -103,6 +103,10 @@ class JobMarketAggregatesDTO(ModelConfigBaseModel):
     """
 
     jobs: int
+    unlisted_jobs: int = Field(default=0, ge=0, description=(
+        "Stored ads across the entire database absent from every current county feed, regardless of search "
+        "filters or deadline. Excluded from these totals; absence alone does not prove expiry."
+    ))
     with_details: int
     with_category: int
     category_from_description: int
@@ -163,6 +167,11 @@ class JobsByCountyDTO(ModelConfigBaseModel):
     description: str
     today: date
     total_jobs: int
+    unlisted_jobs: int = Field(default=0, ge=0, description=(
+        "For the LLM's accompanying text only, not a UI warning: stored ads across the entire database "
+        "absent from every current county feed and excluded from displayed counts, regardless of filters "
+        "or deadline. Absence alone does not prove expiry."
+    ))
     total_workers_needed: int
     top: int
     counties: tuple[CountyShareDTO, ...]

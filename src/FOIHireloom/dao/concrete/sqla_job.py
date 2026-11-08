@@ -113,6 +113,9 @@ class SqlAlchemyJobRepository(SqlAlchemyRepository, JobRepository):
         )
         return JobMarketAggregatesDTO(
             **await self._market_totals(found, criteria.today),
+            unlisted_jobs=await self._session.scalar(
+                select(func.count()).select_from(Job).where(not_(listed_condition()))
+            ),
             counties=await self._county_counts(found),
             **await self._market_breakdowns(found, criteria.top),
         )

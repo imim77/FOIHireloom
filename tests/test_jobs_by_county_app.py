@@ -79,6 +79,24 @@ class JobsByCountyAppTests(unittest.TestCase):
         chart = jobs_by_county(stats(jobs=0).model_copy(update={"counties": ()}), 8, JobMarketFiltersDTO(query="pilot"))
         self.assertEqual((chart.total_jobs, chart.counties), (0, ()))
 
+    def test_unlisted_ads_are_available_to_the_llm_without_a_ui_warning(self) -> None:
+        data = stats(jobs=12).model_copy(update={"unlisted_jobs": 5183})
+        chart = jobs_by_county(data, 7, JobMarketFiltersDTO(query="kuhar"))
+        self.assertEqual(chart.total_jobs, 12)
+        self.assertEqual(chart.coverage.data_status, "fresh")
+        self.assertEqual(chart.unlisted_jobs, 5183)
+        self.assertIsNone(chart.coverage_note)
+
+    def test_unlisted_note_preserves_existing_coverage_warning(self) -> None:
+        data = stats().model_copy(update={
+            "unlisted_jobs": 1,
+            "coverage": FRESH.model_copy(update={"data_status": "unavailable"}),
+        })
+        chart = jobs_by_county(data, 7, ALL)
+        self.assertEqual(chart.coverage_note,
+                         "Nijedna županija nije registrirana, pa nema podataka o oglasima.")
+        self.assertEqual(chart.unlisted_jobs, 1)
+
     def test_built_page_inlines_the_sdk_and_draws_shadcn_bar_chart(self) -> None:
         html = JOBS_BY_COUNTY.page()
         self.assertTrue(html.startswith("<!doctype html>"))

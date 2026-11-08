@@ -1,6 +1,6 @@
 """Run `uv run --locked foihireloom-mcp [--transport stdio|http] [--host H] [--port P] [--path /mcp]`.
 
-    Options override the MCP_* settings from the environment or .env.
+    Options override the built-in MCP server defaults.
 """
 
 import argparse

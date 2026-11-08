@@ -5,7 +5,7 @@
 // to; under it the coverage warning, the sources and the notes. In a narrow frame the table scrolls sideways under its
 // sticky row names. Animated like the job comparison: the counties' headings rise in one after another, then the rows.
 
-import { Card, ExpandButton, Notes, Warning } from '../../../../components/Card'
+import { Card, ExpandButton, Warning } from '../../../../components/Card'
 import { FilterChips } from '../../../../components/FilterChips'
 import { ComparisonTable, Footer, Moments } from '../../components/CountyComparisonDetails'
 import type { useCountyComparison } from '../../hooks/use-county-comparison'
@@ -28,7 +28,6 @@ export function CountyComparison({ data, loading, error, removeFilter, expanded,
       <Warning text={error} />
       <Moments data={data} />
       <ComparisonTable data={data} expanded={expanded} />
-      <Notes warning={data.coverage_note} note={[data.disclaimer, ...data.view_notes]} />
       <Footer data={data} onOpenLink={onOpenLink} />
     </Card>
   )

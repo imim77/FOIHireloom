@@ -50,7 +50,7 @@ class FetchJobPagesCommandTests(unittest.TestCase):
     def test_prints_summary_and_uses_the_configured_batch_size(self) -> None:
         service = FakeJobPageService()
         code, out, _ = self.run_main(service)
-        self.assertEqual((code, service.limits), (0, [40]))
+        self.assertEqual((code, service.limits), (0, [500]))
         self.assertEqual(json.loads(out)["remaining"], 7)
         self.run_main(service, "--limit", "3")
         self.assertEqual(service.limits[-1], 3)
