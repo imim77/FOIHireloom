@@ -1,41 +1,80 @@
 # FOIHireloom
 
-FOIHireloom je MCP aplikacija za pretraživanje HZZ oglasa i pregled podataka o tržištu rada. MCP klijent prikazuje rezultate i pripadajuće vizualizacije.
+FOIHireloom je MCP aplikacija za pretraživanje HZZ oglasa i pregled podataka o hrvatskom tržištu rada. Pomoću MCP klijenta mogu se pretraživati oglasi te pregledavati usporedbe i vizualizacije podataka po županijama.
 
-## Lokalno pokretanje
+## Preduvjeti
 
-Potrebni su Git, `make`, [uv](https://docs.astral.sh/uv/getting-started/installation/), Node.js 22 s npm-om te pokrenut Docker s Docker Composeom. Potrebna je i internetska veza za instalaciju ovisnosti i preuzimanje Docker slike.
+Za lokalno pokretanje potrebni su:
 
-Nakon preuzimanja repozitorija, u njegovoj glavnoj mapi pokreni:
+- [Git](https://git-scm.com/install/) i `make`.
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) i Python 3.14 ili noviji. `uv` može preuzeti odgovarajuću verziju Pythona ako nije instalirana.
+- [Node.js](https://nodejs.org/) 22.12 ili noviji i npm.
+- Pokrenut [Docker](https://docs.docker.com/get-docker/) s Docker Composeom.
+- Internetska veza za preuzimanje ovisnosti i Docker slike pri prvom pokretanju.
+- MCP klijent koji podržava Streamable HTTP; za vizualizacije klijent treba podržavati i MCP Apps.
+
+Naredbe u nastavku pokreću se u terminalu iz korijenske mape projekta. Na Windowsu možeš koristiti WSL s dostupnim Dockerom.
+
+## Preuzimanje i pokretanje
+
+1. Kloniraj repozitorij i uđi u mapu projekta:
+
+   ```bash
+   git clone https://github.com/imim77/FOIHireloom.git
+   cd FOIHireloom
+   ```
+
+2. Pokreni Docker, a zatim aplikaciju:
+
+   ```bash
+   make start
+   ```
+
+   Pri prvom pokretanju naredba instalira Python i frontend ovisnosti, pokreće PostgreSQL 18, učitava priloženu snimku baze, primjenjuje migracije i gradi prikaze. Priprema može potrajati. Za zadanu lokalnu bazu nije potrebna `.env` datoteka.
+
+3. U MCP klijentu dodaj poslužitelj s adresom:
+
+   ```text
+   http://127.0.0.1:8000/mcp
+   ```
+
+   Poslužitelj mora ostati pokrenut dok koristiš aplikaciju. Pokušaj, primjerice, zatražiti oglase za posao u određenoj županiji ili usporedbu podataka o županijama.
+
+Za zaustavljanje MCP poslužitelja pritisni **Ctrl+C** u njegovu terminalu. Zatim pokreni `make stop` za zaustavljanje baze; podaci ostaju sačuvani. Za ponovno pokretanje koristi `make start`.
+
+## Podaci i korisne naredbe
+
+Početna snimka u `data/initial.sql.gz` sadrži HZZ oglase, podatke DZS-a i već dohvaćene detalje oglasa. Predstavlja stanje od 8. studenoga 2026., a ne podatke u stvarnom vremenu. Docker je učitava samo pri stvaranju praznog volumena baze; sljedeća pokretanja zadržavaju postojeće podatke.
+
+| Naredba | Namjena |
+| --- | --- |
+| `make help` | Prikaži sve dostupne naredbe. |
+| `make sync-jobs` | Osvježi oglase iz HZZ izvora. |
+| `make import-dzs` | Osvježi podatke DZS-a. |
+| `make fetch-job-pages` | Dohvati dodatne detalje oglasa. |
+| `make export-db` | Izvezi snimku trenutačne lokalne baze u `data/initial.sql.gz`. |
+| `make test` | Pokreni Python testove; PostgreSQL testovi trebaju `TEST_DATABASE_URL`. |
+| `make test-frontend` | Pokreni frontend testove. |
+
+Za manji broj stranica pri dohvaćanju detalja koristi `make fetch-job-pages args="--limit 10"`. Dohvat i osvježavanje podataka zahtijevaju pristup odgovarajućim internetskim izvorima.
+
+> [!WARNING]
+> `make down-volumes` zaustavlja bazu i trajno briše njezin Docker volumen. Pri sljedećem pokretanju ponovno se učitava početna snimka.
+
+## Vlastita baza i prognoziranje
+
+Ako koristiš postojeću PostgreSQL bazu, kopiraj `.env.example` u `.env`, postavi `DATABASE_URL` i pokreni:
 
 ```bash
-make start
+make start LOCAL_DATABASE=0
 ```
 
-Pri prvom pokretanju naredba instalira ovisnosti, pokreće lokalnu PostgreSQL 18 bazu, automatski učitava priloženu snimku naše radne baze, primjenjuje migracije i gradi prikaze. Nije potrebno čekati novi uvoz HZZ i DZS podataka. Kad se poslužitelj pokrene, poveži MCP klijent na **http://127.0.0.1:8000/mcp**. Za prikaz vizualizacija potreban je klijent koji podržava MCP Apps. Poslužitelj se zaustavlja s Ctrl+C; `make stop` zaustavlja bazu i zadržava podatke.
+Baza mora biti dostupna prije pokretanja. U ovom načinu početna priprema registrira izvore i uvozi HZZ i DZS podatke s interneta umjesto učitavanja priložene snimke. `DATABASE_URL` sadrži pristupne podatke, pa `.env` nemoj dijeliti.
 
-Zadana lokalna baza radi bez `.env` datoteke. Za vlastitu bazu kopiraj `.env.example` u `.env`, postavi `DATABASE_URL` i pokreni `make start LOCAL_DATABASE=0`. Baza mora već biti dostupna. U tom načinu početna priprema registrira izvore i uvozi aktualne podatke s interneta umjesto učitavanja snimke. `DATABASE_URL` sadrži korisničko ime i lozinku.
-
-`make help` prikazuje ostale naredbe. Oglasi se poslije osvježavaju s `make sync-jobs`, a DZS podaci s `make import-dzs`. Snimka uključuje i već preuzete detalje oglasa; preostali se postupno dohvaćaju s `make fetch-job-pages`. Za prognoziranje pokreni `make start UV_EXTRA="--extra forecast"`; ono instalira dodatne ovisnosti i pri prvoj prognozi preuzima model.
-
-## Početna baza
-
-Datoteka `data/initial.sql.gz` sadrži snimku radne baze od 8. studenoga 2026.: 11.263 oglasa, 21 županiju i 8.757 DZS vrijednosti, zajedno s izvorima, evidencijom uvoza i već dohvaćenim detaljima oglasa. Korisnik dobiva lokalnu kopiju tih podataka. Snimka predstavlja stanje u trenutku izvoza; svježina oglasa ovisi o naknadnom osvježavanju.
-
-Docker učitava snimku samo kada prvi put stvara bazu u praznom volumenu. Ponovno pokretanje i `make setup` čuvaju postojeće podatke. Samo brisanje volumena naredbom `make down-volumes` trajno uklanja lokalne podatke; sljedeći `make start` tada ponovno učitava snimku.
-
-Za osvježavanje priložene snimke iz naše lokalne Docker Compose baze koristi `make export-db`. Naredba izvozi shemu i podatke bez vlasnika i prava pristupa te zamjenjuje `data/initial.sql.gz` tek nakon uspješnog izvoza. Tu datoteku treba uključiti u repozitorij zajedno s promjenama sheme.
-
-Za prvo pokretanje računaj na instalaciju ovisnosti, preuzimanje Docker slike, učitavanje snimke i izgradnju prikaza. HZZ i DZS izvori nisu potrebni za početno punjenje lokalne baze.
-
-Osnovni podaci iz feedova dovoljni su za isprobavanje pretraživanja i statistike. Dodatni detalji i uvjeti oglasa dohvaćaju se zasebno:
+Za alate za prognoziranje pokreni:
 
 ```bash
-make fetch-job-pages
+make start UV_EXTRA="--extra forecast"
 ```
 
-Naredba prema zadanim postavkama obrađuje najviše 500 oglasa po pokretanju, uz pauzu od jedne sekunde između zahtjeva. Samo pauze za punu skupinu traju oko osam minuta, a preuzimanje dodaje vrijeme. Za približno 11.000 stranica trebalo bi više od tri sata kroz više pokretanja naredbe. Dok se stranice ne preuzmu, pojedini dodatni uvjeti oglasa ostaju nepoznati. Za manju probu koristi `make fetch-job-pages args="--limit 10"`.
-
-## Licenca
-
-Projekt je licenciran pod [Apache License 2.0](LICENSE).
+Time se instaliraju dodatne ovisnosti; pri prvoj prognozi preuzima se model.
