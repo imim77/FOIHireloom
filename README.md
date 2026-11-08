@@ -31,3 +31,7 @@ make fetch-job-pages
 ```
 
 Naredba prema zadanim postavkama obrađuje najviše 500 oglasa po pokretanju, uz pauzu od jedne sekunde između zahtjeva. Samo pauze za punu skupinu traju oko osam minuta, a preuzimanje dodaje vrijeme. Za približno 11.000 stranica trebalo bi više od tri sata kroz više pokretanja naredbe. Dok se stranice ne preuzmu, pojedini dodatni uvjeti oglasa ostaju nepoznati. Za manju probu koristi `make fetch-job-pages args="--limit 10"`.
+
+## Licenca
+
+Projekt je licenciran pod [Apache License 2.0](LICENSE).
