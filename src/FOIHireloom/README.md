@@ -136,13 +136,15 @@ are in `docs/database-era.md` and `docs/database-croatian-names.md`.
 Kopiraj `.env.example` u `.env` i po potrebi promijeni `DATABASE_URL`.
 Za lokalnu Docker Compose bazu zadana adresa odgovara konfiguraciji projekta.
 Potrebni su `uv`, Node.js, npm i Docker Compose. `make start` pri prvom
-pokretanju instalira ovisnosti, pokreće bazu, primjenjuje migracije, registrira
-izvore, uvozi oglase i DZS podatke te gradi MCP App prikaze. Zatim pokreće
-HTTP MCP poslužitelj na `http://127.0.0.1:8000/mcp`. Prvi uvoz zahtijeva
-internetsku vezu i može potrajati. Poslužitelj se zaustavlja s Ctrl+C.
+pokretanju instalira ovisnosti, pokreće PostgreSQL 18 bazu i u prazan Docker
+volumen učitava `data/initial.sql.gz`, primjenjuje migracije te gradi MCP App prikaze. Zatim pokreće
+HTTP MCP poslužitelj na `http://127.0.0.1:8000/mcp`. Instalacija ovisnosti i Docker slike zahtijeva
+internetsku vezu; početni podaci dolaze iz priložene snimke. Poslužitelj se zaustavlja s Ctrl+C.
 
 Za već pokrenutu vanjsku bazu koristi `make start LOCAL_DATABASE=0`, uz njezin
-`DATABASE_URL` u `.env`; time se preskače pokretanje Docker baze. `make setup`
-ponavlja pripremu, a `make help` prikazuje pojedinačne naredbe. `make stop`
+`DATABASE_URL` u `.env`; time se preskače pokretanje Docker baze i snimka se
+ne učitava, nego se pri početnoj pripremi uvoze podaci s interneta. `make setup`
+ponavlja pripremu bez zamjene postojeće lokalne baze, a `make help` prikazuje pojedinačne naredbe. `make stop`
 zaustavlja lokalnu bazu; `make down-volumes` trajno briše njezine podatke.
+`make export-db` osvježava priloženu snimku iz lokalne Docker Compose baze.
 Za prognoziranje pokreni poslužitelj s `make start UV_EXTRA="--extra forecast"`.

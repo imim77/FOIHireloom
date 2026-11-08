@@ -15,15 +15,15 @@ start: ## Pripremi projekt pri prvom pokretanju i pokreni MCP na portu 8000.
 	$(MAKE) build-frontend
 	$(MAKE) run-mcp
 
-setup: ## Instaliraj ovisnosti, migriraj bazu, uvezi podatke i izgradi prikaze.
+setup: ## Instaliraj ovisnosti, pripremi početnu bazu i izgradi prikaze.
 	@rm -f $(SETUP_STAMP)
 	$(MAKE) sync
 	$(MAKE) install-frontend
 	@if [ "$(LOCAL_DATABASE)" = 1 ]; then $(MAKE) up; fi
 	$(MAKE) migrate
-	$(MAKE) register-sources
-	$(MAKE) sync-jobs
-	$(MAKE) import-dzs
+	@if [ "$(LOCAL_DATABASE)" != 1 ]; then \
+		$(MAKE) register-sources && $(MAKE) sync-jobs && $(MAKE) import-dzs; \
+	fi
 	$(MAKE) build-frontend
 	@touch $(SETUP_STAMP)
 
@@ -35,7 +35,7 @@ install-frontend: ## Instaliraj frontend ovisnosti iz lock datoteke.
 
 up: ## Pokreni lokalnu PostgreSQL bazu i pričekaj spremnost.
 	docker compose up -d
-	@attempt=0; until docker compose exec -T postgres pg_isready -U myuser -d myapp >/dev/null 2>&1; do \
+	@attempt=0; until docker compose exec -T postgres pg_isready -h 127.0.0.1 -U myuser -d myapp >/dev/null 2>&1; do \
 		attempt=$$((attempt + 1)); \
 		if [ $$attempt -ge 60 ]; then echo 'PostgreSQL nije spreman nakon 60 sekundi.' >&2; exit 1; fi; \
 		sleep 1; \
@@ -49,6 +49,14 @@ stop: down ## Zaustavi lokalnu bazu; MCP poslužitelj zaustavlja se s Ctrl+C.
 down-volumes: ## Zaustavi bazu i trajno izbriši Docker volumen s podacima.
 	docker compose down -v
 	@rm -f $(SETUP_STAMP)
+
+export-db: ## Osvježi početnu snimku iz lokalne Docker Compose baze.
+	@set -e; snapshot=$$(mktemp); \
+	trap 'rm -f "$$snapshot" "$$snapshot.gz"' EXIT; \
+	docker compose exec -T postgres pg_dump -U myuser -d myapp --no-owner --no-privileges > "$$snapshot"; \
+	gzip -n -c "$$snapshot" > "$$snapshot.gz"; \
+	chmod 644 "$$snapshot.gz"; \
+	mv "$$snapshot.gz" data/initial.sql.gz
 
 migrate: ## Primijeni migracije na bazu iz DATABASE_URL.
 	$(ALEMBIC) upgrade head
@@ -99,4 +107,4 @@ test-frontend: ## Pokreni frontend testove.
 test-browser: ## Pokreni frontend testove u pregledniku.
 	npm --prefix frontend run test:browser
 
-.PHONY: help start setup sync install-frontend up down stop down-volumes migrate create-migrations register-sources sync-jobs fetch-job-pages normalize-job-conditions import-dzs category-snapshot forecast-accuracy run-mcp run-frontend build-frontend lint-frontend test test-frontend test-browser
+.PHONY: help start setup sync install-frontend up down stop down-volumes export-db migrate create-migrations register-sources sync-jobs fetch-job-pages normalize-job-conditions import-dzs category-snapshot forecast-accuracy run-mcp run-frontend build-frontend lint-frontend test test-frontend test-browser
